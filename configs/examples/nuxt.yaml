@@ -1,0 +1,113 @@
+# Nuxt 3 Application Configuration
+# Production-ready setup with Nitro server
+#
+# Prerequisites:
+#   - Build: npm run build (generates .output directory)
+#   - Server entrypoint: .output/server/index.mjs
+#
+# For scaled deployments, each instance gets unique env vars:
+#   - PHPEEK_PM_INSTANCE_INDEX: 0, 1, 2, ... (numeric)
+#   - PORT: Auto-calculated from port_base + instance index
+
+version: "1.0"
+
+global:
+  shutdown_timeout: 30
+  log_format: json
+  log_level: info
+  metrics_enabled: true
+  metrics_port: 9090
+  api_enabled: true
+  api_port: 9180
+
+hooks:
+  pre-start:
+    # Build Nuxt application (skip if using pre-built image)
+    - name: build
+      command: ["npm", "run", "build"]
+      timeout: 300
+      continue_on_error: false
+
+processes:
+  # Nuxt 3 Nitro server
+  nuxt:
+    enabled: true
+    command: ["node", ".output/server/index.mjs"]
+    working_dir: /app
+    restart: always
+    env:
+      NODE_ENV: production
+      NITRO_HOST: "0.0.0.0"
+      NUXT_HOST: "0.0.0.0"
+    # Auto-assign ports for scaled instances
+    port_base: 3000
+    health_check:
+      type: http
+      url: http://localhost:3000/api/health
+      initial_delay: 5
+      period: 10
+      timeout: 3
+      failure_threshold: 3
+      mode: both
+    shutdown:
+      signal: SIGTERM
+      timeout: 30
+    logging:
+      stdout: true
+      stderr: true
+      labels:
+        service: nuxt
+        framework: nuxt3
+    # Memory leak protection - restart if exceeding 512MB
+    max_memory_mb: 512
+
+  # Nginx reverse proxy
+  nginx:
+    enabled: true
+    command: ["nginx", "-g", "daemon off;"]
+    depends_on: [nuxt]
+    restart: always
+    health_check:
+      type: http
+      url: http://localhost:80/health
+      initial_delay: 2
+      period: 10
+      timeout: 2
+      failure_threshold: 3
+    shutdown:
+      signal: SIGQUIT
+      timeout: 30
+
+---
+# Full-Stack Nuxt with Background Jobs
+# For apps using Nitro tasks or external job queues
+
+# processes:
+#   nuxt:
+#     enabled: true
+#     command: ["node", ".output/server/index.mjs"]
+#     scale: 2
+#     port_base: 3000
+#     restart: always
+#     max_memory_mb: 512
+#     env:
+#       NODE_ENV: production
+#
+#   # BullMQ worker (if using background jobs)
+#   worker:
+#     enabled: true
+#     command: ["node", "workers/index.js"]
+#     scale: 2
+#     restart: always
+#     depends_on: [nuxt]
+#     max_memory_mb: 256
+#     env:
+#       NODE_ENV: production
+#       REDIS_URL: redis://localhost:6379
+#
+#   # Scheduled tasks runner
+#   scheduler:
+#     enabled: true
+#     command: ["node", "scripts/scheduler.js"]
+#     schedule: "* * * * *"
+#     restart: never

@@ -21,18 +21,36 @@ PHPeek PM includes powerful scaffolding tools to quickly generate production-rea
 ./phpeek-pm scaffold --interactive
 
 # Specify output directory
-./phpeek-pm scaffold production --output ./docker --docker-compose
+./phpeek-pm scaffold laravel --output ./docker --docker-compose --observability
 ```
 
 ## Available Presets
 
+### PHP Frameworks
+
 | Preset | Framework | Services | Best For |
 |--------|-----------|----------|----------|
 | **`laravel`** | Laravel | PHP-FPM, Nginx, Horizon, Queue Workers, Scheduler | Full Laravel apps with queues |
-| **`production`** | Laravel | All Laravel + Tracing + Metrics | Production with observability |
 | **`symfony`** | Symfony | PHP-FPM, Nginx, Queue Workers | Symfony apps with Messenger |
-| **`generic`** | Any PHP | Nginx only | Static sites, simple PHP apps |
-| **`minimal`** | None | Empty template | Custom configurations from scratch |
+| **`php`** | Any PHP | PHP-FPM, Nginx | Vanilla PHP apps, simple PHP sites |
+
+> **Tip:** Add `--observability` to any preset for tracing, metrics, and API.
+
+### CMS Frameworks
+
+| Preset | Framework | Services | Best For |
+|--------|-----------|----------|----------|
+| **`wordpress`** | WordPress | PHP-FPM, Nginx, WP-CLI cron | WordPress sites with proper cron |
+| **`magento`** | Magento 2 | PHP-FPM, Nginx, Queue consumers, Cron, Indexer | Magento e-commerce sites |
+| **`drupal`** | Drupal | PHP-FPM, Nginx, Drush cron | Drupal CMS sites |
+
+### Node.js Frameworks
+
+| Preset | Framework | Services | Best For |
+|--------|-----------|----------|----------|
+| **`nextjs`** | Next.js | Node.js (standalone), Nginx reverse proxy | Next.js with SSR |
+| **`nuxt`** | Nuxt 3 | Nitro server, Nginx reverse proxy | Nuxt 3 applications |
+| **`nodejs`** | Node.js | Node.js server, Workers, Nginx reverse proxy | Express, Fastify, NestJS |
 
 ## Preset Details
 
@@ -84,28 +102,25 @@ processes:
     scale: 3
 ```
 
-### 2. Production (Laravel + Observability)
+### 2. Observability Stack (--observability flag)
 
-**Production-ready Laravel with complete observability stack.**
+**Add full observability to any preset with a single flag.**
 
 ```bash
-./phpeek-pm scaffold production --output ./prod --docker-compose
+# Add observability to any preset
+./phpeek-pm scaffold laravel --observability
+./phpeek-pm scaffold wordpress --observability
+./phpeek-pm scaffold magento --observability --docker-compose
+./phpeek-pm scaffold nextjs --observability --dockerfile --nginx
 ```
 
-**Includes everything from `laravel` preset plus:**
+**The `--observability` flag enables:**
 - ✅ **Distributed Tracing** - OpenTelemetry with OTLP gRPC
-- ✅ **Log Level** - Warning (reduced noise in production)
-- ✅ **Sample Rate** - 10% (performance optimized)
-- ✅ **Docker Compose** - Includes Prometheus + Grafana
+- ✅ **Prometheus Metrics** - Full metrics collection
+- ✅ **Management API** - REST API for process control
+- ✅ **Log Level** - Set to `warn` (reduced noise in production)
 
-**Generated `docker-compose.yml` includes:**
-- MySQL 8.0 database
-- Redis cache/queue
-- Prometheus metrics collection
-- Grafana dashboards
-- Port mappings (80, 443, 8080, 9090)
-
-**Observability config:**
+**Generated observability config:**
 ```yaml
 global:
   log_level: warn
@@ -116,6 +131,7 @@ global:
   metrics_enabled: true
   api_enabled: true
 ```
+
 
 ### 3. Symfony
 
@@ -150,39 +166,280 @@ processes:
     restart: always
 ```
 
-### 4. Generic
+### 4. PHP (Vanilla)
 
-**Basic PHP application with web server only.**
+**Basic PHP application with PHP-FPM and Nginx.**
 
 ```bash
-./phpeek-pm scaffold generic --output ./config
+./phpeek-pm scaffold php --output ./config
 ```
 
 **Includes:**
-- ✅ **Nginx** - Standalone web server
+- ✅ **PHP-FPM** - FastCGI process manager
+- ✅ **Nginx** - Web server with PHP-FPM dependency
 - ✅ **API + Metrics** - Enabled by default
 
 **Use cases:**
-- Static websites
 - Simple PHP applications without framework
 - Custom PHP setups
+- Legacy PHP applications
 
-### 5. Minimal
+### 5. WordPress
 
-**Bare minimum configuration template.**
+**WordPress application with WP-CLI cron replacement.**
 
 ```bash
-./phpeek-pm scaffold minimal --output ./config
+./phpeek-pm scaffold wordpress --output ./config --dockerfile
 ```
 
 **Includes:**
-- ✅ Global settings only
-- ❌ No processes pre-configured
+- ✅ **PHP-FPM** - FastCGI process manager with health checks
+- ✅ **Nginx** - Web server with PHP-FPM dependency
+- ✅ **WP-CLI Cron** - Proper cron via `wp cron event run --due-now`
+- ✅ **API + Metrics** - Enabled by default
+
+**Generated config:**
+```yaml
+processes:
+  php-fpm:
+    enabled: true
+    command: ["php-fpm", "-F", "-R"]
+    health_check:
+      type: tcp
+      address: "127.0.0.1:9000"
+
+  nginx:
+    enabled: true
+    command: ["nginx", "-g", "daemon off;"]
+    depends_on: [php-fpm]
+
+  wp-cron:
+    enabled: true
+    command: ["wp", "cron", "event", "run", "--due-now"]
+    type: oneshot
+    restart: never
+    schedule: "*/1 * * * *"
+```
+
+**Why WP-CLI cron?**
+- WordPress's default `wp-cron.php` runs on page load, which is unreliable
+- WP-CLI cron runs scheduled tasks independently of visitor traffic
+- Ensure `define('DISABLE_WP_CRON', true);` in `wp-config.php`
+
+### 6. Magento 2
+
+**Magento 2 application with queue consumers, cron, and indexer.**
+
+```bash
+./phpeek-pm scaffold magento --output ./config --dockerfile --docker-compose
+```
+
+**Includes:**
+- ✅ **PHP-FPM** - FastCGI process manager with health checks
+- ✅ **Nginx** - Web server with PHP-FPM dependency
+- ✅ **Queue Consumers** - 2 instances of async message processing
+- ✅ **Cron** - Magento cron runner (every minute)
+- ✅ **Indexer** - Reindex scheduler (every 15 minutes)
+- ✅ **API + Metrics** - Enabled by default
+
+**Generated config:**
+```yaml
+processes:
+  php-fpm:
+    enabled: true
+    command: ["php-fpm", "-F", "-R"]
+    health_check:
+      type: tcp
+      address: "127.0.0.1:9000"
+
+  nginx:
+    enabled: true
+    command: ["nginx", "-g", "daemon off;"]
+    depends_on: [php-fpm]
+
+  queue-consumer:
+    enabled: true
+    command: ["php", "bin/magento", "queue:consumers:start", "--max-messages=1000"]
+    scale: 2
+    restart: always
+    depends_on: [php-fpm]
+
+  cron:
+    enabled: true
+    command: ["php", "bin/magento", "cron:run"]
+    type: oneshot
+    restart: never
+    schedule: "* * * * *"
+
+  indexer:
+    enabled: true
+    command: ["php", "bin/magento", "indexer:reindex"]
+    type: oneshot
+    restart: never
+    schedule: "*/15 * * * *"
+```
+
+**Magento-specific considerations:**
+- Queue consumers handle async operations (order processing, notifications)
+- Cron handles scheduled tasks (catalog updates, cache cleanup)
+- Indexer keeps product/category data optimized for search
+- Consider increasing `queue-consumer` scale for high-traffic stores
+
+### 7. Drupal
+
+**Drupal CMS with Drush cron.**
+
+```bash
+./phpeek-pm scaffold drupal --output ./config --dockerfile
+```
+
+**Includes:**
+- ✅ **PHP-FPM** - FastCGI process manager with health checks
+- ✅ **Nginx** - Web server with PHP-FPM dependency
+- ✅ **Drush Cron** - Drupal cron via Drush command
+- ✅ **API + Metrics** - Enabled by default
+
+**Generated config:**
+```yaml
+processes:
+  php-fpm:
+    enabled: true
+    command: ["php-fpm", "-F", "-R"]
+    health_check:
+      type: tcp
+      address: "127.0.0.1:9000"
+
+  nginx:
+    enabled: true
+    command: ["nginx", "-g", "daemon off;"]
+    depends_on: [php-fpm]
+
+  drush-cron:
+    enabled: true
+    command: ["drush", "cron"]
+    type: oneshot
+    restart: never
+    schedule: "*/5 * * * *"
+```
+
+**Drupal-specific considerations:**
+- Drush cron runs scheduled tasks reliably outside of web requests
+- 5-minute intervals balance freshness vs. server load
+- Ensure Drush is installed and accessible in PATH
+
+### 8. Next.js
+
+**Next.js application with standalone output mode.**
+
+```bash
+./phpeek-pm scaffold nextjs --output ./config --dockerfile --nginx
+```
+
+**Includes:**
+- ✅ **Node.js Server** - Standalone mode with `scale: 2` instances
+- ✅ **Nginx** - Reverse proxy with upstream load balancing
+- ✅ **Memory Protection** - `max_memory_mb: 512` for leak protection
+- ✅ **Port Assignment** - Automatic `PORT` env var via `port_base: 3000`
+- ✅ **API + Metrics** - Enabled by default
+
+**Generated config:**
+```yaml
+processes:
+  nextjs:
+    command: ["node", ".next/standalone/server.js"]
+    scale: 2
+    port_base: 3000
+    max_memory_mb: 512
+    env:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+    health_check:
+      type: http
+      url: "http://127.0.0.1:3000/api/health"
+
+  nginx:
+    command: ["nginx", "-g", "daemon off;"]
+    depends_on: [nextjs]
+```
+
+**Generated nginx.conf (with `--nginx`):**
+```nginx
+upstream nodejs_backend {
+    least_conn;
+    server 127.0.0.1:3000;
+    server 127.0.0.1:3001;
+}
+```
+
+**Requirements:**
+- Add `output: 'standalone'` to `next.config.js`
+- Implement `/api/health` endpoint for health checks
+
+### 9. Nuxt 3
+
+**Nuxt 3 application with Nitro server.**
+
+```bash
+./phpeek-pm scaffold nuxt --output ./config --dockerfile --nginx
+```
+
+**Includes:**
+- ✅ **Nitro Server** - `.output/server/index.mjs` with `scale: 2`
+- ✅ **Nginx** - Reverse proxy with upstream load balancing
+- ✅ **Memory Protection** - `max_memory_mb: 512`
+- ✅ **Port Assignment** - Automatic via `port_base: 3000`
+- ✅ **API + Metrics** - Enabled by default
+
+**Generated config:**
+```yaml
+processes:
+  nuxt:
+    command: ["node", ".output/server/index.mjs"]
+    scale: 2
+    port_base: 3000
+    max_memory_mb: 512
+    env:
+      NODE_ENV: production
+      NITRO_HOST: "0.0.0.0"
+```
+
+### 10. Generic Node.js
+
+**Generic Node.js application with background workers.**
+
+```bash
+./phpeek-pm scaffold nodejs --output ./config --dockerfile --nginx
+```
+
+**Includes:**
+- ✅ **App Server** - Main Node.js application with `scale: 2`
+- ✅ **Workers** - Background job processors (BullMQ, etc.)
+- ✅ **Nginx** - Reverse proxy with upstream load balancing
+- ✅ **Memory Protection** - `max_memory_mb: 512` for app, 256MB for workers
+- ✅ **API + Metrics** - Enabled by default
+
+**Generated config:**
+```yaml
+processes:
+  app:
+    command: ["node", "dist/server.js"]
+    scale: 2
+    port_base: 3000
+    max_memory_mb: 512
+    env:
+      NODE_ENV: production
+
+  worker:
+    command: ["node", "dist/worker.js"]
+    scale: 2
+    max_memory_mb: 256
+    depends_on: [app]
+```
 
 **Use cases:**
-- Starting from scratch
-- Custom process configurations
-- Non-standard setups
+- Express, Fastify, Koa applications
+- NestJS backends
+- Custom Node.js servers with background workers
 
 ## CLI Flags
 
@@ -193,11 +450,23 @@ phpeek-pm scaffold <preset>
 ```
 
 **Available presets:**
+
+PHP Frameworks:
 - `laravel` - Full Laravel stack
 - `production` - Laravel with observability
 - `symfony` - Symfony application
 - `generic` - Basic web server
 - `minimal` - Empty template
+
+CMS Frameworks:
+- `wordpress` - WordPress with WP-CLI cron
+- `magento` - Magento 2 with queue consumers
+- `drupal` - Drupal with Drush cron
+
+Node.js Frameworks:
+- `nextjs` - Next.js (standalone mode)
+- `nuxt` - Nuxt 3 (Nitro server)
+- `nodejs` - Generic Node.js with workers
 
 ### Optional Flags
 
@@ -207,8 +476,10 @@ phpeek-pm scaffold <preset>
 | `--output PATH`, `-o PATH` | Output directory | Current directory |
 | `--dockerfile` | Generate Dockerfile | `false` |
 | `--docker-compose` | Generate docker-compose.yml | `false` |
+| `--nginx` | Generate nginx.conf (with load balancing for Node.js) | `false` |
+| `--observability` | Enable observability stack (tracing, metrics, API) | `false` |
 | `--app-name STRING` | Application name | `my-app` |
-| `--queue-workers INT` | Number of queue workers (Laravel/Symfony) | `3` |
+| `--queue-workers INT` | Number of queue workers | `3` |
 
 ### Examples
 
@@ -222,8 +493,13 @@ phpeek-pm scaffold laravel --app-name api-service --queue-workers 5
 # Generate with Docker files
 phpeek-pm scaffold laravel --dockerfile --docker-compose --output ./docker
 
-# Production setup
-phpeek-pm scaffold production --output ./prod --docker-compose
+# Production setup with full observability (tracing + metrics + API)
+phpeek-pm scaffold laravel --observability --docker-compose
+
+# Any preset with observability
+phpeek-pm scaffold wordpress --observability
+phpeek-pm scaffold magento --observability --docker-compose
+phpeek-pm scaffold nextjs --observability --dockerfile --nginx
 ```
 
 ## Interactive Mode
@@ -239,13 +515,23 @@ phpeek-pm scaffold production --output ./prod --docker-compose
 **1. Preset Selection**
 ```
 Select a preset:
-  1. Laravel (Full Stack)
-  2. Production (Laravel + Observability)
-  3. Symfony
-  4. Generic
-  5. Minimal
 
-Enter choice [1-5]: 1
+  PHP Frameworks:
+    1.  laravel     - Laravel application (full stack)
+    2.  symfony     - Symfony application
+    3.  wordpress   - WordPress with WP-CLI cron
+    4.  magento     - Magento 2 with queue consumers
+    5.  drupal      - Drupal with Drush cron
+    6.  generic     - Generic PHP application
+    7.  minimal     - Minimal setup (PHP-FPM only)
+    8.  production  - Production-ready Laravel (all features)
+
+  Node.js Frameworks:
+    9.  nextjs      - Next.js application (standalone mode)
+    10. nuxt        - Nuxt 3 application (Nitro server)
+    11. nodejs      - Generic Node.js application
+
+Enter choice [1-11]: 1
 ```
 
 **2. Application Name**
@@ -506,6 +792,8 @@ phpeek-pm --config ./myapp/phpeek-pm.yaml
 
 ## Preset Comparison Matrix
 
+### PHP Presets
+
 | Feature | Minimal | Generic | Symfony | Laravel | Production |
 |---------|---------|---------|---------|---------|------------|
 | PHP-FPM | - | - | ✅ | ✅ | ✅ |
@@ -517,7 +805,33 @@ phpeek-pm --config ./myapp/phpeek-pm.yaml
 | Metrics | - | ✅ | ✅ | ✅ | ✅ |
 | API | - | ✅ | ✅ | ✅ | ✅ |
 | Tracing | - | - | - | - | ✅ |
-| Docker Compose | - | - | - | - | ✅ (default) |
+
+### CMS Presets
+
+| Feature | WordPress | Magento 2 | Drupal |
+|---------|-----------|-----------|--------|
+| PHP-FPM | ✅ | ✅ | ✅ |
+| Nginx | ✅ | ✅ | ✅ |
+| Queue Workers | - | ✅ (2) | - |
+| Scheduled Cron | ✅ (WP-CLI) | ✅ (bin/magento) | ✅ (Drush) |
+| Indexer | - | ✅ | - |
+| Health Checks | ✅ | ✅ | ✅ |
+| Metrics | ✅ | ✅ | ✅ |
+| API | ✅ | ✅ | ✅ |
+
+### Node.js Presets
+
+| Feature | Next.js | Nuxt 3 | Node.js |
+|---------|---------|--------|---------|
+| Node.js Server | ✅ (standalone) | ✅ (Nitro) | ✅ |
+| Nginx (reverse proxy) | ✅ | ✅ | ✅ |
+| Scale Instances | ✅ (2) | ✅ (2) | ✅ (2) |
+| Memory Protection | ✅ (512MB) | ✅ (512MB) | ✅ (512MB) |
+| Background Workers | - | - | ✅ |
+| Health Checks | ✅ | ✅ | ✅ |
+| Metrics | ✅ | ✅ | ✅ |
+| API | ✅ | ✅ | ✅ |
+| Port Base | ✅ (3000) | ✅ (3000) | ✅ (3000) |
 
 ## Examples
 
@@ -588,6 +902,45 @@ vim ./custom/phpeek-pm.yaml
   --dockerfile
 
 # Result: Symfony config + Dockerfile
+```
+
+### Example 6: WordPress with Proper Cron
+
+```bash
+# Generate WordPress config with WP-CLI cron
+./phpeek-pm scaffold wordpress \
+  --output ./wordpress \
+  --app-name my-blog \
+  --dockerfile
+
+# Result: phpeek-pm.yaml with WP-CLI cron (runs every minute)
+# Don't forget: define('DISABLE_WP_CRON', true); in wp-config.php
+```
+
+### Example 7: Magento 2 E-commerce
+
+```bash
+# Generate Magento 2 config with full stack
+./phpeek-pm scaffold magento \
+  --output ./magento \
+  --app-name my-store \
+  --queue-workers 4 \
+  --dockerfile \
+  --docker-compose
+
+# Result: Full Magento stack with queue consumers, cron, and indexer
+```
+
+### Example 8: Drupal CMS
+
+```bash
+# Generate Drupal config with Drush cron
+./phpeek-pm scaffold drupal \
+  --output ./drupal \
+  --app-name my-cms \
+  --dockerfile
+
+# Result: Drupal config with Drush cron (runs every 5 minutes)
 ```
 
 ## Template Architecture

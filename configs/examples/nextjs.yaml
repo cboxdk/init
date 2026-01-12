@@ -1,0 +1,116 @@
+# Next.js Application Configuration
+# Production-ready setup with standalone output mode
+#
+# Prerequisites:
+#   - next.config.js: output: 'standalone'
+#   - Build: npm run build
+#   - Server entrypoint: .next/standalone/server.js
+#
+# For scaled deployments, each instance gets unique env vars:
+#   - PHPEEK_PM_INSTANCE_INDEX: 0, 1, 2, ... (numeric)
+#   - PORT: Auto-calculated from port_base + instance index
+
+version: "1.0"
+
+global:
+  shutdown_timeout: 30
+  log_format: json
+  log_level: info
+  metrics_enabled: true
+  metrics_port: 9090
+  api_enabled: true
+  api_port: 9180
+
+hooks:
+  pre-start:
+    # Build Next.js in standalone mode (skip if using pre-built image)
+    - name: build
+      command: ["npm", "run", "build"]
+      timeout: 300
+      continue_on_error: false
+
+processes:
+  # Next.js production server (standalone mode)
+  nextjs:
+    enabled: true
+    command: ["node", ".next/standalone/server.js"]
+    working_dir: /app
+    restart: always
+    env:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+    # For horizontal scaling, use port_base to auto-assign ports
+    # Each instance gets PORT = port_base + instance_index
+    port_base: 3000
+    health_check:
+      type: http
+      url: http://localhost:3000/api/health
+      initial_delay: 5
+      period: 10
+      timeout: 3
+      failure_threshold: 3
+      mode: both
+    shutdown:
+      signal: SIGTERM
+      timeout: 30
+    logging:
+      stdout: true
+      stderr: true
+      labels:
+        service: nextjs
+        framework: next
+    # Restart if memory exceeds 512MB (Node.js memory leak protection)
+    max_memory_mb: 512
+
+  # Nginx reverse proxy (optional - for static assets and load balancing)
+  nginx:
+    enabled: true
+    command: ["nginx", "-g", "daemon off;"]
+    depends_on: [nextjs]
+    restart: always
+    health_check:
+      type: http
+      url: http://localhost:80/health
+      initial_delay: 2
+      period: 10
+      timeout: 2
+      failure_threshold: 3
+    shutdown:
+      signal: SIGQUIT
+      timeout: 30
+    logging:
+      stdout: true
+      stderr: true
+      labels:
+        service: nginx
+        tier: frontend
+
+---
+# Scaled Next.js Configuration (multiple instances behind Nginx)
+# Uncomment and modify for horizontal scaling
+
+# processes:
+#   nextjs:
+#     enabled: true
+#     command: ["node", ".next/standalone/server.js"]
+#     scale: 4  # Run 4 instances
+#     port_base: 3000  # Ports: 3000, 3001, 3002, 3003
+#     restart: always
+#     max_memory_mb: 512
+#     env:
+#       NODE_ENV: production
+#       HOSTNAME: "0.0.0.0"
+#     health_check:
+#       type: http
+#       # Health check URL uses instance-specific port via template
+#       url: http://localhost:${PORT}/api/health
+#       initial_delay: 5
+#       period: 10
+#
+# Nginx upstream config for load balancing:
+# upstream nextjs {
+#     server 127.0.0.1:3000;
+#     server 127.0.0.1:3001;
+#     server 127.0.0.1:3002;
+#     server 127.0.0.1:3003;
+# }

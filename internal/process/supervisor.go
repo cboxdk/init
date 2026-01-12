@@ -132,6 +132,7 @@ type Supervisor struct {
 // Instance is safe for concurrent access via its embedded RWMutex.
 type Instance struct {
 	id            string
+	index         int // Instance index (0, 1, 2, ...) for port assignment
 	cmd           *exec.Cmd
 	state         ProcessState
 	pid           int
@@ -324,7 +325,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	for i := 0; i < s.config.Scale; i++ {
 		instanceID := fmt.Sprintf("%s-%d", s.name, i)
 
-		instance, err := s.startInstance(s.ctx, instanceID)
+		instance, err := s.startInstance(s.ctx, instanceID, i)
 		if err != nil {
 			s.state = StateFailed
 			s.cancel()
@@ -381,9 +382,11 @@ func (s *Supervisor) Start(ctx context.Context) error {
 }
 
 // startInstance starts a single process instance
-func (s *Supervisor) startInstance(ctx context.Context, instanceID string) (*Instance, error) {
+// instanceIndex is used for port assignment (PORT = port_base + instanceIndex)
+func (s *Supervisor) startInstance(ctx context.Context, instanceID string, instanceIndex int) (*Instance, error) {
 	s.logger.Info("Starting process instance",
 		"instance_id", instanceID,
+		"instance_index", instanceIndex,
 		"command", s.config.Command,
 	)
 
@@ -394,7 +397,7 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string) (*Ins
 	}
 
 	// Set environment variables
-	envVars := append(os.Environ(), s.envVars(instanceID)...)
+	envVars := append(os.Environ(), s.envVars(instanceID, instanceIndex)...)
 	envVars = append(envVars,
 		fmt.Sprintf("PHPEEK_SERVICE=%s", s.name),
 		fmt.Sprintf("PHPEEK_INSTANCE=%s", instanceID),
@@ -458,6 +461,7 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string) (*Ins
 	startTime := time.Now()
 	instance := &Instance{
 		id:           instanceID,
+		index:        instanceIndex,
 		cmd:          cmd,
 		state:        StateRunning,
 		pid:          cmd.Process.Pid,
@@ -587,9 +591,10 @@ func (s *Supervisor) ScaleUp(ctx context.Context, targetScale int) error {
 	}
 
 	for i := 0; i < instancesToAdd; i++ {
-		instanceID := fmt.Sprintf("%s-%d", s.name, currentScale+i)
+		instanceIndex := currentScale + i
+		instanceID := fmt.Sprintf("%s-%d", s.name, instanceIndex)
 
-		instance, err := s.startInstance(runCtx, instanceID)
+		instance, err := s.startInstance(runCtx, instanceID, instanceIndex)
 		if err != nil {
 			// Clean up any instances we already started
 			for _, started := range newInstances {
@@ -1004,7 +1009,8 @@ func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCou
 	}
 
 	// Attempt restart using supervisor context
-	newInstance, err := s.startInstance(s.ctx, instance.id)
+	// Use the stored instance index to preserve port assignment
+	newInstance, err := s.startInstance(s.ctx, instance.id, instance.index)
 	if err != nil {
 		s.logger.Error("Failed to restart process instance",
 			"instance_id", instance.id,
@@ -1037,8 +1043,8 @@ func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCou
 }
 
 // envVars returns environment variables for a process instance
-func (s *Supervisor) envVars(instanceID string) []string {
-	envs := make([]string, 0, len(s.config.Env)+2)
+func (s *Supervisor) envVars(instanceID string, instanceIndex int) []string {
+	envs := make([]string, 0, len(s.config.Env)+5)
 
 	// Add configured environment variables
 	for key, value := range s.config.Env {
@@ -1049,7 +1055,15 @@ func (s *Supervisor) envVars(instanceID string) []string {
 	envs = append(envs,
 		fmt.Sprintf("PHPEEK_PM_PROCESS_NAME=%s", s.name),
 		fmt.Sprintf("PHPEEK_PM_INSTANCE_ID=%s", instanceID),
+		fmt.Sprintf("PHPEEK_PM_INSTANCE_INDEX=%d", instanceIndex),
 	)
+
+	// Add PORT env var if port_base is configured (for Node.js/web apps)
+	// Each instance gets a unique port: PORT = port_base + instance_index
+	if s.config.PortBase > 0 {
+		port := s.config.PortBase + instanceIndex
+		envs = append(envs, fmt.Sprintf("PORT=%d", port))
+	}
 
 	return envs
 }
@@ -1225,11 +1239,17 @@ func (s *Supervisor) collectResourceMetrics() {
 
 // collectInstanceMetrics collects and records metrics for all running instances
 func (s *Supervisor) collectInstanceMetrics() {
+	// Defensive: Check if resourceCollector is nil
+	if s.resourceCollector == nil {
+		return
+	}
+
 	startTime := time.Now()
 
 	s.mu.RLock()
 	instances := make([]*Instance, len(s.instances))
 	copy(instances, s.instances)
+	maxMemoryMB := s.config.MaxMemoryMB
 	s.mu.RUnlock()
 
 	// Collect metrics for each instance
@@ -1262,6 +1282,28 @@ func (s *Supervisor) collectInstanceMetrics() {
 
 		// Update Prometheus gauges
 		metrics.UpdatePrometheusMetrics(s.name, instanceID, sample)
+
+		// Check memory limit and trigger restart if exceeded
+		// This provides memory leak protection for long-running processes
+		if maxMemoryMB > 0 && sample.MemoryRSSBytes > 0 {
+			memoryMB := sample.MemoryRSSBytes / (1024 * 1024)
+			if memoryMB >= uint64(maxMemoryMB) {
+				s.logger.Warn("Process memory limit exceeded, triggering restart",
+					"instance_id", instanceID,
+					"pid", pid,
+					"memory_mb", memoryMB,
+					"max_memory_mb", maxMemoryMB,
+				)
+				// Kill the process - monitorInstance will handle restart based on policy
+				inst.mu.Lock()
+				if inst.state == StateRunning && inst.cmd != nil && inst.cmd.Process != nil {
+					// Record memory restart metric
+					metrics.RecordProcessRestart(s.name, "memory_limit")
+					_ = inst.cmd.Process.Kill()
+				}
+				inst.mu.Unlock()
+			}
+		}
 	}
 
 	// Record collection duration

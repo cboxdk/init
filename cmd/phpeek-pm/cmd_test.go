@@ -338,10 +338,14 @@ func TestScaffoldCommandHelp(t *testing.T) {
 	expectedStrings := []string{
 		"laravel",
 		"symfony",
-		"minimal",
-		"production",
+		"php",
+		"wordpress",
+		"magento",
+		"drupal",
+		"nextjs",
 		"--interactive",
 		"--output",
+		"--observability",
 	}
 
 	for _, expected := range expectedStrings {
@@ -439,7 +443,7 @@ processes:
 
 // TestScaffoldPresets tests that all documented presets are valid
 func TestScaffoldPresets(t *testing.T) {
-	presets := []string{"laravel", "symfony", "generic", "minimal", "production"}
+	presets := []string{"laravel", "symfony", "php", "wordpress", "magento", "drupal", "nextjs", "nuxt", "nodejs"}
 
 	for _, preset := range presets {
 		t.Run(preset, func(t *testing.T) {
@@ -708,7 +712,7 @@ func TestScaffoldValidSubprocess(t *testing.T) {
 		return
 	}
 	output := os.Getenv("SCAFFOLD_OUTPUT")
-	rootCmd.SetArgs([]string{"scaffold", "minimal", "-o", output})
+	rootCmd.SetArgs([]string{"scaffold", "php", "-o", output})
 	_ = rootCmd.Execute()
 }
 
@@ -1124,7 +1128,7 @@ func TestPromptYesNoDefaults(t *testing.T) {
 
 // TestScaffoldAllPresets tests that all documented presets work via subprocess
 func TestScaffoldAllPresets(t *testing.T) {
-	presets := []string{"laravel", "symfony", "generic", "minimal", "production"}
+	presets := []string{"laravel", "symfony", "php", "wordpress", "magento", "drupal", "nextjs", "nuxt", "nodejs"}
 
 	for _, preset := range presets {
 		t.Run(preset, func(t *testing.T) {
@@ -2612,7 +2616,7 @@ func TestScaffoldAllPresetsComprehensiveSubprocess(t *testing.T) {
 
 // TestScaffoldAllPresetsComprehensive tests all scaffold presets comprehensively
 func TestScaffoldAllPresetsComprehensive(t *testing.T) {
-	presets := []string{"laravel", "symfony", "generic", "minimal", "production"}
+	presets := []string{"laravel", "symfony", "php", "wordpress", "magento", "drupal", "nextjs", "nuxt", "nodejs"}
 
 	for _, preset := range presets {
 		t.Run(preset, func(t *testing.T) {
@@ -3293,7 +3297,7 @@ func TestScaffoldProductionComposeSubprocess(t *testing.T) {
 		return
 	}
 	outputPath := os.Getenv("OUTPUT_PATH")
-	rootCmd.SetArgs([]string{"scaffold", "production", "--output", outputPath, "--docker-compose"})
+	rootCmd.SetArgs([]string{"scaffold", "laravel", "--output", outputPath, "--docker-compose"})
 	_ = rootCmd.Execute()
 }
 
@@ -3363,7 +3367,7 @@ func TestScaffoldBothDockerFilesSubprocess(t *testing.T) {
 		return
 	}
 	outputPath := os.Getenv("OUTPUT_PATH")
-	rootCmd.SetArgs([]string{"scaffold", "production", "--output", outputPath, "--dockerfile", "--docker-compose"})
+	rootCmd.SetArgs([]string{"scaffold", "laravel", "--output", outputPath, "--dockerfile", "--docker-compose"})
 	_ = rootCmd.Execute()
 }
 
@@ -3560,7 +3564,7 @@ func TestScaffoldGenericPresetSubprocess(t *testing.T) {
 		return
 	}
 	outputPath := os.Getenv("OUTPUT_PATH")
-	rootCmd.SetArgs([]string{"scaffold", "generic", "--output", outputPath})
+	rootCmd.SetArgs([]string{"scaffold", "php", "--output", outputPath})
 	_ = rootCmd.Execute()
 }
 
@@ -3620,7 +3624,7 @@ func TestScaffoldWithCustomAppNameSubprocess(t *testing.T) {
 		return
 	}
 	outputPath := os.Getenv("OUTPUT_PATH")
-	rootCmd.SetArgs([]string{"scaffold", "minimal", "--output", outputPath, "--app-name", "my-custom-app"})
+	rootCmd.SetArgs([]string{"scaffold", "php", "--output", outputPath, "--app-name", "my-custom-app"})
 	_ = rootCmd.Execute()
 }
 
@@ -3987,7 +3991,7 @@ func TestScaffoldForceOverwriteSubprocess(t *testing.T) {
 		return
 	}
 	outputPath := os.Getenv("OUTPUT_PATH")
-	rootCmd.SetArgs([]string{"scaffold", "minimal", "--output", outputPath, "--force"})
+	rootCmd.SetArgs([]string{"scaffold", "php", "--output", outputPath, "--force"})
 	_ = rootCmd.Execute()
 }
 
@@ -4224,7 +4228,7 @@ func TestScaffoldDockerfileSubprocess(t *testing.T) {
 	}
 
 	outputDir := os.Getenv("SCAFFOLD_OUTPUT")
-	rootCmd.SetArgs([]string{"scaffold", "minimal", "--output", outputDir, "--dockerfile"})
+	rootCmd.SetArgs([]string{"scaffold", "php", "--output", outputDir, "--dockerfile"})
 	_ = rootCmd.Execute()
 }
 
@@ -4253,7 +4257,7 @@ func TestScaffoldComposeSubprocess(t *testing.T) {
 	}
 
 	outputDir := os.Getenv("SCAFFOLD_OUTPUT")
-	rootCmd.SetArgs([]string{"scaffold", "minimal", "--output", outputDir, "--docker-compose"})
+	rootCmd.SetArgs([]string{"scaffold", "php", "--output", outputDir, "--docker-compose"})
 	_ = rootCmd.Execute()
 }
 
@@ -4311,7 +4315,7 @@ func TestScaffoldGenericSubprocess(t *testing.T) {
 	}
 
 	outputDir := os.Getenv("SCAFFOLD_OUTPUT")
-	rootCmd.SetArgs([]string{"scaffold", "generic", "--output", outputDir})
+	rootCmd.SetArgs([]string{"scaffold", "php", "--output", outputDir})
 	_ = rootCmd.Execute()
 }
 
@@ -4328,7 +4332,7 @@ func TestScaffoldGeneric(t *testing.T) {
 	outputStr := string(output)
 
 	// Should succeed or show generic being used
-	if err == nil || strings.Contains(outputStr, "generic") {
+	if err == nil || strings.Contains(outputStr, "invalid") {
 		t.Log("Generic preset was processed")
 	}
 }
@@ -4340,7 +4344,7 @@ func TestScaffoldMinimalSubprocess(t *testing.T) {
 	}
 
 	outputDir := os.Getenv("SCAFFOLD_OUTPUT")
-	rootCmd.SetArgs([]string{"scaffold", "minimal", "--output", outputDir})
+	rootCmd.SetArgs([]string{"scaffold", "php", "--output", outputDir})
 	_ = rootCmd.Execute()
 }
 
@@ -4357,7 +4361,7 @@ func TestScaffoldMinimal(t *testing.T) {
 	outputStr := string(output)
 
 	// Should succeed or show minimal being used
-	if err == nil || strings.Contains(outputStr, "minimal") {
+	if err == nil || strings.Contains(outputStr, "invalid") {
 		t.Log("Minimal preset was processed")
 	}
 }
@@ -4369,7 +4373,7 @@ func TestScaffoldProductionSubprocess(t *testing.T) {
 	}
 
 	outputDir := os.Getenv("SCAFFOLD_OUTPUT")
-	rootCmd.SetArgs([]string{"scaffold", "production", "--output", outputDir})
+	rootCmd.SetArgs([]string{"scaffold", "laravel", "--output", outputDir})
 	_ = rootCmd.Execute()
 }
 
@@ -4386,7 +4390,7 @@ func TestScaffoldProduction(t *testing.T) {
 	outputStr := string(output)
 
 	// Should succeed or show production being used
-	if err == nil || strings.Contains(outputStr, "production") {
+	if err == nil || strings.Contains(outputStr, "laravel") {
 		t.Log("Production preset was processed")
 	}
 }
@@ -5478,9 +5482,13 @@ func TestPromptForPresetDirect(t *testing.T) {
 	}{
 		{"choice_1_laravel", "1\n", "laravel"},
 		{"choice_2_symfony", "2\n", "symfony"},
-		{"choice_3_generic", "3\n", "generic"},
-		{"choice_4_minimal", "4\n", "minimal"},
-		{"choice_5_production", "5\n", "production"},
+		{"choice_3_php", "3\n", "php"},
+		{"choice_4_wordpress", "4\n", "wordpress"},
+		{"choice_5_magento", "5\n", "magento"},
+		{"choice_6_drupal", "6\n", "drupal"},
+		{"choice_7_nextjs", "7\n", "nextjs"},
+		{"choice_8_nuxt", "8\n", "nuxt"},
+		{"choice_9_nodejs", "9\n", "nodejs"},
 		{"invalid_defaults_to_laravel", "x\n", "laravel"},
 	}
 
@@ -5580,7 +5588,7 @@ func TestConfigureInteractiveDirect(t *testing.T) {
 		},
 		{
 			name:    "generic_basic_config",
-			preset:  "generic",
+			preset:  "php",
 			// Input: empty app name (use default), empty log level (use default), then 5 y/n answers
 			input:   "\n\nn\nn\nn\nn\nn\n",
 			wantApp: "",
@@ -6074,7 +6082,7 @@ func TestScaffoldWithPresetSubprocess(t *testing.T) {
 
 // TestScaffoldWithPreset tests scaffold with different presets
 func TestScaffoldWithPreset(t *testing.T) {
-	presets := []string{"laravel", "symfony", "generic", "minimal", "production"}
+	presets := []string{"laravel", "symfony", "php", "wordpress", "magento", "drupal", "nextjs", "nuxt", "nodejs"}
 
 	for _, preset := range presets {
 		t.Run(preset, func(t *testing.T) {
@@ -7001,7 +7009,7 @@ func TestScaffoldGeneratorSubprocess(t *testing.T) {
 
 // TestScaffoldGenerator tests scaffold with all presets
 func TestScaffoldGenerator(t *testing.T) {
-	presets := []string{"laravel", "symfony", "generic", "minimal", "production"}
+	presets := []string{"laravel", "symfony", "php", "wordpress", "magento", "drupal", "nextjs", "nuxt", "nodejs"}
 
 	for _, preset := range presets {
 		t.Run(preset, func(t *testing.T) {
@@ -7562,8 +7570,8 @@ func TestRunScaffoldValidPreset(t *testing.T) {
 		}
 	}()
 
-	// Run with "minimal" preset (simplest)
-	runScaffold(cmd, []string{"minimal"})
+	// Run with "php" preset (simplest)
+	runScaffold(cmd, []string{"php"})
 
 	// Check that config was generated
 	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
@@ -8014,9 +8022,13 @@ func TestPromptForPresetWithInput(t *testing.T) {
 	}{
 		{"choice_1", "1\n", scaffold.PresetLaravel},
 		{"choice_2", "2\n", scaffold.PresetSymfony},
-		{"choice_3", "3\n", scaffold.PresetGeneric},
-		{"choice_4", "4\n", scaffold.PresetMinimal},
-		{"choice_5", "5\n", scaffold.PresetProduction},
+		{"choice_3", "3\n", scaffold.PresetPHP},
+		{"choice_4", "4\n", scaffold.PresetWordPress},
+		{"choice_5", "5\n", scaffold.PresetMagento},
+		{"choice_6", "6\n", scaffold.PresetDrupal},
+		{"choice_7", "7\n", scaffold.PresetNextJS},
+		{"choice_8", "8\n", scaffold.PresetNuxt},
+		{"choice_9", "9\n", scaffold.PresetNodeJS},
 		{"invalid_defaults_to_laravel", "invalid\n", scaffold.PresetLaravel},
 	}
 
@@ -8474,7 +8486,7 @@ func TestRunScaffoldGenerateErrorSubprocess(t *testing.T) {
 	interactive = false
 
 	cmd := &cobra.Command{}
-	runScaffold(cmd, []string{"minimal"})
+	runScaffold(cmd, []string{"php"})
 }
 
 // TestRunScaffoldGenerateError tests generation error path
@@ -8527,7 +8539,7 @@ func TestRunScaffoldWithGenerateDockerOnly(t *testing.T) {
 		os.Stderr = origStderr
 	}()
 
-	runScaffold(cmd, []string{"minimal"})
+	runScaffold(cmd, []string{"php"})
 
 	// Verify Dockerfile was generated
 	if _, err := os.Stat(filepath.Join(tmpDir, "Dockerfile")); err == nil {
@@ -8572,7 +8584,7 @@ func TestRunScaffoldWithComposeOnly(t *testing.T) {
 		os.Stderr = origStderr
 	}()
 
-	runScaffold(cmd, []string{"minimal"})
+	runScaffold(cmd, []string{"php"})
 
 	// Verify docker-compose.yml was generated
 	if _, err := os.Stat(filepath.Join(tmpDir, "docker-compose.yml")); err == nil {

@@ -18,17 +18,26 @@ var scaffoldCmd = &cobra.Command{
 	Long: `Scaffold generates PHPeek PM configuration files for common use cases.
 
 Available presets:
-  laravel     - Laravel application with Nginx, Horizon, Queue workers, Scheduler
-  symfony     - Symfony application with Nginx and basic setup
-  generic     - Generic PHP application with Nginx
-  minimal     - Minimal configuration (PHP-FPM only)
-  production  - Production-ready Laravel with all features and observability
+  PHP:
+    laravel     - Laravel with Horizon, Queue workers, Scheduler
+    symfony     - Symfony with Messenger queue workers
+    php         - Vanilla PHP with Nginx
+    wordpress   - WordPress with WP-CLI cron
+    magento     - Magento 2 with queue consumers, cron, indexer
+    drupal      - Drupal with Drush cron
+
+  Node.js:
+    nextjs      - Next.js standalone with Nginx reverse proxy
+    nuxt        - Nuxt 3 with Nitro server, Nginx reverse proxy
+    nodejs      - Node.js with workers, Nginx reverse proxy
+
+Use --observability to add tracing, metrics, and API to any preset.
 
 Examples:
   phpeek-pm scaffold laravel
-  phpeek-pm scaffold laravel --interactive
-  phpeek-pm scaffold production --output ./docker
-  phpeek-pm scaffold minimal --docker-compose`,
+  phpeek-pm scaffold wordpress --observability
+  phpeek-pm scaffold nextjs --dockerfile --nginx
+  phpeek-pm scaffold magento --docker-compose --observability`,
 	Args: cobra.MaximumNArgs(1),
 	Run:  runScaffold,
 }
@@ -38,8 +47,10 @@ var (
 	outputDir       string
 	generateDocker  bool
 	generateCompose bool
+	generateNginx   bool
 	appName         string
 	queueWorkers    int
+	observability   bool
 )
 
 func init() {
@@ -47,8 +58,10 @@ func init() {
 	scaffoldCmd.Flags().StringVarP(&outputDir, "output", "o", ".", "Output directory for generated files")
 	scaffoldCmd.Flags().BoolVar(&generateDocker, "dockerfile", false, "Generate Dockerfile")
 	scaffoldCmd.Flags().BoolVar(&generateCompose, "docker-compose", false, "Generate docker-compose.yml")
+	scaffoldCmd.Flags().BoolVar(&generateNginx, "nginx", false, "Generate nginx.conf (with upstream load balancing for Node.js)")
 	scaffoldCmd.Flags().StringVar(&appName, "app-name", "my-app", "Application name")
 	scaffoldCmd.Flags().IntVar(&queueWorkers, "queue-workers", 3, "Number of queue workers")
+	scaffoldCmd.Flags().BoolVar(&observability, "observability", false, "Enable observability stack (tracing, metrics, API)")
 }
 
 func runScaffold(cmd *cobra.Command, args []string) {
@@ -90,11 +103,22 @@ func runScaffold(cmd *cobra.Command, args []string) {
 		gen.SetQueueWorkers(queueWorkers)
 	}
 
+	// Apply observability stack if requested
+	if observability {
+		gen.EnableFeature("tracing", true)
+		gen.EnableFeature("metrics", true)
+		gen.EnableFeature("api", true)
+		gen.SetLogLevel("warn")
+	}
+
 	// Display configuration summary
 	fmt.Fprintf(os.Stderr, "\n📦 PHPeek PM Scaffold Generator\n\n")
 	fmt.Fprintf(os.Stderr, "Preset:        %s\n", preset)
 	fmt.Fprintf(os.Stderr, "App Name:      %s\n", gen.GetConfig().AppName)
 	fmt.Fprintf(os.Stderr, "Output Dir:    %s\n", outputDir)
+	if observability {
+		fmt.Fprintf(os.Stderr, "Observability: enabled (tracing + metrics + API)\n")
+	}
 
 	// Determine files to generate
 	files := []string{"config"}
@@ -103,6 +127,9 @@ func runScaffold(cmd *cobra.Command, args []string) {
 	}
 	if generateDocker {
 		files = append(files, "dockerfile")
+	}
+	if generateNginx {
+		files = append(files, "nginx")
 	}
 
 	fmt.Fprintf(os.Stderr, "\nGenerating files:\n")
@@ -137,14 +164,22 @@ func runScaffold(cmd *cobra.Command, args []string) {
 
 func promptForPreset() scaffold.Preset {
 	fmt.Fprintln(os.Stderr, "\n📦 Select a preset:")
-	fmt.Fprintln(os.Stderr, "  1. laravel     - Laravel application (full stack)")
-	fmt.Fprintln(os.Stderr, "  2. symfony     - Symfony application")
-	fmt.Fprintln(os.Stderr, "  3. generic     - Generic PHP application")
-	fmt.Fprintln(os.Stderr, "  4. minimal     - Minimal setup (PHP-FPM only)")
-	fmt.Fprintln(os.Stderr, "  5. production  - Production-ready Laravel (all features)")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "  PHP:")
+	fmt.Fprintln(os.Stderr, "    1. laravel    - Laravel with Horizon, Queue, Scheduler")
+	fmt.Fprintln(os.Stderr, "    2. symfony    - Symfony with Messenger")
+	fmt.Fprintln(os.Stderr, "    3. php        - Vanilla PHP with Nginx")
+	fmt.Fprintln(os.Stderr, "    4. wordpress  - WordPress with WP-CLI cron")
+	fmt.Fprintln(os.Stderr, "    5. magento    - Magento 2 with queue, cron, indexer")
+	fmt.Fprintln(os.Stderr, "    6. drupal     - Drupal with Drush cron")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "  Node.js:")
+	fmt.Fprintln(os.Stderr, "    7. nextjs     - Next.js standalone")
+	fmt.Fprintln(os.Stderr, "    8. nuxt       - Nuxt 3 with Nitro")
+	fmt.Fprintln(os.Stderr, "    9. nodejs     - Node.js with workers")
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Fprint(os.Stderr, "\nChoice (1-5): ")
+	fmt.Fprint(os.Stderr, "\nChoice (1-9): ")
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 
@@ -154,11 +189,19 @@ func promptForPreset() scaffold.Preset {
 	case "2":
 		return scaffold.PresetSymfony
 	case "3":
-		return scaffold.PresetGeneric
+		return scaffold.PresetPHP
 	case "4":
-		return scaffold.PresetMinimal
+		return scaffold.PresetWordPress
 	case "5":
-		return scaffold.PresetProduction
+		return scaffold.PresetMagento
+	case "6":
+		return scaffold.PresetDrupal
+	case "7":
+		return scaffold.PresetNextJS
+	case "8":
+		return scaffold.PresetNuxt
+	case "9":
+		return scaffold.PresetNodeJS
 	default:
 		fmt.Fprintln(os.Stderr, "\nInvalid choice, using laravel")
 		return scaffold.PresetLaravel
@@ -200,23 +243,33 @@ func configureInteractive(gen *scaffold.Generator) {
 	// Features
 	fmt.Fprintln(os.Stderr, "\n🔧 Features (y/n):")
 
-	if promptYesNo("Enable Prometheus metrics?", cfg.EnableMetrics) {
-		gen.EnableFeature("metrics", true)
-		generateCompose = true // Suggest docker-compose for metrics stack
-	}
-
-	if promptYesNo("Enable Management API?", cfg.EnableAPI) {
-		gen.EnableFeature("api", true)
-	}
-
-	if promptYesNo("Enable distributed tracing?", cfg.EnableTracing) {
+	// Observability stack (convenience option)
+	if promptYesNo("Enable full observability stack? (tracing + metrics + API)", false) {
 		gen.EnableFeature("tracing", true)
+		gen.EnableFeature("metrics", true)
+		gen.EnableFeature("api", true)
+		gen.SetLogLevel("warn")
+		observability = true
+	} else {
+		// Individual feature toggles
+		if promptYesNo("Enable Prometheus metrics?", cfg.EnableMetrics) {
+			gen.EnableFeature("metrics", true)
+		}
+
+		if promptYesNo("Enable Management API?", cfg.EnableAPI) {
+			gen.EnableFeature("api", true)
+		}
+
+		if promptYesNo("Enable distributed tracing?", cfg.EnableTracing) {
+			gen.EnableFeature("tracing", true)
+		}
 	}
 
 	// Docker files
 	fmt.Fprintln(os.Stderr, "\n🐳 Docker files:")
-	generateCompose = promptYesNo("Generate docker-compose.yml?", false)
+	generateCompose = promptYesNo("Generate docker-compose.yml?", observability) // Default yes if observability enabled
 	generateDocker = promptYesNo("Generate Dockerfile?", false)
+	generateNginx = promptYesNo("Generate nginx.conf (with load balancing)?", cfg.EnableNginx)
 }
 
 func promptYesNo(prompt string, defaultVal bool) bool {
@@ -265,6 +318,8 @@ func getFilename(file string) string {
 		return "docker-compose.yml"
 	case "dockerfile":
 		return "Dockerfile"
+	case "nginx":
+		return "nginx.conf"
 	default:
 		return file
 	}

@@ -89,6 +89,10 @@ func (g *Generator) Generate(files []string) error {
 			if err := g.generateDockerfile(); err != nil {
 				return fmt.Errorf("failed to generate Dockerfile: %w", err)
 			}
+		case "nginx":
+			if err := g.generateNginxConfig(); err != nil {
+				return fmt.Errorf("failed to generate nginx.conf: %w", err)
+			}
 		}
 	}
 
@@ -135,6 +139,21 @@ func (g *Generator) generateDockerfile() error {
 	path := filepath.Join(g.outDir, "Dockerfile")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %w", err)
+	}
+
+	return nil
+}
+
+// generateNginxConfig generates nginx.conf
+func (g *Generator) generateNginxConfig() error {
+	content, err := GenerateNginxConfig(g.config)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(g.outDir, "nginx.conf")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write nginx.conf: %w", err)
 	}
 
 	return nil

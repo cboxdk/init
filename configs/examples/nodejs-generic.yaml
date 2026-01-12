@@ -1,0 +1,140 @@
+# Generic Node.js Application Configuration
+# Works with Express, Fastify, Koa, NestJS, Hono, or any Node.js server
+#
+# Environment variables set per instance:
+#   - PHPEEK_PM_INSTANCE_INDEX: 0, 1, 2, ... (numeric index)
+#   - PHPEEK_PM_INSTANCE_ID: processname-0, processname-1, ...
+#   - PORT: Auto-calculated from port_base + instance index (if port_base set)
+
+version: "1.0"
+
+global:
+  shutdown_timeout: 30
+  log_format: json
+  log_level: info
+  metrics_enabled: true
+  api_enabled: true
+
+processes:
+  # Main Node.js application
+  app:
+    enabled: true
+    command: ["node", "dist/server.js"]
+    # Or for TypeScript with ts-node:
+    # command: ["npx", "ts-node", "src/server.ts"]
+    # Or for ESM:
+    # command: ["node", "--experimental-specifier-resolution=node", "dist/server.mjs"]
+    working_dir: /app
+    restart: always
+    env:
+      NODE_ENV: production
+      # App reads PORT from environment
+    # Auto-assign ports when scaling (PORT = 3000, 3001, 3002, ...)
+    port_base: 3000
+    health_check:
+      type: http
+      url: http://localhost:3000/health
+      initial_delay: 5
+      period: 10
+      timeout: 3
+      failure_threshold: 3
+    shutdown:
+      signal: SIGTERM
+      timeout: 30
+      # Optional: drain connections before shutdown
+      pre_stop_hook:
+        name: drain-connections
+        command: ["node", "scripts/drain.js"]
+        timeout: 10
+        continue_on_error: true
+    logging:
+      stdout: true
+      stderr: true
+      # Parse JSON logs from structured loggers (pino, winston, bunyan)
+      json:
+        enabled: true
+        detect_auto: true
+        extract_level: true
+        extract_message: true
+    # Memory leak protection
+    max_memory_mb: 512
+
+---
+# Example configurations for popular Node.js frameworks
+
+# Express.js
+# processes:
+#   express:
+#     command: ["node", "app.js"]
+#     port_base: 3000
+#     max_memory_mb: 256
+
+# Fastify
+# processes:
+#   fastify:
+#     command: ["node", "server.js"]
+#     port_base: 3000
+#     env:
+#       FASTIFY_ADDRESS: "0.0.0.0"
+
+# NestJS
+# processes:
+#   nestjs:
+#     command: ["node", "dist/main.js"]
+#     port_base: 3000
+#     max_memory_mb: 512
+
+# Hono (Bun or Node)
+# processes:
+#   hono:
+#     command: ["bun", "run", "src/index.ts"]
+#     port_base: 3000
+
+---
+# Scaled deployment with workers
+
+# processes:
+#   # API servers (4 instances)
+#   api:
+#     enabled: true
+#     command: ["node", "dist/server.js"]
+#     scale: 4
+#     port_base: 3000  # Ports: 3000-3003
+#     restart: always
+#     max_memory_mb: 512
+#     health_check:
+#       type: http
+#       url: http://localhost:${PORT}/health
+#
+#   # Background job workers
+#   worker:
+#     enabled: true
+#     command: ["node", "dist/worker.js"]
+#     scale: 2
+#     restart: always
+#     max_memory_mb: 256
+#     depends_on: [api]
+#     env:
+#       WORKER_CONCURRENCY: "10"
+#
+#   # Cron scheduler
+#   cron:
+#     enabled: true
+#     command: ["node", "dist/cron.js"]
+#     schedule: "* * * * *"
+#     restart: never
+
+---
+# PM2 Migration Reference
+#
+# | PM2 ecosystem.config.js     | PHPeek-PM equivalent           |
+# |-----------------------------|--------------------------------|
+# | instances: 4                | scale: 4                       |
+# | exec_mode: "cluster"        | scale: N + port_base           |
+# | max_memory_restart: "500M"  | max_memory_mb: 500             |
+# | watch: true                 | phpeek-pm serve --watch        |
+# | env_production: {...}       | env: {...}                     |
+# | cron_restart: "0 0 * * *"   | schedule: "0 0 * * *"          |
+# | wait_ready: true            | health_check.mode: readiness   |
+# | listen_timeout: 3000        | health_check.initial_delay: 3  |
+# | kill_timeout: 5000          | shutdown.timeout: 5            |

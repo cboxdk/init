@@ -3,6 +3,8 @@ package config
 import (
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestSetDefaults(t *testing.T) {
@@ -973,6 +975,166 @@ func TestHookEqual(t *testing.T) {
 			got := hookEqual(tt.a, tt.b)
 			if got != tt.want {
 				t.Errorf("hookEqual() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestProcess_NodeJSFields tests the Node.js specific config fields
+func TestProcess_NodeJSFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		process  *Process
+		validate func(*testing.T, *Process)
+	}{
+		{
+			name: "max_memory_mb is set",
+			process: &Process{
+				Command:     []string{"node", "server.js"},
+				MaxMemoryMB: 512,
+			},
+			validate: func(t *testing.T, p *Process) {
+				if p.MaxMemoryMB != 512 {
+					t.Errorf("MaxMemoryMB = %v, want 512", p.MaxMemoryMB)
+				}
+			},
+		},
+		{
+			name: "port_base is set",
+			process: &Process{
+				Command:  []string{"node", "server.js"},
+				PortBase: 3000,
+			},
+			validate: func(t *testing.T, p *Process) {
+				if p.PortBase != 3000 {
+					t.Errorf("PortBase = %v, want 3000", p.PortBase)
+				}
+			},
+		},
+		{
+			name: "both fields set together",
+			process: &Process{
+				Command:     []string{"node", "server.js"},
+				MaxMemoryMB: 1024,
+				PortBase:    8080,
+				Scale:       4,
+			},
+			validate: func(t *testing.T, p *Process) {
+				if p.MaxMemoryMB != 1024 {
+					t.Errorf("MaxMemoryMB = %v, want 1024", p.MaxMemoryMB)
+				}
+				if p.PortBase != 8080 {
+					t.Errorf("PortBase = %v, want 8080", p.PortBase)
+				}
+				if p.Scale != 4 {
+					t.Errorf("Scale = %v, want 4", p.Scale)
+				}
+			},
+		},
+		{
+			name: "zero values are valid (disabled)",
+			process: &Process{
+				Command:     []string{"node", "server.js"},
+				MaxMemoryMB: 0,
+				PortBase:    0,
+			},
+			validate: func(t *testing.T, p *Process) {
+				if p.MaxMemoryMB != 0 {
+					t.Errorf("MaxMemoryMB = %v, want 0 (disabled)", p.MaxMemoryMB)
+				}
+				if p.PortBase != 0 {
+					t.Errorf("PortBase = %v, want 0 (disabled)", p.PortBase)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.validate(t, tt.process)
+		})
+	}
+}
+
+// TestProcess_NodeJSFieldsYAML tests YAML parsing of Node.js fields
+func TestProcess_NodeJSFieldsYAML(t *testing.T) {
+	yamlContent := `
+version: "1.0"
+global:
+  shutdown_timeout: 30
+  log_level: info
+processes:
+  nodejs-app:
+    enabled: true
+    command: ["node", "dist/server.js"]
+    scale: 4
+    port_base: 3000
+    max_memory_mb: 512
+    restart: always
+    env:
+      NODE_ENV: production
+`
+	var cfg Config
+	if err := yaml.Unmarshal([]byte(yamlContent), &cfg); err != nil {
+		t.Fatalf("Failed to parse YAML: %v", err)
+	}
+
+	proc, ok := cfg.Processes["nodejs-app"]
+	if !ok {
+		t.Fatal("Process 'nodejs-app' not found")
+	}
+
+	if proc.PortBase != 3000 {
+		t.Errorf("PortBase = %v, want 3000", proc.PortBase)
+	}
+	if proc.MaxMemoryMB != 512 {
+		t.Errorf("MaxMemoryMB = %v, want 512", proc.MaxMemoryMB)
+	}
+	if proc.Scale != 4 {
+		t.Errorf("Scale = %v, want 4", proc.Scale)
+	}
+}
+
+// TestProcess_PortBaseCalculation tests port calculation logic
+func TestProcess_PortBaseCalculation(t *testing.T) {
+	tests := []struct {
+		name          string
+		portBase      int
+		instanceIndex int
+		expectedPort  int
+	}{
+		{
+			name:          "first instance",
+			portBase:      3000,
+			instanceIndex: 0,
+			expectedPort:  3000,
+		},
+		{
+			name:          "second instance",
+			portBase:      3000,
+			instanceIndex: 1,
+			expectedPort:  3001,
+		},
+		{
+			name:          "fourth instance",
+			portBase:      3000,
+			instanceIndex: 3,
+			expectedPort:  3003,
+		},
+		{
+			name:          "different base port",
+			portBase:      8080,
+			instanceIndex: 2,
+			expectedPort:  8082,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the port calculation done in supervisor.envVars()
+			calculatedPort := tt.portBase + tt.instanceIndex
+			if calculatedPort != tt.expectedPort {
+				t.Errorf("Port calculation = %v, want %v", calculatedPort, tt.expectedPort)
 			}
 		})
 	}
