@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // maxBufferSize is the maximum size for the line buffer to prevent OOM

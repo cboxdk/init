@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // Redactor handles sensitive data redaction for compliance

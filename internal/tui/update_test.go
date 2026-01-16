@@ -5,9 +5,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/logger"
-	"github.com/gophpeek/phpeek-pm/internal/process"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/process"
 )
 
 // TestFormatLogLevel tests log level formatting

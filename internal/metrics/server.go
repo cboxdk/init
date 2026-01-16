@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/acl"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	tlsmgr "github.com/gophpeek/phpeek-pm/internal/tls"
+	"github.com/cboxdk/init/internal/acl"
+	"github.com/cboxdk/init/internal/config"
+	tlsmgr "github.com/cboxdk/init/internal/tls"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 

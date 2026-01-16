@@ -2,7 +2,7 @@ package config
 
 import "time"
 
-// Config represents the complete phpeek-pm configuration
+// Config represents the complete cbox-init configuration
 type Config struct {
 	Version   string              `yaml:"version" json:"version"`
 	Global    GlobalConfig        `yaml:"global" json:"global"`
@@ -28,7 +28,7 @@ type GlobalConfig struct {
 	MetricsPath               string           `yaml:"metrics_path" json:"metrics_path"`                                 //
 	APIEnabled                *bool            `yaml:"api_enabled" json:"api_enabled"`                                   //
 	APIPort                   int              `yaml:"api_port" json:"api_port"`                                         //
-	APISocket                 string           `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/phpeek-pm.sock)
+	APISocket                 string           `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/cbox-init.sock)
 	APIAuth                   string           `yaml:"api_auth" json:"api_auth"`                                         // Bearer token
 	APITLS                    *TLSConfig       `yaml:"api_tls" json:"api_tls"`                                           // TLS configuration for API
 	APIACL                    *ACLConfig       `yaml:"api_acl" json:"api_acl"`                                           // IP ACL for API
@@ -42,7 +42,7 @@ type GlobalConfig struct {
 	TracingExporter           string           `yaml:"tracing_exporter" json:"tracing_exporter"`                         // otlp-grpc | otlp-http | stdout | jaeger | zipkin
 	TracingEndpoint           string           `yaml:"tracing_endpoint" json:"tracing_endpoint"`                         // Exporter endpoint (e.g., localhost:4317)
 	TracingSampleRate         float64          `yaml:"tracing_sample_rate" json:"tracing_sample_rate"`                   // 0.0-1.0 (default: 1.0 = 100%)
-	TracingServiceName        string           `yaml:"tracing_service_name" json:"tracing_service_name"`                 // Service name for traces (default: phpeek-pm)
+	TracingServiceName        string           `yaml:"tracing_service_name" json:"tracing_service_name"`                 // Service name for traces (default: cbox-init)
 	TracingUseTLS             bool             `yaml:"tracing_use_tls" json:"tracing_use_tls"`                           // Enable TLS for production (default: false)
 	ScheduleHistorySize       int              `yaml:"schedule_history_size" json:"schedule_history_size"`               // Max execution history entries per job (default: 100)
 	OneshotHistoryMaxEntries  int              `yaml:"oneshot_history_max_entries" json:"oneshot_history_max_entries"`   // Max oneshot history entries per process (default: 5000)
@@ -217,7 +217,7 @@ type ACLConfig struct {
 // ReadinessConfig configures container readiness file for Kubernetes integration
 type ReadinessConfig struct {
 	Enabled   bool     `yaml:"enabled" json:"enabled"`     // Enable readiness file creation
-	Path      string   `yaml:"path" json:"path"`           // Path to readiness file (default: /tmp/phpeek-ready)
+	Path      string   `yaml:"path" json:"path"`           // Path to readiness file (default: /tmp/cbox-ready)
 	Mode      string   `yaml:"mode" json:"mode"`           // Readiness mode: "all_healthy" | "all_running" (default: all_healthy)
 	Content   string   `yaml:"content" json:"content"`     // Optional content to write to the file
 	Processes []string `yaml:"processes" json:"processes"` // Specific processes to check (empty = all enabled longrun)
@@ -316,7 +316,7 @@ func (c *Config) setGlobalTLSDefaults() {
 	}
 	if c.Global.Readiness != nil {
 		if c.Global.Readiness.Path == "" {
-			c.Global.Readiness.Path = "/tmp/phpeek-ready"
+			c.Global.Readiness.Path = "/tmp/cbox-ready"
 		}
 		if c.Global.Readiness.Mode == "" {
 			c.Global.Readiness.Mode = "all_healthy"
@@ -356,7 +356,7 @@ func (c *Config) setGlobalTracingDefaults() {
 		c.Global.TracingSampleRate = 1.0
 	}
 	if c.Global.TracingServiceName == "" {
-		c.Global.TracingServiceName = "phpeek-pm"
+		c.Global.TracingServiceName = "cbox-init"
 	}
 	if c.Global.TracingEndpoint == "" {
 		switch c.Global.TracingExporter {

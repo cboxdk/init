@@ -1,12 +1,12 @@
 ---
 title: "Features"
-description: "Comprehensive guide to PHPeek PM features including health checks, scaling, and monitoring"
+description: "Comprehensive guide to Cbox Init features including health checks, scaling, and monitoring"
 weight: 20
 ---
 
 # Features
 
-PHPeek PM provides production-grade process management features designed for PHP applications in Docker containers. Whether you're running Laravel, WordPress, Symfony, or any PHP framework, these features help you manage multi-process containers reliably.
+Cbox Init provides production-grade process management features designed for PHP applications in Docker containers. Whether you're running Laravel, WordPress, Symfony, or any PHP framework, these features help you manage multi-process containers reliably.
 
 ## Core Features
 

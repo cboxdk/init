@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/process"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/process"
 )
 
 // TestShowToast tests toast notification display

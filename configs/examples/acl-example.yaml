@@ -30,8 +30,8 @@ global:
   # TLS Configuration for API (optional - combine with ACL)
   api_tls:
     enabled: false
-    # cert_file: "/etc/phpeek-pm/certs/server.crt"
-    # key_file: "/etc/phpeek-pm/certs/server.key"
+    # cert_file: "/etc/cbox-init/certs/server.crt"
+    # key_file: "/etc/cbox-init/certs/server.key"
 
   # Metrics Configuration with IP ACL
   metrics_enabled: true
@@ -131,9 +131,9 @@ processes:
 #
 # api_tls:
 #   enabled: true
-#   cert_file: "/etc/phpeek-pm/certs/server.crt"
-#   key_file: "/etc/phpeek-pm/certs/server.key"
-#   ca_file: "/etc/phpeek-pm/certs/ca.crt"
+#   cert_file: "/etc/cbox-init/certs/server.crt"
+#   key_file: "/etc/cbox-init/certs/server.key"
+#   ca_file: "/etc/cbox-init/certs/ca.crt"
 #   client_auth: "verify"   # Require client certificates
 #   min_version: "TLS 1.3"
 

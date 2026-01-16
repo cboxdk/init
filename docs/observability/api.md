@@ -1,6 +1,6 @@
 ---
 title: "Management API"
-description: "Control and inspect PHPeek PM processes via REST API at runtime"
+description: "Control and inspect Cbox Init processes via REST API at runtime"
 weight: 41
 ---
 
@@ -10,7 +10,7 @@ REST API for managing and inspecting processes at runtime.
 
 ## Configuration
 
-Enable the API in your `phpeek-pm.yaml`:
+Enable the API in your `cbox-init.yaml`:
 
 ```yaml
 global:

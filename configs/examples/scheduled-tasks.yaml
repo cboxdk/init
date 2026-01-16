@@ -38,7 +38,7 @@ processes:
       method: POST      # Optional: HTTP method (default: POST)
       headers:          # Optional: Custom headers for authentication
         Authorization: Bearer your-token-here
-        X-Service: phpeek-pm
+        X-Service: cbox-init
 
   # Cache warming - runs every 15 minutes
   cache-warmer:

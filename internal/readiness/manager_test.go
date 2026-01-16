@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 func newTestLogger() *slog.Logger {

@@ -86,8 +86,8 @@ func TestSetDefaults(t *testing.T) {
 				if c.Global.TracingSampleRate != 1.0 {
 					t.Errorf("TracingSampleRate = %v, want 1.0", c.Global.TracingSampleRate)
 				}
-				if c.Global.TracingServiceName != "phpeek-pm" {
-					t.Errorf("TracingServiceName = %v, want phpeek-pm", c.Global.TracingServiceName)
+				if c.Global.TracingServiceName != "cbox-init" {
+					t.Errorf("TracingServiceName = %v, want cbox-init", c.Global.TracingServiceName)
 				}
 			},
 		},

@@ -5,12 +5,12 @@ RUN apk add --no-cache \
     ca-certificates \
     tzdata
 
-# Copy phpeek-pm binary
-COPY build/phpeek-pm-linux-amd64 /usr/local/bin/phpeek-pm
-RUN chmod +x /usr/local/bin/phpeek-pm
+# Copy cbox-init binary
+COPY build/cbox-init-linux-amd64 /usr/local/bin/cbox-init
+RUN chmod +x /usr/local/bin/cbox-init
 
 # Copy test configuration
-COPY tests/integration/test-config.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY tests/integration/test-config.yaml /etc/cbox-init/cbox-init.yaml
 
 # Run tests
 COPY tests/integration/run-tests.sh /run-tests.sh

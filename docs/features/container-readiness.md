@@ -6,7 +6,7 @@ weight: 28
 
 # Container Readiness
 
-PHPeek PM supports file-based readiness indicators for Kubernetes integration. When all tracked processes are ready, a readiness file is created. Kubernetes readiness probes can check for this file's existence to determine if the container is ready to receive traffic.
+Cbox Init supports file-based readiness indicators for Kubernetes integration. When all tracked processes are ready, a readiness file is created. Kubernetes readiness probes can check for this file's existence to determine if the container is ready to receive traffic.
 
 ## Overview
 
@@ -25,7 +25,7 @@ version: "1.0"
 global:
   readiness:
     enabled: true
-    path: "/tmp/phpeek-ready"
+    path: "/tmp/cbox-ready"
     mode: "all_healthy"
 
 processes:
@@ -50,7 +50,7 @@ processes:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `false` | Enable/disable readiness file management |
-| `path` | `string` | `/tmp/phpeek-ready` | Path to the readiness file |
+| `path` | `string` | `/tmp/cbox-ready` | Path to the readiness file |
 | `mode` | `string` | `all_healthy` | Readiness evaluation mode |
 | `content` | `string` | `ready\ntimestamp=...` | Custom file content when ready |
 | `processes` | `[]string` | `[]` | Specific processes to track (empty = all) |
@@ -101,13 +101,13 @@ spec:
   containers:
     - name: app
       image: your-app:latest
-      command: ["/usr/local/bin/phpeek-pm"]
+      command: ["/usr/local/bin/cbox-init"]
       readinessProbe:
         exec:
           command:
             - test
             - -f
-            - /tmp/phpeek-ready
+            - /tmp/cbox-ready
         initialDelaySeconds: 5
         periodSeconds: 5
         failureThreshold: 3
@@ -116,7 +116,7 @@ spec:
           command:
             - pgrep
             - -f
-            - phpeek-pm
+            - cbox-init
         initialDelaySeconds: 10
         periodSeconds: 10
 ```
@@ -145,7 +145,7 @@ spec:
             - containerPort: 80
           readinessProbe:
             exec:
-              command: ["test", "-f", "/tmp/phpeek-ready"]
+              command: ["test", "-f", "/tmp/cbox-ready"]
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
@@ -162,7 +162,7 @@ Track only specific processes for readiness evaluation:
 global:
   readiness:
     enabled: true
-    path: "/tmp/phpeek-ready"
+    path: "/tmp/cbox-ready"
     mode: "all_healthy"
     processes:
       - php-fpm
@@ -195,7 +195,7 @@ Provide custom content for the readiness file:
 global:
   readiness:
     enabled: true
-    path: "/tmp/phpeek-ready"
+    path: "/tmp/cbox-ready"
     content: |
       OK
       version=1.0.0
@@ -238,7 +238,7 @@ global:
   log_level: info
   readiness:
     enabled: true
-    path: "/tmp/phpeek-ready"
+    path: "/tmp/cbox-ready"
     mode: "all_healthy"
     processes:
       - php-fpm
@@ -282,7 +282,7 @@ processes:
 
 1. **Check if readiness is enabled:**
    ```bash
-   grep -A5 "readiness:" phpeek-pm.yaml
+   grep -A5 "readiness:" cbox-init.yaml
    ```
 
 2. **Verify all tracked processes are healthy:**
@@ -299,19 +299,19 @@ processes:
 
 1. **Verify probe path matches config:**
    ```yaml
-   # PHPeek config
+   # Cbox config
    readiness:
-     path: "/tmp/phpeek-ready"  # Must match K8s probe path
+     path: "/tmp/cbox-ready"  # Must match K8s probe path
    ```
 
 2. **Check file permissions:**
    ```bash
-   ls -la /tmp/phpeek-ready
+   ls -la /tmp/cbox-ready
    ```
 
 3. **Test probe manually in container:**
    ```bash
-   kubectl exec -it pod-name -- test -f /tmp/phpeek-ready && echo "Ready" || echo "Not ready"
+   kubectl exec -it pod-name -- test -f /tmp/cbox-ready && echo "Ready" || echo "Not ready"
    ```
 
 ### Container stays not-ready after processes start

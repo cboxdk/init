@@ -15,9 +15,9 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "phpeek-pm",
+	Use:   "cbox-init",
 	Short: "Production-grade process manager for Docker containers",
-	Long: `PHPeek PM - Production-grade process manager for Docker containers
+	Long: `Cbox Init - Production-grade process manager for Docker containers
 
 A modern process supervisor designed for Laravel and PHP applications with:
 - Multi-process orchestration with DAG dependencies
@@ -29,11 +29,11 @@ A modern process supervisor designed for Laravel and PHP applications with:
 - Cron-like scheduler for periodic tasks
 
 Examples:
-  phpeek-pm serve                    # Start daemon
-  phpeek-pm tui                      # Interactive dashboard
-  phpeek-pm logs nginx               # Tail nginx logs
-  phpeek-pm restart horizon          # Restart horizon
-  phpeek-pm scale queue-default 10   # Scale to 10 workers`,
+  cbox-init serve                    # Start daemon
+  cbox-init tui                      # Interactive dashboard
+  cbox-init logs nginx               # Tail nginx logs
+  cbox-init restart horizon          # Restart horizon
+  cbox-init scale queue-default 10   # Scale to 10 workers`,
 	Version: version,
 	// Default to serve command if no subcommand specified
 	Run: func(cmd *cobra.Command, args []string) {

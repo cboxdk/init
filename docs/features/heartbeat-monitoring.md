@@ -6,7 +6,7 @@ weight: 26
 
 # Heartbeat Monitoring
 
-Integrate PHPeek PM with external monitoring services like healthchecks.io, Cronitor, or Better Uptime for dead man's switch monitoring.
+Integrate Cbox Init with external monitoring services like healthchecks.io, Cronitor, or Better Uptime for dead man's switch monitoring.
 
 ## Overview
 
@@ -111,7 +111,7 @@ processes:
       method: POST  # Default is POST
       headers:
         Authorization: Bearer your-token-here
-        X-Service: phpeek-pm
+        X-Service: cbox-init
         X-Environment: production
       timeout: 10
 ```
@@ -620,17 +620,17 @@ Monitors:
 
 ### Prometheus Metrics
 
-PHPeek PM exports heartbeat metrics:
+Cbox Init exports heartbeat metrics:
 
 ```bash
 # Heartbeat ping success
-phpeek_pm_heartbeat_pings_total{task="backup-job",status="success"}
+cbox_init_heartbeat_pings_total{task="backup-job",status="success"}
 
 # Heartbeat ping failures
-phpeek_pm_heartbeat_pings_total{task="backup-job",status="failure"}
+cbox_init_heartbeat_pings_total{task="backup-job",status="failure"}
 
 # Last heartbeat timestamp
-phpeek_pm_heartbeat_last_ping_timestamp{task="backup-job"}
+cbox_init_heartbeat_last_ping_timestamp{task="backup-job"}
 ```
 
 ### Alert on Heartbeat Failures
@@ -642,7 +642,7 @@ groups:
     rules:
       - alert: HeartbeatPingFailing
         expr: |
-          sum(rate(phpeek_pm_heartbeat_pings_total{status="failure"}[5m])) > 0
+          sum(rate(cbox_init_heartbeat_pings_total{status="failure"}[5m])) > 0
         labels:
           severity: warning
         annotations:
@@ -650,7 +650,7 @@ groups:
 
       - alert: HeartbeatNotSent
         expr: |
-          time() - phpeek_pm_heartbeat_last_ping_timestamp > 3600
+          time() - cbox_init_heartbeat_last_ping_timestamp > 3600
         labels:
           severity: critical
         annotations:
@@ -743,13 +743,13 @@ cache-warmer:
 **Test before production:**
 ```bash
 # Manual test
-PHPEEK_PM_PROCESS_NAME=test-task \
+CBOX_INIT_PROCESS_NAME=test-task \
   curl -X POST https://hc-ping.com/uuid
 ```
 
 **Monitor heartbeat metrics:**
 ```promql
-sum(rate(phpeek_pm_heartbeat_pings_total{status="failure"}[1h]))
+sum(rate(cbox_init_heartbeat_pings_total{status="failure"}[1h]))
 ```
 
 ### ❌ Don't

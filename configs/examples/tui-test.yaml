@@ -16,7 +16,7 @@ global:
     metrics_path: /metrics
     api_enabled: true
     api_port: 9180
-    api_socket: /tmp/phpeek-pm.sock
+    api_socket: /tmp/cbox-init.sock
     api_auth: ""
     api_tls: null
     api_acl: null
@@ -30,7 +30,7 @@ global:
     tracing_exporter: stdout
     tracing_endpoint: ""
     tracing_sample_rate: 1
-    tracing_service_name: phpeek-pm
+    tracing_service_name: cbox-init
     tracing_use_tls: false
     schedule_history_size: 100
     oneshot_history_max_entries: 5000

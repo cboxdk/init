@@ -18,7 +18,7 @@ func TestLoad(t *testing.T) {
 		{
 			name: "load with custom env path",
 			setupEnv: func() {
-				tmpDir, _ := os.MkdirTemp("", "phpeek-test-*")
+				tmpDir, _ := os.MkdirTemp("", "cbox-test-*")
 				configPath := filepath.Join(tmpDir, "config.yaml")
 				content := `version: "1.0"
 global:
@@ -31,14 +31,14 @@ processes:
     command: ["sleep", "1"]
 `
 				_ = os.WriteFile(configPath, []byte(content), 0644)
-				os.Setenv("PHPEEK_PM_CONFIG", configPath)
+				os.Setenv("CBOX_INIT_CONFIG", configPath)
 			},
 			wantErr: false,
 		},
 		{
 			name: "load with missing file uses local fallback",
 			setupEnv: func() {
-				os.Unsetenv("PHPEEK_PM_CONFIG")
+				os.Unsetenv("CBOX_INIT_CONFIG")
 				// Create local config
 				content := `version: "1.0"
 global:
@@ -50,7 +50,7 @@ processes:
     enabled: true
     command: ["sleep", "1"]
 `
-				_ = os.WriteFile("phpeek-pm.yaml", []byte(content), 0644)
+				_ = os.WriteFile("cbox-init.yaml", []byte(content), 0644)
 			},
 			wantErr: false,
 		},
@@ -61,8 +61,8 @@ processes:
 			if tt.setupEnv != nil {
 				tt.setupEnv()
 				defer func() {
-					os.Unsetenv("PHPEEK_PM_CONFIG")
-					os.RemoveAll("phpeek-pm.yaml")
+					os.Unsetenv("CBOX_INIT_CONFIG")
+					os.RemoveAll("cbox-init.yaml")
 				}()
 			}
 
@@ -491,7 +491,7 @@ func TestCheckCircularDependencies(t *testing.T) {
 }
 
 func TestSave(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

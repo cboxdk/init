@@ -1,14 +1,14 @@
 ---
 title: "Docker Integration"
-description: "Use PHPeek PM as PID 1 in Docker containers for proper signal handling"
+description: "Use Cbox Init as PID 1 in Docker containers for proper signal handling"
 weight: 5
 ---
 
 # Docker Integration
 
-PHPeek PM is designed to run as PID 1 in Docker containers, providing proper init system capabilities.
+Cbox Init is designed to run as PID 1 in Docker containers, providing proper init system capabilities.
 
-## Why PHPeek PM as PID 1?
+## Why Cbox Init as PID 1?
 
 **PID 1 Responsibilities**
 - Signal forwarding to child processes
@@ -16,7 +16,7 @@ PHPeek PM is designed to run as PID 1 in Docker containers, providing proper ini
 - Clean shutdown coordination
 - Process tree management
 
-**What PHPeek PM Provides**
+**What Cbox Init Provides**
 - Proper SIGTERM/SIGINT/SIGQUIT handling
 - Automatic zombie reaping
 - Graceful shutdown with timeouts
@@ -32,20 +32,20 @@ FROM php:8.3-fpm-alpine
 # Install system dependencies
 RUN apk add --no-cache nginx
 
-# Install PHPeek PM
-COPY --from=gophpeek/phpeek-pm:latest \
-    /usr/local/bin/phpeek-pm \
-    /usr/local/bin/phpeek-pm
+# Install Cbox Init
+COPY --from=cboxdk/init:latest \
+    /usr/local/bin/cbox-init \
+    /usr/local/bin/cbox-init
 
 # Copy configuration
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # Copy application
 COPY . /var/www/html
 WORKDIR /var/www/html
 
-# PHPeek PM as PID 1
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+# Cbox Init as PID 1
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ### Multi-Stage Build
@@ -66,21 +66,21 @@ FROM php:8.3-fpm-alpine
 # Install runtime dependencies
 RUN apk add --no-cache nginx
 
-# Copy PHPeek PM
-COPY --from=gophpeek/phpeek-pm:latest \
-    /usr/local/bin/phpeek-pm \
-    /usr/local/bin/phpeek-pm
+# Copy Cbox Init
+COPY --from=cboxdk/init:latest \
+    /usr/local/bin/cbox-init \
+    /usr/local/bin/cbox-init
 
 # Copy application from builder
 COPY --from=builder /app /var/www/html
 WORKDIR /var/www/html
 
 # Copy configuration
-COPY docker/phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY docker/cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
-# PHPeek PM as entrypoint
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+# Cbox Init as entrypoint
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## PHP Application Dockerfile
@@ -105,10 +105,10 @@ RUN docker-php-ext-install \
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Copy PHPeek PM
-COPY --from=gophpeek/phpeek-pm:latest \
-    /usr/local/bin/phpeek-pm \
-    /usr/local/bin/phpeek-pm
+# Copy Cbox Init
+COPY --from=cboxdk/init:latest \
+    /usr/local/bin/cbox-init \
+    /usr/local/bin/cbox-init
 
 # Application setup
 COPY . /var/www/html
@@ -123,39 +123,39 @@ RUN php artisan config:cache && \
     php artisan view:cache
 
 # Copy configurations
-COPY docker/phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY docker/cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Configuration File Location
 
-PHPeek PM looks for configuration in this order:
+Cbox Init looks for configuration in this order:
 
-1. `PHPEEK_PM_CONFIG` environment variable
-2. `/etc/phpeek-pm/phpeek-pm.yaml`
-3. `./phpeek-pm.yaml` (current directory)
+1. `CBOX_INIT_CONFIG` environment variable
+2. `/etc/cbox-init/cbox-init.yaml`
+3. `./cbox-init.yaml` (current directory)
 
 ### Environment Variable Approach
 
 ```dockerfile
 FROM php:8.3-fpm-alpine
 
-COPY --from=gophpeek/phpeek-pm:latest \
-    /usr/local/bin/phpeek-pm \
-    /usr/local/bin/phpeek-pm
+COPY --from=cboxdk/init:latest \
+    /usr/local/bin/cbox-init \
+    /usr/local/bin/cbox-init
 
 # Copy config to custom location
-COPY phpeek-pm.yaml /app/config/phpeek-pm.yaml
+COPY cbox-init.yaml /app/config/cbox-init.yaml
 
 # Set config path via environment
-ENV PHPEEK_PM_CONFIG=/app/config/phpeek-pm.yaml
+ENV CBOX_INIT_CONFIG=/app/config/cbox-init.yaml
 
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ### Standard Location Approach
@@ -163,15 +163,15 @@ ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
 ```dockerfile
 FROM php:8.3-fpm-alpine
 
-COPY --from=gophpeek/phpeek-pm:latest \
-    /usr/local/bin/phpeek-pm \
-    /usr/local/bin/phpeek-pm
+COPY --from=cboxdk/init:latest \
+    /usr/local/bin/cbox-init \
+    /usr/local/bin/cbox-init
 
 # Copy to standard location
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # No ENV needed - uses default location
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Docker Compose Integration
@@ -218,9 +218,9 @@ services:
       - "9090:9090"  # Prometheus metrics
       - "8081:8080"  # Management API
     environment:
-      - PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
-      - PHPEEK_PM_GLOBAL_API_ENABLED=true
-      - PHPEEK_PM_GLOBAL_API_AUTH=${API_TOKEN}
+      - CBOX_INIT_GLOBAL_METRICS_ENABLED=true
+      - CBOX_INIT_GLOBAL_API_ENABLED=true
+      - CBOX_INIT_GLOBAL_API_AUTH=${API_TOKEN}
     restart: unless-stopped
 
   prometheus:
@@ -251,33 +251,33 @@ Override any configuration with environment variables:
 
 ```bash
 docker run -d \
-  -e PHPEEK_PM_GLOBAL_LOG_LEVEL=debug \
-  -e PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT=60 \
-  -e PHPEEK_PM_PROCESS_NGINX_ENABLED=true \
-  -e PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=5 \
+  -e CBOX_INIT_GLOBAL_LOG_LEVEL=debug \
+  -e CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT=60 \
+  -e CBOX_INIT_PROCESS_NGINX_ENABLED=true \
+  -e CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=5 \
   my-app
 ```
 
 ### Environment Variable Format
 
 ```
-PHPEEK_PM_{SECTION}_{SUBSECTION}_{KEY}
+CBOX_INIT_{SECTION}_{SUBSECTION}_{KEY}
 
 Examples:
-PHPEEK_PM_GLOBAL_LOG_LEVEL          → global.log_level
-PHPEEK_PM_GLOBAL_METRICS_ENABLED    → global.metrics_enabled
-PHPEEK_PM_PROCESS_NGINX_ENABLED     → processes.nginx.enabled
-PHPEEK_PM_PROCESS_QUEUE_SCALE       → processes.queue.scale
+CBOX_INIT_GLOBAL_LOG_LEVEL          → global.log_level
+CBOX_INIT_GLOBAL_METRICS_ENABLED    → global.metrics_enabled
+CBOX_INIT_PROCESS_NGINX_ENABLED     → processes.nginx.enabled
+CBOX_INIT_PROCESS_QUEUE_SCALE       → processes.queue.scale
 ```
 
 ## Signal Handling
 
-PHPeek PM handles signals appropriately as PID 1:
+Cbox Init handles signals appropriately as PID 1:
 
 ```bash
 # Graceful shutdown
 docker stop my-app
-# Sends SIGTERM → PHPeek PM gracefully shuts down processes
+# Sends SIGTERM → Cbox Init gracefully shuts down processes
 
 # Force shutdown
 docker kill my-app
@@ -285,12 +285,12 @@ docker kill my-app
 
 # Custom signal
 docker kill -s SIGQUIT my-app
-# PHPeek PM initiates graceful shutdown
+# Cbox Init initiates graceful shutdown
 ```
 
 ## Health Check Integration
 
-Use Docker health checks with PHPeek PM's management API:
+Use Docker health checks with Cbox Init's management API:
 
 ```dockerfile
 FROM php:8.3-fpm-alpine
@@ -300,7 +300,7 @@ FROM php:8.3-fpm-alpine
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
     CMD wget -q -O- http://localhost:9180/api/v1/health || exit 1
 
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 Or check processes directly:
@@ -344,7 +344,7 @@ RUN addgroup -g 1000 app && \
 # Switch to non-root user
 USER app
 
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ### Read-Only Root Filesystem
@@ -362,14 +362,14 @@ services:
 
 ## Debugging
 
-### View PHPeek PM Logs
+### View Cbox Init Logs
 
 ```bash
 # Follow logs
 docker logs -f my-app
 
-# Filter for PHPeek PM messages
-docker logs my-app 2>&1 | grep "PHPeek PM"
+# Filter for Cbox Init messages
+docker logs my-app 2>&1 | grep "Cbox Init"
 
 # Filter for specific process
 docker logs my-app 2>&1 | grep "process=nginx"
@@ -384,7 +384,7 @@ docker exec my-app ps aux
 # Check process tree
 docker exec my-app pstree -p 1
 
-# View PHPeek PM status via API
+# View Cbox Init status via API
 curl http://localhost:9180/api/v1/processes
 ```
 
@@ -400,14 +400,14 @@ global:
 
 1. **Always use specific version tags**
    ```dockerfile
-   COPY --from=gophpeek/phpeek-pm:1.0.0 \
-       /usr/local/bin/phpeek-pm \
-       /usr/local/bin/phpeek-pm
+   COPY --from=cboxdk/init:1.0.0 \
+       /usr/local/bin/cbox-init \
+       /usr/local/bin/cbox-init
    ```
 
 2. **Enable health checks**
    - Use Docker HEALTHCHECK or
-   - Configure PHPeek PM health checks
+   - Configure Cbox Init health checks
 
 3. **Configure graceful shutdown**
    ```yaml

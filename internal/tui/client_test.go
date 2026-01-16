@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/logger"
-	"github.com/gophpeek/phpeek-pm/internal/process"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/process"
 )
 
 // TestNewAPIClient tests client creation
@@ -88,7 +88,7 @@ func TestAPIClient_getURL(t *testing.T) {
 		{
 			name:       "socket URL",
 			baseURL:    "",
-			socketPath: "/tmp/phpeek.sock",
+			socketPath: "/tmp/cbox.sock",
 			path:       "/api/v1/processes",
 			expected:   "http://unix/api/v1/processes",
 		},
@@ -867,7 +867,7 @@ func TestAPIClient_trySocket(t *testing.T) {
 	// Test successful socket connection
 	t.Run("successful socket connection", func(t *testing.T) {
 		// Create a temporary Unix socket server
-		socketPath := "/tmp/test-phpeek-" + time.Now().Format("20060102150405") + ".sock"
+		socketPath := "/tmp/test-cbox-" + time.Now().Format("20060102150405") + ".sock"
 		defer func() {
 			// Clean up socket file
 			_ = os.Remove(socketPath)
@@ -911,7 +911,7 @@ func TestAPIClient_createSocketClient(t *testing.T) {
 
 	// Test that the socket client can make actual requests
 	t.Run("socket client with real server", func(t *testing.T) {
-		socketPath := "/tmp/test-phpeek-client-" + time.Now().Format("20060102150405") + ".sock"
+		socketPath := "/tmp/test-cbox-client-" + time.Now().Format("20060102150405") + ".sock"
 		defer os.Remove(socketPath)
 
 		// Create Unix socket HTTP server

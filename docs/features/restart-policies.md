@@ -6,7 +6,7 @@ weight: 24
 
 # Restart Policies
 
-Control how PHPeek PM handles process exits with configurable restart policies and exponential backoff.
+Control how Cbox Init handles process exits with configurable restart policies and exponential backoff.
 
 ## Overview
 
@@ -133,7 +133,7 @@ public function handle()
 
 ### Default Backoff
 
-PHPeek PM uses exponential backoff to prevent restart loops:
+Cbox Init uses exponential backoff to prevent restart loops:
 
 ```
 Attempt 1: Immediate restart
@@ -273,10 +273,10 @@ processes:
 
 ```bash
 # Total restarts per process
-phpeek_pm_process_restarts_total{process="php-fpm"}
+cbox_init_process_restarts_total{process="php-fpm"}
 
 # Restart rate (restarts per second)
-rate(phpeek_pm_process_restarts_total{process="php-fpm"}[5m])
+rate(cbox_init_process_restarts_total{process="php-fpm"}[5m])
 ```
 
 ### Alert on Excessive Restarts
@@ -287,7 +287,7 @@ groups:
   - name: restart_policies
     rules:
       - alert: FrequentRestarts
-        expr: rate(phpeek_pm_process_restarts_total[5m]) > 0.1
+        expr: rate(cbox_init_process_restarts_total[5m]) > 0.1
         for: 5m
         labels:
           severity: warning
@@ -295,7 +295,7 @@ groups:
           summary: "Process {{ $labels.process }} restarting frequently"
 
       - alert: RestartLoop
-        expr: phpeek_pm_process_restarts_total > 10
+        expr: cbox_init_process_restarts_total > 10
         for: 1m
         labels:
           severity: critical
@@ -414,7 +414,7 @@ flaky-service:
 **Monitor restart rates:**
 ```promql
 # Alert if restart rate too high
-rate(phpeek_pm_process_restarts_total[5m]) > 0.1
+rate(cbox_init_process_restarts_total[5m]) > 0.1
 ```
 
 **Set max restarts for safety:**

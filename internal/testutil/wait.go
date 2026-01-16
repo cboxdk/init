@@ -1,4 +1,4 @@
-// Package testutil provides common testing utilities for phpeek-pm.
+// Package testutil provides common testing utilities for cbox-init.
 package testutil
 
 import (

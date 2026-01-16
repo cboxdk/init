@@ -1,12 +1,12 @@
 ---
 title: "Kubernetes Deployment"
-description: "Deploy PHP applications with PHPeek PM on Kubernetes with ConfigMaps, HPA, and resource limits"
+description: "Deploy PHP applications with Cbox Init on Kubernetes with ConfigMaps, HPA, and resource limits"
 weight: 34
 ---
 
 # Kubernetes Deployment
 
-Deploy PHP applications with PHPeek PM on Kubernetes using ConfigMaps for configuration and HorizontalPodAutoscaler for dynamic scaling.
+Deploy PHP applications with Cbox Init on Kubernetes using ConfigMaps for configuration and HorizontalPodAutoscaler for dynamic scaling.
 
 ## Use Cases
 
@@ -23,9 +23,9 @@ Deploy PHP applications with PHPeek PM on Kubernetes using ConfigMaps for config
 │  Kubernetes Namespace: production          │
 │                                             │
 │  ┌──────────────────────────────────────┐ │
-│  │  ConfigMap: phpeek-config            │ │
+│  │  ConfigMap: cbox-config            │ │
 │  │  - php_fpm_profile: medium           │ │
-│  │  - phpeek_pm_config: (YAML)          │ │
+│  │  - cbox_init_config: (YAML)          │ │
 │  └──────────────────────────────────────┘ │
 │                                             │
 │  ┌──────────────────────────────────────┐ │
@@ -61,14 +61,14 @@ Deploy PHP applications with PHPeek PM on Kubernetes using ConfigMaps for config
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: phpeek-config
+  name: cbox-config
   namespace: production
 data:
   # PHP-FPM auto-tune profile
   php_fpm_profile: "medium"
 
-  # PHPeek PM configuration
-  phpeek_pm_config: |
+  # Cbox Init configuration
+  cbox_init_config: |
     version: "1.0"
     global:
       shutdown_timeout: 60
@@ -154,7 +154,7 @@ spec:
           - name: PHP_FPM_AUTOTUNE_PROFILE
             valueFrom:
               configMapKeyRef:
-                name: phpeek-config
+                name: cbox-config
                 key: php_fpm_profile
 
           # Application environment
@@ -173,10 +173,10 @@ spec:
           - name: REDIS_HOST
             value: "redis-service"
 
-        # Mount PHPeek PM config
+        # Mount Cbox Init config
         volumeMounts:
-          - name: phpeek-config
-            mountPath: /etc/phpeek-pm
+          - name: cbox-config
+            mountPath: /etc/cbox-init
             readOnly: true
 
         # Container resource limits (auto-tuner uses these)
@@ -220,12 +220,12 @@ spec:
 
       # Volumes
       volumes:
-        - name: phpeek-config
+        - name: cbox-config
           configMap:
-            name: phpeek-config
+            name: cbox-config
             items:
-              - key: phpeek_pm_config
-                path: phpeek-pm.yaml
+              - key: cbox_init_config
+                path: cbox-init.yaml
 
       # Security
       securityContext:
@@ -340,10 +340,10 @@ spec:
           - name: PHP_FPM_AUTOTUNE_PROFILE
             value: "dev"  # Minimal resources
 
-          - name: PHPEEK_PM_GLOBAL_LOG_LEVEL
+          - name: CBOX_INIT_GLOBAL_LOG_LEVEL
             value: "debug"
 
-          - name: PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE
+          - name: CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE
             value: "1"
 
         resources:
@@ -371,7 +371,7 @@ spec:
           - name: PHP_FPM_AUTOTUNE_PROFILE
             value: "heavy"  # High traffic profile
 
-          - name: PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE
+          - name: CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE
             value: "10"
 
         resources:
@@ -408,7 +408,7 @@ PHP_FPM_AUTOTUNE_PROFILE: medium
 
 ```yaml
 # Per-pod queue workers
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE: 3
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE: 3
 
 # With HPA
 # Minimum: 3 pods × 3 workers = 9 total workers
@@ -450,10 +450,10 @@ spec:
 ```bash
 # Import dashboard
 # Metrics available:
-# - phpeek_pm_process_up
-# - phpeek_pm_process_restarts_total
-# - phpeek_pm_process_health_status
-# - phpeek_pm_manager_uptime_seconds
+# - cbox_init_process_up
+# - cbox_init_process_restarts_total
+# - cbox_init_process_health_status
+# - cbox_init_manager_uptime_seconds
 ```
 
 ## Resource Planning
@@ -570,7 +570,7 @@ stringData:
   app-key: base64:your-app-key-here
   db-password: your-db-password
   redis-password: your-redis-password
-  api-token: your-phpeek-api-token
+  api-token: your-cbox-api-token
 ```
 
 **Use in Deployment:**
@@ -582,7 +582,7 @@ env:
         name: app-secrets
         key: app-key
 
-  - name: PHPEEK_PM_GLOBAL_API_AUTH
+  - name: CBOX_INIT_GLOBAL_API_AUTH
     valueFrom:
       secretKeyRef:
         name: app-secrets
@@ -732,7 +732,7 @@ livenessProbe:
 **How they work together:**
 - **Readiness:** Removes pod from Service when unhealthy
 - **Liveness:** Restarts pod if continuously unhealthy
-- Both use PHPeek PM's health endpoint
+- Both use Cbox Init's health endpoint
 
 ## Complete Deployment
 
@@ -748,11 +748,11 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: phpeek-config
+  name: cbox-config
   namespace: production
 data:
   php_fpm_profile: "medium"
-  phpeek_pm_config: |
+  cbox_init_config: |
     version: "1.0"
     # ... (full config from above)
 ---

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // Helper function to create test certificates

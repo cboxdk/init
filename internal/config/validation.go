@@ -330,7 +330,7 @@ func (c *Config) validateGlobalReadinessSettings(result *ValidationResult) {
 
 	// Validate path
 	if c.Global.Readiness.Path == "" {
-		result.AddError("global.readiness.path", "Readiness file path is required when enabled", "Set path like /tmp/phpeek-ready")
+		result.AddError("global.readiness.path", "Readiness file path is required when enabled", "Set path like /tmp/cbox-ready")
 	}
 
 	// Validate processes list if specified
@@ -571,7 +571,7 @@ func (c *Config) lintProcessSecurity(name string, proc *Process, result *Validat
 	if proc.User != "" || proc.Group != "" {
 		// Warn if not running as root - user switching requires root privileges
 		if os.Getuid() != 0 {
-			result.AddProcessWarning(name, "user/group", fmt.Sprintf("User switching configured (user=%q, group=%q) but not running as root", proc.User, proc.Group), "Run phpeek-pm as root to enable per-process user switching")
+			result.AddProcessWarning(name, "user/group", fmt.Sprintf("User switching configured (user=%q, group=%q) but not running as root", proc.User, proc.Group), "Run cbox-init as root to enable per-process user switching")
 		} else {
 			// Running as root - good security practice to run processes as non-root
 			result.AddProcessSuggestion(name, "user", fmt.Sprintf("Process configured to run as user=%q", proc.User), "Good security practice: running processes with reduced privileges")

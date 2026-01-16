@@ -1,6 +1,6 @@
 ---
 title: "Examples"
-description: "Real-world PHPeek PM configurations for PHP frameworks, Docker, and Kubernetes deployments"
+description: "Real-world Cbox Init configurations for PHP frameworks, Docker, and Kubernetes deployments"
 weight: 30
 ---
 

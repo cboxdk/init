@@ -6,7 +6,7 @@ weight: 21
 
 # Health Checks
 
-PHPeek PM provides comprehensive health monitoring with TCP, HTTP, and exec-based health checks. Health checks prevent restart loops, enable dependency verification, and support both readiness and liveness probes.
+Cbox Init provides comprehensive health monitoring with TCP, HTTP, and exec-based health checks. Health checks prevent restart loops, enable dependency verification, and support both readiness and liveness probes.
 
 ## Overview
 
@@ -284,25 +284,25 @@ Health check metrics exported when `metrics_enabled: true`:
 
 ```promql
 # Health check status (1=healthy, 0=unhealthy)
-phpeek_pm_health_check_status{process="nginx", type="http"}
+cbox_init_health_check_status{process="nginx", type="http"}
 
 # Health check duration in seconds
-phpeek_pm_health_check_duration_seconds{process="nginx", type="http"}
+cbox_init_health_check_duration_seconds{process="nginx", type="http"}
 
 # Total health check failures
-phpeek_pm_health_check_failures_total{process="nginx", type="http"}
+cbox_init_health_check_failures_total{process="nginx", type="http"}
 ```
 
 **Grafana alerts:**
 ```yaml
 - alert: HealthCheckFailing
-  expr: phpeek_pm_health_check_status == 0
+  expr: cbox_init_health_check_status == 0
   for: 5m
   annotations:
     summary: "Process {{$labels.process}} health check failing"
 
 - alert: SlowHealthCheck
-  expr: phpeek_pm_health_check_duration_seconds > 5
+  expr: cbox_init_health_check_duration_seconds > 5
   for: 5m
   annotations:
     summary: "Slow health check for {{$labels.process}}"
@@ -437,8 +437,8 @@ processes:
 
 3. **Check logs:**
    ```bash
-   # View PHPeek logs
-   journalctl -u phpeek-pm -f | grep "health"
+   # View Cbox logs
+   journalctl -u cbox-init -f | grep "health"
    ```
 
 ### False Positives During Load

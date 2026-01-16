@@ -6,7 +6,7 @@ weight: 43
 
 # Resource Monitoring
 
-PHPeek PM tracks detailed resource usage (CPU, memory, threads, file descriptors) for all managed process instances. Historical data is stored in time series ring buffers and exposed via both REST API and Prometheus metrics.
+Cbox Init tracks detailed resource usage (CPU, memory, threads, file descriptors) for all managed process instances. Historical data is stored in time series ring buffers and exposed via both REST API and Prometheus metrics.
 
 ## Overview
 
@@ -45,7 +45,7 @@ curl "http://localhost:9180/api/v1/metrics/history?process=php-fpm&instance=php-
 
 ```bash
 # View all resource metrics
-curl http://localhost:9090/metrics | grep phpeek_pm_process
+curl http://localhost:9090/metrics | grep cbox_init_process
 ```
 
 ## Configuration
@@ -238,7 +238,7 @@ When both `resource_metrics_enabled` and `metrics_enabled` are true, resource me
 
 ### Metric Names
 
-All metrics use the prefix `phpeek_pm_process_` and include labels:
+All metrics use the prefix `cbox_init_process_` and include labels:
 - `process` - Process name
 - `instance` - Instance ID
 
@@ -246,22 +246,22 @@ All metrics use the prefix `phpeek_pm_process_` and include labels:
 
 ```promql
 # CPU usage (percentage, can exceed 100%)
-phpeek_pm_process_cpu_percent{process="php-fpm", instance="php-fpm-0"}
+cbox_init_process_cpu_percent{process="php-fpm", instance="php-fpm-0"}
 
 # Memory RSS in bytes
-phpeek_pm_process_memory_bytes{process="php-fpm", instance="php-fpm-0", type="rss"}
+cbox_init_process_memory_bytes{process="php-fpm", instance="php-fpm-0", type="rss"}
 
 # Memory VMS in bytes
-phpeek_pm_process_memory_bytes{process="php-fpm", instance="php-fpm-0", type="vms"}
+cbox_init_process_memory_bytes{process="php-fpm", instance="php-fpm-0", type="vms"}
 
 # Memory as % of total system RAM
-phpeek_pm_process_memory_percent{process="php-fpm", instance="php-fpm-0"}
+cbox_init_process_memory_percent{process="php-fpm", instance="php-fpm-0"}
 
 # Number of threads/processes
-phpeek_pm_process_threads{process="php-fpm", instance="php-fpm-0"}
+cbox_init_process_threads{process="php-fpm", instance="php-fpm-0"}
 
 # Open file descriptors (Linux only)
-phpeek_pm_process_file_descriptors{process="php-fpm", instance="php-fpm-0"}
+cbox_init_process_file_descriptors{process="php-fpm", instance="php-fpm-0"}
 ```
 
 ### Collection Metadata
@@ -269,40 +269,40 @@ phpeek_pm_process_file_descriptors{process="php-fpm", instance="php-fpm-0"}
 **Error tracking:**
 ```promql
 # Total collection errors per instance
-phpeek_pm_resource_collection_errors_total{process="...", instance="..."}
+cbox_init_resource_collection_errors_total{process="...", instance="..."}
 ```
 
 **Performance:**
 ```promql
 # Collection duration in seconds
-phpeek_pm_resource_collection_duration_seconds
+cbox_init_resource_collection_duration_seconds
 ```
 
 ### Query Examples
 
 **Average CPU across all PHP-FPM instances:**
 ```promql
-avg(phpeek_pm_process_cpu_percent{process="php-fpm"})
+avg(cbox_init_process_cpu_percent{process="php-fpm"})
 ```
 
 **Memory usage trend for specific instance:**
 ```promql
-phpeek_pm_process_memory_bytes{process="nginx", instance="nginx-0", type="rss"}
+cbox_init_process_memory_bytes{process="nginx", instance="nginx-0", type="rss"}
 ```
 
 **Total threads across all processes:**
 ```promql
-sum(phpeek_pm_process_threads)
+sum(cbox_init_process_threads)
 ```
 
 **Top 5 processes by memory:**
 ```promql
-topk(5, phpeek_pm_process_memory_bytes{type="rss"})
+topk(5, cbox_init_process_memory_bytes{type="rss"})
 ```
 
 **Memory usage rate of change (MB/hour):**
 ```promql
-rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
+rate(cbox_init_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
 ```
 
 ## Grafana Integration
@@ -322,7 +322,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
   "title": "CPU Usage by Process",
   "targets": [
     {
-      "expr": "phpeek_pm_process_cpu_percent",
+      "expr": "cbox_init_process_cpu_percent",
       "legendFormat": "{{process}}-{{instance}}"
     }
   ],
@@ -340,7 +340,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
   "title": "Memory Usage (RSS)",
   "targets": [
     {
-      "expr": "phpeek_pm_process_memory_bytes{type=\"rss\"}",
+      "expr": "cbox_init_process_memory_bytes{type=\"rss\"}",
       "legendFormat": "{{process}}-{{instance}}"
     }
   ],
@@ -358,7 +358,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
   "title": "Thread Count",
   "targets": [
     {
-      "expr": "phpeek_pm_process_threads",
+      "expr": "cbox_init_process_threads",
       "legendFormat": "{{process}}-{{instance}}"
     }
   ]
@@ -372,7 +372,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
   "title": "Open File Descriptors",
   "targets": [
     {
-      "expr": "phpeek_pm_process_file_descriptors",
+      "expr": "cbox_init_process_file_descriptors",
       "legendFormat": "{{process}}-{{instance}}"
     }
   ]
@@ -384,7 +384,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
 **High CPU usage:**
 ```yaml
 - alert: HighCPUUsage
-  expr: phpeek_pm_process_cpu_percent > 80
+  expr: cbox_init_process_cpu_percent > 80
   for: 5m
   annotations:
     summary: "High CPU usage detected"
@@ -394,7 +394,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
 **Memory leak detection:**
 ```yaml
 - alert: MemoryLeak
-  expr: rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) > 10485760  # 10MB/hour
+  expr: rate(cbox_init_process_memory_bytes{type="rss"}[1h]) > 10485760  # 10MB/hour
   for: 3h
   annotations:
     summary: "Potential memory leak"
@@ -404,7 +404,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
 **File descriptor exhaustion:**
 ```yaml
 - alert: FileDescriptorLeak
-  expr: phpeek_pm_process_file_descriptors > 1000
+  expr: cbox_init_process_file_descriptors > 1000
   for: 5m
   annotations:
     summary: "High file descriptor count"
@@ -469,13 +469,13 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
 
 3. **Check for collection errors:**
    ```bash
-   # View PHPeek logs
-   journalctl -u phpeek-pm -f | grep "resource collection"
+   # View Cbox logs
+   journalctl -u cbox-init -f | grep "resource collection"
    ```
 
 ### Missing Prometheus Metrics
 
-**Issue:** `phpeek_pm_process_*` metrics not in Prometheus
+**Issue:** `cbox_init_process_*` metrics not in Prometheus
 
 **Solutions:**
 
@@ -489,14 +489,14 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
 2. **Check Prometheus scrape config:**
    ```yaml
    scrape_configs:
-     - job_name: 'phpeek-pm'
+     - job_name: 'cbox-init'
        static_configs:
          - targets: ['localhost:9090']
    ```
 
 3. **Test endpoint manually:**
    ```bash
-   curl http://localhost:9090/metrics | grep phpeek_pm_process
+   curl http://localhost:9090/metrics | grep cbox_init_process
    ```
 
 ### File Descriptors Always Zero
@@ -511,7 +511,7 @@ rate(phpeek_pm_process_memory_bytes{type="rss"}[1h]) * 3600 / 1024 / 1024
 
 ### High Memory Usage
 
-**Issue:** PHPeek PM using more memory than expected
+**Issue:** Cbox Init using more memory than expected
 
 **Solutions:**
 
@@ -561,7 +561,7 @@ curl "http://localhost:9180/api/v1/metrics/history?process=horizon&instance=hori
 **Grafana alert:**
 ```yaml
 - alert: MemoryGrowth
-  expr: rate(phpeek_pm_process_memory_bytes{type="rss"}[6h]) > 1048576  # 1MB/hour
+  expr: rate(cbox_init_process_memory_bytes{type="rss"}[6h]) > 1048576  # 1MB/hour
   for: 12h
 ```
 
@@ -571,7 +571,7 @@ curl "http://localhost:9180/api/v1/metrics/history?process=horizon&instance=hori
 
 ```promql
 # Top 3 CPU consumers
-topk(3, avg_over_time(phpeek_pm_process_cpu_percent[5m]))
+topk(3, avg_over_time(cbox_init_process_cpu_percent[5m]))
 ```
 
 ### Capacity Planning
@@ -580,10 +580,10 @@ topk(3, avg_over_time(phpeek_pm_process_cpu_percent[5m]))
 
 ```promql
 # Total memory across all instances
-sum(phpeek_pm_process_memory_bytes{type="rss"})
+sum(cbox_init_process_memory_bytes{type="rss"})
 
 # Average CPU across all processes
-avg(phpeek_pm_process_cpu_percent)
+avg(cbox_init_process_cpu_percent)
 ```
 
 ### Thread Monitoring
@@ -592,13 +592,13 @@ avg(phpeek_pm_process_cpu_percent)
 
 ```promql
 # PHP-FPM child process count
-phpeek_pm_process_threads{process="php-fpm"}
+cbox_init_process_threads{process="php-fpm"}
 ```
 
 **Alert on low spare workers:**
 ```yaml
 - alert: LowSpareWorkers
-  expr: phpeek_pm_process_threads{process="php-fpm"} > 50  # Max children threshold
+  expr: cbox_init_process_threads{process="php-fpm"} > 50  # Max children threshold
   for: 5m
 ```
 

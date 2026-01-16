@@ -6,7 +6,7 @@ weight: 16
 
 # PHP-FPM Auto-Tuning Guide
 
-PHPeek PM includes intelligent PHP-FPM worker auto-tuning based on container resource limits. This feature eliminates manual calculations and prevents memory over-provisioning that can cause OOM kills.
+Cbox Init includes intelligent PHP-FPM worker auto-tuning based on container resource limits. This feature eliminates manual calculations and prevents memory over-provisioning that can cause OOM kills.
 
 ## Table of Contents
 
@@ -229,16 +229,16 @@ Start Servers: 50% of max
 
 ```bash
 # Via CLI flag
-./build/phpeek-pm --php-fpm-profile=medium
+./build/cbox-init --php-fpm-profile=medium
 
 # Via environment variable (recommended for containers)
-PHP_FPM_AUTOTUNE_PROFILE=medium ./build/phpeek-pm
+PHP_FPM_AUTOTUNE_PROFILE=medium ./build/cbox-init
 
 # Docker
 docker run -e PHP_FPM_AUTOTUNE_PROFILE=medium myapp:latest
 
 # Priority: CLI flag > ENV var
-PHP_FPM_AUTOTUNE_PROFILE=light ./build/phpeek-pm --php-fpm-profile=heavy
+PHP_FPM_AUTOTUNE_PROFILE=light ./build/cbox-init --php-fpm-profile=heavy
 # Result: Uses 'heavy' (CLI overrides ENV)
 ```
 
@@ -246,9 +246,9 @@ PHP_FPM_AUTOTUNE_PROFILE=light ./build/phpeek-pm --php-fpm-profile=heavy
 
 ```bash
 # Combine with specific config
-./build/phpeek-pm \
+./build/cbox-init \
   --php-fpm-profile=medium \
-  --config /etc/phpeek-pm/production.yaml
+  --config /etc/cbox-init/production.yaml
 ```
 
 ### Docker Integration
@@ -257,8 +257,8 @@ PHP_FPM_AUTOTUNE_PROFILE=light ./build/phpeek-pm --php-fpm-profile=heavy
 ```dockerfile
 FROM php:8.3-fpm-alpine
 
-# Install phpeek-pm
-COPY build/phpeek-pm /usr/local/bin/phpeek-pm
+# Install cbox-init
+COPY build/cbox-init /usr/local/bin/cbox-init
 
 # PHP-FPM pool config with environment variable placeholders
 COPY www.conf /usr/local/etc/php-fpm.d/www.conf
@@ -267,7 +267,7 @@ COPY www.conf /usr/local/etc/php-fpm.d/www.conf
 ENV PHP_FPM_AUTOTUNE_PROFILE=medium
 
 # Start with auto-tuning enabled via ENV
-CMD ["phpeek-pm", "--config", "/etc/phpeek-pm/phpeek-pm.yaml"]
+CMD ["cbox-init", "--config", "/etc/cbox-init/cbox-init.yaml"]
 ```
 
 ### Docker Compose
@@ -331,7 +331,7 @@ spec:
 
 ```bash
 # Test autotune without starting processes
-./build/phpeek-pm --php-fpm-profile=medium --dry-run
+./build/cbox-init --php-fpm-profile=medium --dry-run
 
 # Output:
 # 🎯 PHP-FPM auto-tuned (medium profile):
@@ -348,7 +348,7 @@ spec:
 
 ### Pool Configuration
 
-PHPeek PM exports environment variables that PHP-FPM can reference in `www.conf`:
+Cbox Init exports environment variables that PHP-FPM can reference in `www.conf`:
 
 ```ini
 [www]
@@ -383,7 +383,7 @@ You can still manually override if needed:
 ```bash
 # Override auto-tuned values
 export PHP_FPM_MAX_CHILDREN=20
-./build/phpeek-pm --php-fpm-profile=medium
+./build/cbox-init --php-fpm-profile=medium
 ```
 
 ## Calculation Algorithm
@@ -551,4 +551,4 @@ Then rebuild and use: `--php-fpm-profile=custom`
 
 ---
 
-**Need help?** Open an issue at https://github.com/gophpeek/phpeek-pm/issues
+**Need help?** Open an issue at https://github.com/cboxdk/init/issues

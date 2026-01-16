@@ -1,30 +1,30 @@
 ---
 title: "Configuration Validation"
-description: "Lint and validate PHPeek PM configurations with comprehensive error checking and CI/CD integration"
+description: "Lint and validate Cbox Init configurations with comprehensive error checking and CI/CD integration"
 weight: 17
 ---
 
 # Configuration Validation
 
-PHPeek PM includes a powerful configuration validation system that catches errors before runtime. The `check-config` command provides comprehensive linting with errors, warnings, and best practice suggestions.
+Cbox Init includes a powerful configuration validation system that catches errors before runtime. The `check-config` command provides comprehensive linting with errors, warnings, and best practice suggestions.
 
 ## Quick Start
 
 ```bash
 # Validate configuration file
-./phpeek-pm check-config
+./cbox-init check-config
 
 # Validate specific config
-./phpeek-pm check-config --config production.yaml
+./cbox-init check-config --config production.yaml
 
 # Quiet mode (one-line summary)
-./phpeek-pm check-config --quiet
+./cbox-init check-config --quiet
 
 # Strict mode (fail on warnings, perfect for CI/CD)
-./phpeek-pm check-config --strict
+./cbox-init check-config --strict
 
 # JSON output (for automation/scripting)
-./phpeek-pm check-config --json
+./cbox-init check-config --json
 ```
 
 ## Validation Modes
@@ -34,7 +34,7 @@ PHPeek PM includes a powerful configuration validation system that catches error
 Displays detailed report with all validation issues categorized and explained.
 
 ```bash
-./phpeek-pm check-config --config app.yaml
+./cbox-init check-config --config app.yaml
 ```
 
 **Output:**
@@ -96,7 +96,7 @@ Displays detailed report with all validation issues categorized and explained.
 One-line summary, perfect for shell scripts and quick checks.
 
 ```bash
-./phpeek-pm check-config --quiet
+./cbox-init check-config --quiet
 ```
 
 **Output (success with warnings):**
@@ -118,7 +118,7 @@ One-line summary, perfect for shell scripts and quick checks.
 Treats warnings as errors, perfect for CI/CD pipelines where warnings must be resolved.
 
 ```bash
-./phpeek-pm check-config --strict
+./cbox-init check-config --strict
 ```
 
 **Behavior:**
@@ -147,7 +147,7 @@ Exit code: 1
 Machine-readable output for automation, scripting, and tooling integration.
 
 ```bash
-./phpeek-pm check-config --json
+./cbox-init check-config --json
 ```
 
 **Output structure:**
@@ -194,7 +194,7 @@ Machine-readable output for automation, scripting, and tooling integration.
 
 ### 🚨 Errors (Blocking)
 
-**Critical issues that MUST be fixed before starting PHPeek PM.**
+**Critical issues that MUST be fixed before starting Cbox Init.**
 
 **Examples:**
 - Missing required fields (`version`, `processes`)
@@ -306,7 +306,7 @@ global:
 # ✅ Auth enabled
 global:
   api_enabled: true
-  api_auth: "${PHPEEK_PM_API_TOKEN}"
+  api_auth: "${CBOX_INIT_API_TOKEN}"
 ```
 
 **TLS configuration:**
@@ -333,7 +333,7 @@ global:
 api_auth: "secret-token-123"
 
 # ✅ Environment variable reference
-api_auth: "${PHPEEK_PM_API_TOKEN}"
+api_auth: "${CBOX_INIT_API_TOKEN}"
 ```
 
 ### Best Practices
@@ -397,7 +397,7 @@ api_tls:
 
 # ✅ Valid path (validated at runtime)
 api_tls:
-  cert_file: "/etc/phpeek-pm/tls/server.crt"
+  cert_file: "/etc/cbox-init/tls/server.crt"
 ```
 
 ### Dependencies
@@ -483,15 +483,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download PHPeek PM
+      - name: Download Cbox Init
         run: |
-          curl -L https://github.com/gophpeek/phpeek-pm/releases/latest/download/phpeek-pm-linux-amd64 \
-            -o phpeek-pm
-          chmod +x phpeek-pm
+          curl -L https://github.com/cboxdk/init/releases/latest/download/cbox-init-linux-amd64 \
+            -o cbox-init
+          chmod +x cbox-init
 
       - name: Validate Configuration (Strict)
         run: |
-          ./phpeek-pm check-config --config production.yaml --strict
+          ./cbox-init check-config --config production.yaml --strict
           # Fails build if warnings exist
 ```
 
@@ -503,10 +503,10 @@ validate-config:
   image: alpine:latest
   before_script:
     - apk add --no-cache curl
-    - curl -L https://github.com/gophpeek/phpeek-pm/releases/latest/download/phpeek-pm-linux-amd64 -o phpeek-pm
-    - chmod +x phpeek-pm
+    - curl -L https://github.com/cboxdk/init/releases/latest/download/cbox-init-linux-amd64 -o cbox-init
+    - chmod +x cbox-init
   script:
-    - ./phpeek-pm check-config --config $CI_PROJECT_DIR/phpeek-pm.yaml --strict
+    - ./cbox-init check-config --config $CI_PROJECT_DIR/cbox-init.yaml --strict
   only:
     changes:
       - "**/*.yaml"
@@ -527,8 +527,8 @@ if [ -n "$CONFIG_FILES" ]; then
   echo "Validating configuration files..."
 
   for file in $CONFIG_FILES; do
-    if echo "$file" | grep -q "phpeek-pm"; then
-      ./phpeek-pm check-config --config "$file" --quiet || exit 1
+    if echo "$file" | grep -q "cbox-init"; then
+      ./cbox-init check-config --config "$file" --quiet || exit 1
     fi
   done
 
@@ -544,11 +544,11 @@ fi
 FROM alpine:latest AS validator
 
 # Copy binary and config
-COPY phpeek-pm /usr/local/bin/phpeek-pm
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init /usr/local/bin/cbox-init
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # Validate configuration (fails build if invalid)
-RUN phpeek-pm check-config --config /etc/phpeek-pm/phpeek-pm.yaml --strict
+RUN cbox-init check-config --config /etc/cbox-init/cbox-init.yaml --strict
 
 FROM alpine:latest
 # ... rest of Dockerfile
@@ -560,20 +560,20 @@ FROM alpine:latest
 .PHONY: validate
 validate:
 	@echo "Validating configuration..."
-	@./phpeek-pm check-config --config phpeek-pm.yaml --strict
+	@./cbox-init check-config --config cbox-init.yaml --strict
 
 .PHONY: validate-all
 validate-all:
 	@echo "Validating all configs..."
 	@for file in configs/**/*.yaml; do \
 		echo "Checking $$file..."; \
-		./phpeek-pm check-config --config $$file --strict || exit 1; \
+		./cbox-init check-config --config $$file --strict || exit 1; \
 	done
 	@echo "✅ All configurations valid"
 
 .PHONY: ci-validate
 ci-validate:
-	@./phpeek-pm check-config --config production.yaml --strict --json > validation-report.json
+	@./cbox-init check-config --config production.yaml --strict --json > validation-report.json
 	@cat validation-report.json | jq '.valid' | grep -q 'true' || exit 1
 ```
 
@@ -590,7 +590,7 @@ set -e
 CONFIG_FILE="production.yaml"
 
 echo "Validating configuration..."
-if phpeek-pm check-config --config "$CONFIG_FILE" --strict --quiet; then
+if cbox-init check-config --config "$CONFIG_FILE" --strict --quiet; then
   echo "✅ Configuration valid - proceeding with deployment"
 
   # Deploy
@@ -608,16 +608,16 @@ fi
 
 ```bash
 # Get all warnings
-phpeek-pm check-config --json | jq '.warnings[]'
+cbox-init check-config --json | jq '.warnings[]'
 
 # Count errors
-phpeek-pm check-config --json | jq '.counts.errors'
+cbox-init check-config --json | jq '.counts.errors'
 
 # Check if valid
-phpeek-pm check-config --json | jq -r '.valid'
+cbox-init check-config --json | jq -r '.valid'
 
 # Generate report
-phpeek-pm check-config --json | jq -r '
+cbox-init check-config --json | jq -r '
   "Config: \(.summary.config_path)",
   "Status: \(if .valid then "✅ Valid" else "❌ Invalid" end)",
   "Errors: \(.counts.errors)",
@@ -632,7 +632,7 @@ phpeek-pm check-config --json | jq -r '
 #!/bin/bash
 # notify-validation-failure.sh
 
-VALIDATION_OUTPUT=$(phpeek-pm check-config --json 2>&1)
+VALIDATION_OUTPUT=$(cbox-init check-config --json 2>&1)
 IS_VALID=$(echo "$VALIDATION_OUTPUT" | jq -r '.valid')
 
 if [ "$IS_VALID" != "true" ]; then
@@ -657,7 +657,7 @@ fi
 **Issue:** Validator flags valid configuration as error
 
 **Solution:**
-1. Check PHPeek PM version: `phpeek-pm --version`
+1. Check Cbox Init version: `cbox-init --version`
 2. Review error message for specific field
 3. Consult documentation for correct format
 4. Report bug if validator is wrong
@@ -680,20 +680,20 @@ fi
 1. **Version mismatch:**
    ```bash
    # Pin version in CI
-   PHPEEK_VERSION=v1.0.0
-   curl -L https://github.com/gophpeek/phpeek-pm/releases/download/$PHPEEK_VERSION/...
+   CBOX_VERSION=v1.0.0
+   curl -L https://github.com/cboxdk/init/releases/download/$CBOX_VERSION/...
    ```
 
 2. **Environment variables:**
    ```yaml
    # CI may not have env vars set
-   api_auth: "${PHPEEK_PM_API_TOKEN:-default}"  # Use default in CI
+   api_auth: "${CBOX_INIT_API_TOKEN:-default}"  # Use default in CI
    ```
 
 3. **File paths:**
    ```yaml
    # Use CI-compatible paths
-   api_socket: "${SOCKET_PATH:-/tmp/phpeek-pm.sock}"
+   api_socket: "${SOCKET_PATH:-/tmp/cbox-init.sock}"
    ```
 
 ## Best Practices

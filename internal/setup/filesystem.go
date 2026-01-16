@@ -9,13 +9,13 @@ import (
 // IsReadOnlyRoot detects if the root filesystem is mounted read-only
 func IsReadOnlyRoot() bool {
 	// Check if explicitly set via environment variable
-	if os.Getenv("PHPEEK_PM_READ_ONLY_ROOT") == "true" {
+	if os.Getenv("CBOX_INIT_READ_ONLY_ROOT") == "true" {
 		return true
 	}
 
 	// Try to create a test file in /tmp (should always work if not read-only)
 	// Using /tmp instead of / to avoid permission issues
-	testFile := "/tmp/.phpeek-pm-write-test"
+	testFile := "/tmp/.cbox-init-write-test"
 	f, err := os.OpenFile(testFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		// If we can't write to /tmp, filesystem is likely read-only
@@ -28,7 +28,7 @@ func IsReadOnlyRoot() bool {
 
 	// Additional check: try writing to root if we're running as root
 	if os.Getuid() == 0 {
-		rootTestFile := "/.phpeek-pm-ro-check"
+		rootTestFile := "/.cbox-init-ro-check"
 		if f, err := os.OpenFile(rootTestFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644); err != nil {
 			// Can't write to root even as root - read-only
 			return true
@@ -48,10 +48,10 @@ func GetRuntimeDir() (string, error) {
 
 	if IsReadOnlyRoot() {
 		// Use /run (typically tmpfs) for read-only root
-		runtimeDir = "/run/phpeek-pm"
+		runtimeDir = "/run/cbox-init"
 	} else {
 		// Use /var/run for writable root
-		runtimeDir = "/var/run/phpeek-pm"
+		runtimeDir = "/var/run/cbox-init"
 	}
 
 	// Create runtime directory if it doesn't exist
@@ -80,7 +80,7 @@ func EnsureWritableDir(path string) (string, error) {
 
 	// Read-only root - create alternative in /run
 	baseName := filepath.Base(path)
-	altPath := filepath.Join("/run/phpeek-pm", baseName)
+	altPath := filepath.Join("/run/cbox-init", baseName)
 
 	if err := os.MkdirAll(altPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create alternative directory %s: %w", altPath, err)

@@ -19,7 +19,7 @@ Production-ready Laravel configuration with all services: PHP-FPM, Nginx, Horizo
 
 ## Complete Configuration
 
-**File:** `phpeek-pm.yaml`
+**File:** `cbox-init.yaml`
 
 ```yaml
 version: "1.0"
@@ -155,7 +155,7 @@ processes:
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Container (PHPeek PM as PID 1)                 │
+│  Container (Cbox Init as PID 1)                 │
 │                                                  │
 │  Pre-Start Hooks:                               │
 │   1. config:cache ─> 2. route:cache ─>         │
@@ -405,11 +405,11 @@ COPY . .
 # Install dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Copy PHPeek PM
-COPY --from=ghcr.io/gophpeek/phpeek-pm:latest /phpeek-pm /usr/local/bin/phpeek-pm
+# Copy Cbox Init
+COPY --from=ghcr.io/cboxdk/init:latest /cbox-init /usr/local/bin/cbox-init
 
 # Copy configuration
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # Copy Nginx config
 COPY nginx.conf /etc/nginx/nginx.conf
@@ -419,11 +419,11 @@ EXPOSE 80 9090
 
 # Environment defaults
 ENV PHP_FPM_AUTOTUNE_PROFILE=medium \
-    PHPEEK_PM_GLOBAL_LOG_FORMAT=json \
-    PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
+    CBOX_INIT_GLOBAL_LOG_FORMAT=json \
+    CBOX_INIT_GLOBAL_METRICS_ENABLED=true
 
-# Run PHPeek PM as PID 1
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+# Run Cbox Init as PID 1
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Nginx Configuration
@@ -521,8 +521,8 @@ services:
       - "9090:9090"  # Prometheus metrics
     environment:
       PHP_FPM_AUTOTUNE_PROFILE: "medium"
-      PHPEEK_PM_GLOBAL_METRICS_ENABLED: "true"
-      PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE: "3"
+      CBOX_INIT_GLOBAL_METRICS_ENABLED: "true"
+      CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE: "3"
 
       # Laravel environment
       APP_ENV: production
@@ -702,10 +702,10 @@ protected function schedule(Schedule $schedule)
 ```bash
 # .env.development
 PHP_FPM_AUTOTUNE_PROFILE=dev
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug
-PHPEEK_PM_PROCESS_HORIZON_ENABLED=false
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=1
-PHPEEK_PM_PROCESS_SCHEDULER_ENABLED=false
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug
+CBOX_INIT_PROCESS_HORIZON_ENABLED=false
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=1
+CBOX_INIT_PROCESS_SCHEDULER_ENABLED=false
 ```
 
 ### Staging
@@ -713,9 +713,9 @@ PHPEEK_PM_PROCESS_SCHEDULER_ENABLED=false
 ```bash
 # .env.staging
 PHP_FPM_AUTOTUNE_PROFILE=medium
-PHPEEK_PM_GLOBAL_LOG_LEVEL=info
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=3
+CBOX_INIT_GLOBAL_LOG_LEVEL=info
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=3
 ```
 
 ### Production
@@ -723,11 +723,11 @@ PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=3
 ```bash
 # .env.production
 PHP_FPM_AUTOTUNE_PROFILE=heavy
-PHPEEK_PM_GLOBAL_LOG_LEVEL=warn
-PHPEEK_PM_GLOBAL_LOG_REDACTION_ENABLED=true
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
-PHPEEK_PM_GLOBAL_API_ENABLED=true
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=10
+CBOX_INIT_GLOBAL_LOG_LEVEL=warn
+CBOX_INIT_GLOBAL_LOG_REDACTION_ENABLED=true
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true
+CBOX_INIT_GLOBAL_API_ENABLED=true
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=10
 ```
 
 ## Monitoring
@@ -739,9 +739,9 @@ PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=10
 curl http://localhost:9090/metrics
 
 # Key metrics:
-# - phpeek_pm_process_up{process="php-fpm"}
-# - phpeek_pm_process_restarts_total{process="nginx"}
-# - phpeek_pm_process_health_status{process="horizon"}
+# - cbox_init_process_up{process="php-fpm"}
+# - cbox_init_process_restarts_total{process="nginx"}
+# - cbox_init_process_health_status{process="horizon"}
 ```
 
 ### Health Status
@@ -824,10 +824,10 @@ PHP_FPM_AUTOTUNE_PROFILE=heavy   # 4-8GB container
 
 ```bash
 # Start with 1 worker per CPU core
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=2  # 2 CPUs
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=2  # 2 CPUs
 
 # Scale up based on queue depth
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=5  # High traffic
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=5  # High traffic
 ```
 
 ### Horizon vs Queue Workers

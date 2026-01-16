@@ -108,12 +108,12 @@ processes:
 curl http://localhost:9090/metrics
 
 # Key metrics:
-phpeek_pm_manager_uptime_seconds               # Manager uptime
-phpeek_pm_process_up{process="nginx"}          # Process status (1=up, 0=down)
-phpeek_pm_process_restarts_total{process="*"}  # Restart count
-phpeek_pm_process_health_status{process="*"}   # Health status
-phpeek_pm_process_start_time{process="*"}      # Process start timestamp
-phpeek_pm_hook_execution_seconds{hook="*"}     # Hook execution time
+cbox_init_manager_uptime_seconds               # Manager uptime
+cbox_init_process_up{process="nginx"}          # Process status (1=up, 0=down)
+cbox_init_process_restarts_total{process="*"}  # Restart count
+cbox_init_process_health_status{process="*"}   # Health status
+cbox_init_process_start_time{process="*"}      # Process start timestamp
+cbox_init_hook_execution_seconds{hook="*"}     # Hook execution time
 ```
 
 ### Grafana Dashboard
@@ -131,20 +131,20 @@ datasources:
 **Example Queries:**
 ```promql
 # Process uptime
-phpeek_pm_manager_uptime_seconds
+cbox_init_manager_uptime_seconds
 
 # Total restarts (all processes)
-sum(phpeek_pm_process_restarts_total)
+sum(cbox_init_process_restarts_total)
 
 # Unhealthy processes
-count(phpeek_pm_process_health_status == 0)
+count(cbox_init_process_health_status == 0)
 
 # Processes by state
-count by (state) (phpeek_pm_process_up)
+count by (state) (cbox_init_process_up)
 
 # Hook execution duration
-rate(phpeek_pm_hook_execution_seconds_sum[5m]) /
-rate(phpeek_pm_hook_execution_seconds_count[5m])
+rate(cbox_init_hook_execution_seconds_sum[5m]) /
+rate(cbox_init_hook_execution_seconds_count[5m])
 ```
 
 ### Prometheus Alerts
@@ -152,11 +152,11 @@ rate(phpeek_pm_hook_execution_seconds_count[5m])
 **alerts.yml:**
 ```yaml
 groups:
-  - name: phpeek_pm
+  - name: cbox_init
     rules:
       # Process down
       - alert: ProcessDown
-        expr: phpeek_pm_process_up == 0
+        expr: cbox_init_process_up == 0
         for: 1m
         labels:
           severity: critical
@@ -166,7 +166,7 @@ groups:
 
       # Excessive restarts
       - alert: FrequentRestarts
-        expr: rate(phpeek_pm_process_restarts_total[5m]) > 0.1
+        expr: rate(cbox_init_process_restarts_total[5m]) > 0.1
         for: 5m
         labels:
           severity: warning
@@ -175,7 +175,7 @@ groups:
 
       # Unhealthy process
       - alert: ProcessUnhealthy
-        expr: phpeek_pm_process_health_status == 0
+        expr: cbox_init_process_health_status == 0
         for: 2m
         labels:
           severity: warning
@@ -184,7 +184,7 @@ groups:
 
       # Hook failures
       - alert: HookFailed
-        expr: phpeek_pm_hook_failures_total > 0
+        expr: cbox_init_hook_failures_total > 0
         labels:
           severity: warning
         annotations:
@@ -338,7 +338,7 @@ echo "4. Verify all processes healthy..."
 curl -H "Authorization: Bearer $TOKEN" "$API_URL/processes" | jq '.[] | select(.health_status!="healthy")'
 
 echo "5. Check metrics..."
-curl http://localhost:9090/metrics | grep "phpeek_pm_process_up"
+curl http://localhost:9090/metrics | grep "cbox_init_process_up"
 
 echo "Deployment complete!"
 ```
@@ -404,7 +404,7 @@ done
 version: '3.8'
 
 services:
-  # Laravel application with PHPeek PM
+  # Laravel application with Cbox Init
   app:
     build: .
     ports:
@@ -413,9 +413,9 @@ services:
       - "9180:9180"  # Management API
     environment:
       PHP_FPM_AUTOTUNE_PROFILE: "medium"
-      PHPEEK_PM_GLOBAL_METRICS_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_API_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_API_AUTH: ${API_TOKEN}
+      CBOX_INIT_GLOBAL_METRICS_ENABLED: "true"
+      CBOX_INIT_GLOBAL_API_ENABLED: "true"
+      CBOX_INIT_GLOBAL_API_AUTH: ${API_TOKEN}
     depends_on:
       - database
       - redis
@@ -507,8 +507,8 @@ rule_files:
 
 # Scrape configs
 scrape_configs:
-  # PHPeek PM metrics
-  - job_name: 'phpeek-pm'
+  # Cbox Init metrics
+  - job_name: 'cbox-init'
     static_configs:
       - targets: ['app:9090']
         labels:
@@ -569,36 +569,36 @@ receivers:
 ```json
 {
   "dashboard": {
-    "title": "PHPeek PM - Laravel Monitoring",
+    "title": "Cbox Init - Laravel Monitoring",
     "panels": [
       {
         "title": "Process Uptime",
         "targets": [{
-          "expr": "phpeek_pm_manager_uptime_seconds"
+          "expr": "cbox_init_manager_uptime_seconds"
         }]
       },
       {
         "title": "Process Status",
         "targets": [{
-          "expr": "phpeek_pm_process_up"
+          "expr": "cbox_init_process_up"
         }]
       },
       {
         "title": "Restart Rate",
         "targets": [{
-          "expr": "rate(phpeek_pm_process_restarts_total[5m])"
+          "expr": "rate(cbox_init_process_restarts_total[5m])"
         }]
       },
       {
         "title": "Health Check Status",
         "targets": [{
-          "expr": "phpeek_pm_process_health_status"
+          "expr": "cbox_init_process_health_status"
         }]
       },
       {
         "title": "Hook Execution Time",
         "targets": [{
-          "expr": "rate(phpeek_pm_hook_execution_seconds_sum[5m]) / rate(phpeek_pm_hook_execution_seconds_count[5m])"
+          "expr": "rate(cbox_init_hook_execution_seconds_sum[5m]) / rate(cbox_init_hook_execution_seconds_count[5m])"
         }]
       }
     ]
@@ -698,13 +698,13 @@ curl -X POST \
 version: '3.8'
 
 services:
-  # PHPeek PM with full observability
+  # Cbox Init with full observability
   app:
     image: myapp:latest
     environment:
-      PHPEEK_PM_GLOBAL_METRICS_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_API_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_API_AUTH: ${API_TOKEN}
+      CBOX_INIT_GLOBAL_METRICS_ENABLED: "true"
+      CBOX_INIT_GLOBAL_API_ENABLED: "true"
+      CBOX_INIT_GLOBAL_API_AUTH: ${API_TOKEN}
     networks:
       - app-network
       - monitoring
@@ -786,7 +786,7 @@ receivers:
     slack_configs:
       - api_url: 'https://hooks.slack.com/services/XXX/YYY/ZZZ'
         channel: '#production-alerts'
-        title: 'PHPeek PM Alert'
+        title: 'Cbox Init Alert'
         text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
 ```
 
@@ -821,7 +821,7 @@ receivers:
 ```yaml
 # Allow brief failures before alerting
 - alert: ProcessDown
-  expr: phpeek_pm_process_up == 0
+  expr: cbox_init_process_up == 0
   for: 2m  # Not instant, allow for brief restarts
 ```
 
@@ -829,8 +829,8 @@ receivers:
 ```yaml
 # Alert on increasing restart rate
 - alert: RestartRateIncreasing
-  expr: rate(phpeek_pm_process_restarts_total[15m]) >
-        rate(phpeek_pm_process_restarts_total[1h])
+  expr: rate(cbox_init_process_restarts_total[15m]) >
+        rate(cbox_init_process_restarts_total[1h])
 ```
 
 **Use severity labels:**
@@ -853,11 +853,11 @@ global:
 ```yaml
 # ❌ Bad - scheduled tasks restart by design
 - alert: SchedulerRestarted
-  expr: phpeek_pm_process_restarts_total{process="scheduler"} > 0
+  expr: cbox_init_process_restarts_total{process="scheduler"} > 0
 
 # ✅ Good - only alert on unexpected restarts
 - alert: UnexpectedRestart
-  expr: phpeek_pm_process_restarts_total{process!~"scheduler|.*-task"} > threshold
+  expr: cbox_init_process_restarts_total{process!~"scheduler|.*-task"} > threshold
 ```
 
 **Don't expose API publicly:**
@@ -880,10 +880,10 @@ expose:
 API_TOKEN=$(openssl rand -base64 32)
 
 # Store in secret management
-echo $API_TOKEN > /secrets/phpeek-api-token
+echo $API_TOKEN > /secrets/cbox-api-token
 
 # Use in configuration
-export PHPEEK_PM_GLOBAL_API_AUTH=$(cat /secrets/phpeek-api-token)
+export CBOX_INIT_GLOBAL_API_AUTH=$(cat /secrets/cbox-api-token)
 ```
 
 ### Network Isolation
@@ -942,7 +942,7 @@ echo $API_TOKEN
 
 **Verify token in container:**
 ```bash
-docker-compose exec app env | grep PHPEEK_PM_GLOBAL_API_AUTH
+docker-compose exec app env | grep CBOX_INIT_GLOBAL_API_AUTH
 ```
 
 ### Grafana Not Showing Data
@@ -954,7 +954,7 @@ docker-compose exec app env | grep PHPEEK_PM_GLOBAL_API_AUTH
 
 **Test query in Explore:**
 ```promql
-phpeek_pm_process_up
+cbox_init_process_up
 ```
 
 ## See Also

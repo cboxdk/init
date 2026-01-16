@@ -6,7 +6,7 @@ weight: 26
 
 # Terminal User Interface (TUI)
 
-PHPeek PM includes a modern, k9s-style terminal user interface for interactive process management. The TUI provides real-time monitoring, process control, and configuration management without leaving your terminal.
+Cbox Init includes a modern, k9s-style terminal user interface for interactive process management. The TUI provides real-time monitoring, process control, and configuration management without leaving your terminal.
 
 ## Overview
 
@@ -23,16 +23,16 @@ PHPeek PM includes a modern, k9s-style terminal user interface for interactive p
 
 ```bash
 # Local connection (auto-detects Unix socket, falls back to TCP)
-./phpeek-pm tui
+./cbox-init tui
 
 # Explicit TCP connection
-./phpeek-pm tui --url http://localhost:9180
+./cbox-init tui --url http://localhost:9180
 
 # Remote connection with authentication
-./phpeek-pm tui --url http://remote-host:9180 --auth your-secret-token
+./cbox-init tui --url http://remote-host:9180 --auth your-secret-token
 
 # TLS connection
-./phpeek-pm tui --url https://remote-host:9180 --auth your-secret-token
+./cbox-init tui --url https://remote-host:9180 --auth your-secret-token
 ```
 
 ## Connection Modes
@@ -47,15 +47,15 @@ The TUI supports two connection modes with intelligent auto-detection:
 - 🎯 **Simple**: No authentication required (filesystem handles it)
 
 **Auto-detected paths** (priority order):
-1. `/var/run/phpeek-pm.sock`
-2. `/tmp/phpeek-pm.sock`
-3. `/run/phpeek-pm.sock`
+1. `/var/run/cbox-init.sock`
+2. `/tmp/cbox-init.sock`
+3. `/run/cbox-init.sock`
 
 **Configuration:**
 ```yaml
 global:
   api_enabled: true
-  api_socket: "/var/run/phpeek-pm.sock"
+  api_socket: "/var/run/cbox-init.sock"
 ```
 
 ### TCP (Remote, Fallback)
@@ -78,8 +78,8 @@ global:
   # Optional: TLS
   api_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/server.crt"
-    key_file: "/etc/phpeek-pm/server.key"
+    cert_file: "/etc/cbox-init/server.crt"
+    key_file: "/etc/cbox-init/server.key"
 
   # Optional: IP ACL
   api_acl:
@@ -99,11 +99,11 @@ The TUI automatically tries connection methods in this order:
 **Example:**
 ```bash
 # TUI tries:
-# 1. /var/run/phpeek-pm.sock → Found! Using Unix socket
+# 1. /var/run/cbox-init.sock → Found! Using Unix socket
 # OR
-# 1. /var/run/phpeek-pm.sock → Not found
-# 2. /tmp/phpeek-pm.sock → Not found
-# 3. /run/phpeek-pm.sock → Not found
+# 1. /var/run/cbox-init.sock → Not found
+# 2. /tmp/cbox-init.sock → Not found
+# 3. /run/cbox-init.sock → Not found
 # 4. http://localhost:9180 → Fallback to TCP
 ```
 
@@ -316,7 +316,7 @@ global:
   # Choose connection method:
 
   # Option 1: Unix socket (local, recommended)
-  api_socket: "/var/run/phpeek-pm.sock"
+  api_socket: "/var/run/cbox-init.sock"
 
   # Option 2: TCP (remote access)
   api_port: 9180
@@ -331,16 +331,16 @@ global:
 global:
   api_enabled: true
   api_port: 9180
-  api_socket: "/var/run/phpeek-pm.sock"
+  api_socket: "/var/run/cbox-init.sock"
 
   # Authentication (TCP only, socket uses file permissions)
-  api_auth: "${PHPEEK_PM_API_TOKEN}"
+  api_auth: "${CBOX_INIT_API_TOKEN}"
 
   # TLS for remote access
   api_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/tls/server.crt"
-    key_file: "/etc/phpeek-pm/tls/server.key"
+    cert_file: "/etc/cbox-init/tls/server.crt"
+    key_file: "/etc/cbox-init/tls/server.key"
 
   # IP ACL for additional security
   api_acl:
@@ -355,12 +355,12 @@ global:
 **File permissions:**
 ```bash
 # Recommended: Owner-only access (0600)
-chmod 600 /var/run/phpeek-pm.sock
-chown phpeek:phpeek /var/run/phpeek-pm.sock
+chmod 600 /var/run/cbox-init.sock
+chown cbox:cbox /var/run/cbox-init.sock
 
 # Verify permissions
-ls -la /var/run/phpeek-pm.sock
-# Output: srw------- 1 phpeek phpeek 0 Nov 24 10:00 phpeek-pm.sock
+ls -la /var/run/cbox-init.sock
+# Output: srw------- 1 cbox cbox 0 Nov 24 10:00 cbox-init.sock
 ```
 
 **Access control:**
@@ -382,12 +382,12 @@ ls -la /var/run/phpeek-pm.sock
 global:
   api_enabled: true
   api_port: 9180
-  api_auth: "${PHPEEK_PM_API_TOKEN}"  # Load from env
+  api_auth: "${CBOX_INIT_API_TOKEN}"  # Load from env
 
   api_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/tls/server.crt"
-    key_file: "/etc/phpeek-pm/tls/server.key"
+    cert_file: "/etc/cbox-init/tls/server.crt"
+    key_file: "/etc/cbox-init/tls/server.key"
 
   api_acl:
     allow: ["10.0.0.0/8"]  # VPN network only
@@ -398,7 +398,7 @@ global:
 
 ### TUI Won't Connect
 
-**Error:** `Failed to connect to PHPeek PM API`
+**Error:** `Failed to connect to Cbox Init API`
 
 **Solutions:**
 1. **Check API is enabled:**
@@ -407,15 +407,15 @@ global:
      api_enabled: true
    ```
 
-2. **Verify phpeek-pm is running:**
+2. **Verify cbox-init is running:**
    ```bash
-   ps aux | grep phpeek-pm
+   ps aux | grep cbox-init
    ```
 
 3. **Check socket exists (local):**
    ```bash
-   ls -la /var/run/phpeek-pm.sock
-   # Should show: srw------- 1 user user 0 ... phpeek-pm.sock
+   ls -la /var/run/cbox-init.sock
+   # Should show: srw------- 1 user user 0 ... cbox-init.sock
    ```
 
 4. **Test TCP connection (remote):**
@@ -433,23 +433,23 @@ global:
 
 ### Permission Denied on Unix Socket
 
-**Error:** `Permission denied: /var/run/phpeek-pm.sock`
+**Error:** `Permission denied: /var/run/cbox-init.sock`
 
 **Solutions:**
 1. **Check socket permissions:**
    ```bash
-   ls -la /var/run/phpeek-pm.sock
+   ls -la /var/run/cbox-init.sock
    ```
 
 2. **Add user to socket owner group:**
    ```bash
-   sudo usermod -a -G phpeek $USER
+   sudo usermod -a -G cbox $USER
    # Re-login for group changes to take effect
    ```
 
 3. **Run TUI as socket owner:**
    ```bash
-   sudo -u phpeek phpeek-pm tui
+   sudo -u cbox cbox-init tui
    ```
 
 ### Scale/Restart Not Working
@@ -466,13 +466,13 @@ global:
 
 2. **Verify no config errors:**
    ```bash
-   phpeek-pm check-config --strict
+   cbox-init check-config --strict
    ```
 
 3. **Check API logs:**
    ```bash
-   # Look for API errors in PHPeek logs
-   journalctl -u phpeek-pm -f
+   # Look for API errors in Cbox logs
+   journalctl -u cbox-init -f
    ```
 
 ## Examples
@@ -480,21 +480,21 @@ global:
 ### Local Development
 
 ```bash
-# Start PHPeek PM with TUI-ready config
-./phpeek-pm serve --config dev.yaml
+# Start Cbox Init with TUI-ready config
+./cbox-init serve --config dev.yaml
 
 # In another terminal, launch TUI
-./phpeek-pm tui
-# Auto-detects socket at /tmp/phpeek-pm.sock
+./cbox-init tui
+# Auto-detects socket at /tmp/cbox-init.sock
 ```
 
 ### Remote Production Monitoring
 
 ```bash
 # From local machine, connect to production server
-phpeek-pm tui \
+cbox-init tui \
   --url https://prod-server.example.com:9180 \
-  --auth "${PHPEEK_PM_PROD_TOKEN}"
+  --auth "${CBOX_INIT_PROD_TOKEN}"
 
 # Monitor processes, view logs, scale workers as needed
 ```
@@ -506,8 +506,8 @@ phpeek-pm tui \
 docker exec -it my-app /bin/sh
 
 # Launch TUI inside container
-phpeek-pm tui
-# Uses Unix socket /var/run/phpeek-pm.sock
+cbox-init tui
+# Uses Unix socket /var/run/cbox-init.sock
 ```
 
 ## Advanced Features

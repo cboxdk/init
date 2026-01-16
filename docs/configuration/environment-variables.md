@@ -22,49 +22,49 @@ Environment variables enable:
 Configuration is loaded in this order (later overrides earlier):
 
 1. **Default values** - Built-in defaults
-2. **YAML configuration file** - `phpeek-pm.yaml`
+2. **YAML configuration file** - `cbox-init.yaml`
 3. **Environment variables** - Runtime overrides
 
 ```bash
 # YAML has log_level: info
 # ENV overrides to debug
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug ./phpeek-pm
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug ./cbox-init
 ```
 
 ## Naming Convention
 
 ### Global Settings
 
-**Pattern:** `PHPEEK_PM_GLOBAL_<SETTING_NAME>`
+**Pattern:** `CBOX_INIT_GLOBAL_<SETTING_NAME>`
 
 ```bash
-PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT=60
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug
-PHPEEK_PM_GLOBAL_LOG_FORMAT=json
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
-PHPEEK_PM_GLOBAL_METRICS_PORT=9090
-PHPEEK_PM_GLOBAL_API_ENABLED=true
-PHPEEK_PM_GLOBAL_API_PORT=8080
+CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT=60
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug
+CBOX_INIT_GLOBAL_LOG_FORMAT=json
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true
+CBOX_INIT_GLOBAL_METRICS_PORT=9090
+CBOX_INIT_GLOBAL_API_ENABLED=true
+CBOX_INIT_GLOBAL_API_PORT=8080
 ```
 
 ### Process-Specific Settings
 
-**Pattern:** `PHPEEK_PM_PROCESS_<PROCESS_NAME>_<SETTING_NAME>`
+**Pattern:** `CBOX_INIT_PROCESS_<PROCESS_NAME>_<SETTING_NAME>`
 
 ```bash
-PHPEEK_PM_PROCESS_NGINX_ENABLED=true
-PHPEEK_PM_PROCESS_NGINX_PRIORITY=20
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=5
-PHPEEK_PM_PROCESS_HORIZON_RESTART=always
+CBOX_INIT_PROCESS_NGINX_ENABLED=true
+CBOX_INIT_PROCESS_NGINX_PRIORITY=20
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=5
+CBOX_INIT_PROCESS_HORIZON_RESTART=always
 ```
 
 **Important:** Process names are converted to uppercase and hyphens to underscores.
 
 | Process Name | Environment Prefix |
 |--------------|-------------------|
-| `nginx` | `PHPEEK_PM_PROCESS_NGINX_` |
-| `queue-default` | `PHPEEK_PM_PROCESS_QUEUE_DEFAULT_` |
-| `php-fpm` | `PHPEEK_PM_PROCESS_PHP_FPM_` |
+| `nginx` | `CBOX_INIT_PROCESS_NGINX_` |
+| `queue-default` | `CBOX_INIT_PROCESS_QUEUE_DEFAULT_` |
+| `php-fpm` | `CBOX_INIT_PROCESS_PHP_FPM_` |
 
 ### PHP-FPM Auto-Tuning
 
@@ -83,61 +83,61 @@ See [PHP-FPM Auto-Tuning](../php-fpm-autotune) for complete guide.
 
 ```bash
 # Shutdown timeout (seconds)
-PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT=60
+CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT=60
 ```
 
 ### Logging Configuration
 
 ```bash
 # Log format (json|text)
-PHPEEK_PM_GLOBAL_LOG_FORMAT=json
+CBOX_INIT_GLOBAL_LOG_FORMAT=json
 
 # Log level (debug|info|warn|error)
-PHPEEK_PM_GLOBAL_LOG_LEVEL=info
+CBOX_INIT_GLOBAL_LOG_LEVEL=info
 
 # Multiline logging
-PHPEEK_PM_GLOBAL_LOG_MULTILINE_ENABLED=true
-PHPEEK_PM_GLOBAL_LOG_MULTILINE_TIMEOUT=500
+CBOX_INIT_GLOBAL_LOG_MULTILINE_ENABLED=true
+CBOX_INIT_GLOBAL_LOG_MULTILINE_TIMEOUT=500
 
 # Log redaction
-PHPEEK_PM_GLOBAL_LOG_REDACTION_ENABLED=true
+CBOX_INIT_GLOBAL_LOG_REDACTION_ENABLED=true
 ```
 
 ### Metrics Configuration
 
 ```bash
 # Enable Prometheus metrics
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true
 
 # Metrics HTTP port
-PHPEEK_PM_GLOBAL_METRICS_PORT=9090
+CBOX_INIT_GLOBAL_METRICS_PORT=9090
 
 # Metrics URL path
-PHPEEK_PM_GLOBAL_METRICS_PATH=/metrics
+CBOX_INIT_GLOBAL_METRICS_PATH=/metrics
 ```
 
 ### Restart Configuration
 
 ```bash
 # Exponential backoff (Go duration strings)
-PHPEEK_PM_GLOBAL_RESTART_BACKOFF_INITIAL=5s
-PHPEEK_PM_GLOBAL_RESTART_BACKOFF_MAX=60s
+CBOX_INIT_GLOBAL_RESTART_BACKOFF_INITIAL=5s
+CBOX_INIT_GLOBAL_RESTART_BACKOFF_MAX=60s
 
 # Maximum automatic restart attempts (0 = unlimited)
-PHPEEK_PM_GLOBAL_MAX_RESTART_ATTEMPTS=5
+CBOX_INIT_GLOBAL_MAX_RESTART_ATTEMPTS=5
 ```
 
 ### API Configuration
 
 ```bash
 # Enable Management API
-PHPEEK_PM_GLOBAL_API_ENABLED=true
+CBOX_INIT_GLOBAL_API_ENABLED=true
 
 # API HTTP port
-PHPEEK_PM_GLOBAL_API_PORT=8080
+CBOX_INIT_GLOBAL_API_PORT=8080
 
 # API authentication token
-PHPEEK_PM_GLOBAL_API_AUTH=your-secure-token-here
+CBOX_INIT_GLOBAL_API_AUTH=your-secure-token-here
 ```
 
 ## Process Settings Reference
@@ -146,34 +146,34 @@ PHPEEK_PM_GLOBAL_API_AUTH=your-secure-token-here
 
 ```bash
 # Enable/disable process
-PHPEEK_PM_PROCESS_<NAME>_ENABLED=true
+CBOX_INIT_PROCESS_<NAME>_ENABLED=true
 
 # Command (JSON array)
-PHPEEK_PM_PROCESS_<NAME>_COMMAND='["php-fpm","-F","-R"]'
+CBOX_INIT_PROCESS_<NAME>_COMMAND='["php-fpm","-F","-R"]'
 
 # Priority (startup order)
-PHPEEK_PM_PROCESS_<NAME>_PRIORITY=10
+CBOX_INIT_PROCESS_<NAME>_PRIORITY=10
 
 # Restart policy (always|on-failure|never)
-PHPEEK_PM_PROCESS_<NAME>_RESTART=always
+CBOX_INIT_PROCESS_<NAME>_RESTART=always
 
 # Scale (number of instances)
-PHPEEK_PM_PROCESS_<NAME>_SCALE=3
+CBOX_INIT_PROCESS_<NAME>_SCALE=3
 
 # Working directory
-PHPEEK_PM_PROCESS_<NAME>_WORKING_DIR=/var/www/html
+CBOX_INIT_PROCESS_<NAME>_WORKING_DIR=/var/www/html
 ```
 
 ### Process Environment Variables
 
 ```bash
 # Set environment variable for process
-PHPEEK_PM_PROCESS_<NAME>_ENV_<VAR_NAME>=value
+CBOX_INIT_PROCESS_<NAME>_ENV_<VAR_NAME>=value
 
 # Examples:
-PHPEEK_PM_PROCESS_QUEUE_ENV_QUEUE_CONNECTION=redis
-PHPEEK_PM_PROCESS_QUEUE_ENV_REDIS_HOST=localhost
-PHPEEK_PM_PROCESS_APP_ENV_DEBUG=true
+CBOX_INIT_PROCESS_QUEUE_ENV_QUEUE_CONNECTION=redis
+CBOX_INIT_PROCESS_QUEUE_ENV_REDIS_HOST=localhost
+CBOX_INIT_PROCESS_APP_ENV_DEBUG=true
 ```
 
 ## Complete Examples
@@ -188,16 +188,16 @@ services:
     image: myapp:latest
     environment:
       # Global settings
-      PHPEEK_PM_GLOBAL_LOG_LEVEL: "info"
-      PHPEEK_PM_GLOBAL_METRICS_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_API_ENABLED: "true"
+      CBOX_INIT_GLOBAL_LOG_LEVEL: "info"
+      CBOX_INIT_GLOBAL_METRICS_ENABLED: "true"
+      CBOX_INIT_GLOBAL_API_ENABLED: "true"
 
       # PHP-FPM auto-tuning
       PHP_FPM_AUTOTUNE_PROFILE: "medium"
 
       # Process-specific
-      PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE: "5"
-      PHPEEK_PM_PROCESS_HORIZON_ENABLED: "true"
+      CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE: "5"
+      CBOX_INIT_PROCESS_HORIZON_ENABLED: "true"
 
     deploy:
       resources:
@@ -222,28 +222,28 @@ spec:
         image: myapp:v1.2.3
         env:
           # Global config
-          - name: PHPEEK_PM_GLOBAL_LOG_FORMAT
+          - name: CBOX_INIT_GLOBAL_LOG_FORMAT
             value: "json"
 
-          - name: PHPEEK_PM_GLOBAL_METRICS_ENABLED
+          - name: CBOX_INIT_GLOBAL_METRICS_ENABLED
             value: "true"
 
           # PHP-FPM auto-tuning from ConfigMap
           - name: PHP_FPM_AUTOTUNE_PROFILE
             valueFrom:
               configMapKeyRef:
-                name: phpeek-config
+                name: cbox-config
                 key: php_fpm_profile
 
           # API token from Secret
-          - name: PHPEEK_PM_GLOBAL_API_AUTH
+          - name: CBOX_INIT_GLOBAL_API_AUTH
             valueFrom:
               secretKeyRef:
-                name: phpeek-secrets
+                name: cbox-secrets
                 key: api-token
 
           # Process scaling
-          - name: PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE
+          - name: CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE
             value: "5"
 
         resources:
@@ -260,16 +260,16 @@ FROM php:8.3-fpm-alpine
 # Copy application
 COPY . /var/www/html
 
-# Copy phpeek-pm
-COPY --from=builder /app/phpeek-pm /usr/local/bin/phpeek-pm
+# Copy cbox-init
+COPY --from=builder /app/cbox-init /usr/local/bin/cbox-init
 
 # Default environment variables
-ENV PHPEEK_PM_GLOBAL_LOG_FORMAT=json \
-    PHPEEK_PM_GLOBAL_LOG_LEVEL=info \
+ENV CBOX_INIT_GLOBAL_LOG_FORMAT=json \
+    CBOX_INIT_GLOBAL_LOG_LEVEL=info \
     PHP_FPM_AUTOTUNE_PROFILE=medium
 
 # Run as PID 1
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ### Shell Script
@@ -278,20 +278,20 @@ ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
 #!/bin/bash
 
 # Production environment
-export PHPEEK_PM_GLOBAL_LOG_LEVEL=info
-export PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
-export PHPEEK_PM_GLOBAL_API_ENABLED=true
-export PHPEEK_PM_GLOBAL_API_AUTH=$(cat /secrets/api-token)
+export CBOX_INIT_GLOBAL_LOG_LEVEL=info
+export CBOX_INIT_GLOBAL_METRICS_ENABLED=true
+export CBOX_INIT_GLOBAL_API_ENABLED=true
+export CBOX_INIT_GLOBAL_API_AUTH=$(cat /secrets/api-token)
 
 # PHP-FPM configuration
 export PHP_FPM_AUTOTUNE_PROFILE=heavy
 
 # Process configuration
-export PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=10
-export PHPEEK_PM_PROCESS_HORIZON_ENABLED=true
+export CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=10
+export CBOX_INIT_PROCESS_HORIZON_ENABLED=true
 
-# Run phpeek-pm
-exec /usr/local/bin/phpeek-pm
+# Run cbox-init
+exec /usr/local/bin/cbox-init
 ```
 
 ## Environment-Specific Patterns
@@ -300,42 +300,42 @@ exec /usr/local/bin/phpeek-pm
 
 ```bash
 # development.env
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug
-PHPEEK_PM_GLOBAL_LOG_FORMAT=text  # Human-readable
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=false
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug
+CBOX_INIT_GLOBAL_LOG_FORMAT=text  # Human-readable
+CBOX_INIT_GLOBAL_METRICS_ENABLED=false
 PHP_FPM_AUTOTUNE_PROFILE=dev
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=1
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=1
 ```
 
 ```bash
 # Run with development settings
 set -a; source development.env; set +a
-./phpeek-pm
+./cbox-init
 ```
 
 ### Staging
 
 ```bash
 # staging.env
-PHPEEK_PM_GLOBAL_LOG_LEVEL=info
-PHPEEK_PM_GLOBAL_LOG_FORMAT=json
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
+CBOX_INIT_GLOBAL_LOG_LEVEL=info
+CBOX_INIT_GLOBAL_LOG_FORMAT=json
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true
 PHP_FPM_AUTOTUNE_PROFILE=medium
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=3
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=3
 ```
 
 ### Production
 
 ```bash
 # production.env
-PHPEEK_PM_GLOBAL_LOG_LEVEL=warn
-PHPEEK_PM_GLOBAL_LOG_FORMAT=json
-PHPEEK_PM_GLOBAL_LOG_REDACTION_ENABLED=true
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
-PHPEEK_PM_GLOBAL_API_ENABLED=true
-PHPEEK_PM_GLOBAL_API_AUTH=$(vault read -field=token secret/phpeek-api)
+CBOX_INIT_GLOBAL_LOG_LEVEL=warn
+CBOX_INIT_GLOBAL_LOG_FORMAT=json
+CBOX_INIT_GLOBAL_LOG_REDACTION_ENABLED=true
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true
+CBOX_INIT_GLOBAL_API_ENABLED=true
+CBOX_INIT_GLOBAL_API_AUTH=$(vault read -field=token secret/cbox-api)
 PHP_FPM_AUTOTUNE_PROFILE=heavy
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=10
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=10
 ```
 
 ## Secret Management
@@ -346,10 +346,10 @@ PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=10
 #!/bin/bash
 # Load secrets from Vault
 
-export PHPEEK_PM_GLOBAL_API_AUTH=$(vault kv get -field=api_token secret/phpeek)
+export CBOX_INIT_GLOBAL_API_AUTH=$(vault kv get -field=api_token secret/cbox)
 export DATABASE_PASSWORD=$(vault kv get -field=password secret/database)
 
-exec /usr/local/bin/phpeek-pm
+exec /usr/local/bin/cbox-init
 ```
 
 ### AWS Secrets Manager
@@ -358,12 +358,12 @@ exec /usr/local/bin/phpeek-pm
 #!/bin/bash
 # Load secrets from AWS Secrets Manager
 
-export PHPEEK_PM_GLOBAL_API_AUTH=$(aws secretsmanager get-secret-value \
-  --secret-id phpeek-api-token \
+export CBOX_INIT_GLOBAL_API_AUTH=$(aws secretsmanager get-secret-value \
+  --secret-id cbox-api-token \
   --query SecretString \
   --output text)
 
-exec /usr/local/bin/phpeek-pm
+exec /usr/local/bin/cbox-init
 ```
 
 ### Kubernetes Secrets
@@ -372,7 +372,7 @@ exec /usr/local/bin/phpeek-pm
 apiVersion: v1
 kind: Secret
 metadata:
-  name: phpeek-secrets
+  name: cbox-secrets
 type: Opaque
 data:
   api-token: <base64-encoded-token>
@@ -385,10 +385,10 @@ spec:
       containers:
       - name: app
         env:
-          - name: PHPEEK_PM_GLOBAL_API_AUTH
+          - name: CBOX_INIT_GLOBAL_API_AUTH
             valueFrom:
               secretKeyRef:
-                name: phpeek-secrets
+                name: cbox-secrets
                 key: api-token
 ```
 
@@ -398,7 +398,7 @@ spec:
 
 ```bash
 # Start with verbose logging
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug ./phpeek-pm
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug ./cbox-init
 
 # Check which values are being used (in logs)
 # Look for "Configuration loaded" messages
@@ -411,9 +411,9 @@ PHPEEK_PM_GLOBAL_LOG_LEVEL=debug ./phpeek-pm
 # validate-env.sh
 
 required_vars=(
-    "PHPEEK_PM_GLOBAL_LOG_LEVEL"
+    "CBOX_INIT_GLOBAL_LOG_LEVEL"
     "PHP_FPM_AUTOTUNE_PROFILE"
-    "PHPEEK_PM_GLOBAL_API_AUTH"
+    "CBOX_INIT_GLOBAL_API_AUTH"
 )
 
 for var in "${required_vars[@]}"; do
@@ -433,43 +433,43 @@ echo "All required variables are set"
 **Check variable name format:**
 ```bash
 # ❌ Wrong
-PHPEEK_PM_process_nginx_enabled=true
+CBOX_INIT_process_nginx_enabled=true
 
 # ✅ Correct
-PHPEEK_PM_PROCESS_NGINX_ENABLED=true
+CBOX_INIT_PROCESS_NGINX_ENABLED=true
 ```
 
 **Verify it's exported:**
 ```bash
 # Check if variable is exported
-env | grep PHPEEK_PM
+env | grep CBOX_INIT
 
 # Export if needed
-export PHPEEK_PM_GLOBAL_LOG_LEVEL=debug
+export CBOX_INIT_GLOBAL_LOG_LEVEL=debug
 ```
 
 ### Complex Values (JSON Arrays)
 
 ```bash
 # Process command as JSON array
-PHPEEK_PM_PROCESS_APP_COMMAND='["./my-app","--port=8080","--host=0.0.0.0"]'
+CBOX_INIT_PROCESS_APP_COMMAND='["./my-app","--port=8080","--host=0.0.0.0"]'
 
 # Escape quotes properly in shell
-PHPEEK_PM_PROCESS_APP_COMMAND="[\"./my-app\",\"--port=8080\"]"
+CBOX_INIT_PROCESS_APP_COMMAND="[\"./my-app\",\"--port=8080\"]"
 ```
 
 ### Boolean Values
 
 ```bash
 # All these are treated as true
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=1
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=yes
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true
+CBOX_INIT_GLOBAL_METRICS_ENABLED=1
+CBOX_INIT_GLOBAL_METRICS_ENABLED=yes
 
 # All these are treated as false
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=false
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=0
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=no
+CBOX_INIT_GLOBAL_METRICS_ENABLED=false
+CBOX_INIT_GLOBAL_METRICS_ENABLED=0
+CBOX_INIT_GLOBAL_METRICS_ENABLED=no
 ```
 
 ## See Also

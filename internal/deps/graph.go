@@ -3,7 +3,7 @@ package deps
 import (
 	"fmt"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // Graph represents a directed acyclic graph (DAG) of process dependencies

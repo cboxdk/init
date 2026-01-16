@@ -534,7 +534,7 @@ services:
       - "{{ .MetricsPort }}:{{ .MetricsPort }}"
       {{- end }}
     volumes:
-      - ./phpeek-pm.yaml:/etc/phpeek-pm/config.yaml:ro
+      - ./cbox-init.yaml:/etc/cbox-init/config.yaml:ro
       {{- if .EnableNginx }}
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       {{- end }}
@@ -681,11 +681,11 @@ volumes:
 `
 
 // DockerfileTemplate generates a Dockerfile (PHP or Node.js based on framework)
-// PHP frameworks use gophpeek/php-fpm-nginx base images with PHPeek PM pre-installed
-// Node.js frameworks use multi-stage builds with PHPeek PM binary
+// PHP frameworks use cboxdk/php-fpm-nginx base images with Cbox Init pre-installed
+// Node.js frameworks use multi-stage builds with Cbox Init binary
 const DockerfileTemplate = `{{- if or (eq .Framework "nextjs") (eq .Framework "nuxt") (eq .Framework "nodejs") -}}
 # =============================================================================
-# Node.js Application Dockerfile with PHPeek PM
+# Node.js Application Dockerfile with Cbox Init
 # Multi-stage build optimized for {{ .Framework | title }}
 # =============================================================================
 
@@ -714,7 +714,7 @@ RUN npm run build 2>/dev/null || true
 
 # Stage 3: Production
 FROM node:22-alpine AS runner
-LABEL maintainer="PHPeek <https://github.com/gophpeek>"
+LABEL maintainer="Cbox <https://github.com/cboxdk>"
 
 # Install nginx and required tools
 RUN apk add --no-cache nginx curl tini && \
@@ -723,15 +723,15 @@ RUN apk add --no-cache nginx curl tini && \
 
 WORKDIR {{ .WorkDir }}
 
-# Copy PHPeek PM binary (download from releases or copy from build context)
+# Copy Cbox Init binary (download from releases or copy from build context)
 # Option 1: Copy from build context
-# COPY phpeek-pm /usr/local/bin/phpeek-pm
+# COPY cbox-init /usr/local/bin/cbox-init
 # Option 2: Download from releases (uncomment the appropriate architecture)
-ARG PHPEEK_PM_VERSION=latest
+ARG CBOX_INIT_VERSION=latest
 ARG TARGETARCH
-RUN curl -fsSL "https://github.com/gophpeek/phpeek-pm/releases/${PHPEEK_PM_VERSION}/download/phpeek-pm-linux-${TARGETARCH}" \
-    -o /usr/local/bin/phpeek-pm && \
-    chmod +x /usr/local/bin/phpeek-pm
+RUN curl -fsSL "https://github.com/cboxdk/init/releases/${CBOX_INIT_VERSION}/download/cbox-init-linux-${TARGETARCH}" \
+    -o /usr/local/bin/cbox-init && \
+    chmod +x /usr/local/bin/cbox-init
 
 # Copy built application
 {{- if eq .Framework "nextjs" }}
@@ -747,7 +747,7 @@ COPY --from=builder --chown=node:node /app/package*.json ./
 {{- end }}
 
 # Copy configuration files
-COPY --chown=node:node phpeek-pm.yaml /etc/phpeek-pm/config.yaml
+COPY --chown=node:node cbox-init.yaml /etc/cbox-init/config.yaml
 {{- if .EnableNginx }}
 COPY --chown=node:node nginx.conf /etc/nginx/nginx.conf
 {{- end }}
@@ -771,20 +771,20 @@ EXPOSE {{ .APIPort }}
 EXPOSE {{ .MetricsPort }}
 {{- end }}
 
-# Use tini as init system, PHPeek PM as process manager
+# Use tini as init system, Cbox Init as process manager
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["/usr/local/bin/phpeek-pm", "serve", "--config", "/etc/phpeek-pm/config.yaml"]
+CMD ["/usr/local/bin/cbox-init", "serve", "--config", "/etc/cbox-init/config.yaml"]
 {{- else -}}
 # =============================================================================
-# PHP Application Dockerfile using gophpeek/php-fpm-nginx base image
-# PHPeek PM is pre-installed and configured in the base image
+# PHP Application Dockerfile using cboxdk/php-fpm-nginx base image
+# Cbox Init is pre-installed and configured in the base image
 # =============================================================================
 
 # Available tiers: slim (120MB), standard (250MB), full (700MB)
 # Available versions: 8.2, 8.3, 8.4
-FROM gophpeek/php-fpm-nginx:8.3-bookworm
+FROM cboxdk/php-fpm-nginx:8.3-bookworm
 
-LABEL maintainer="PHPeek <https://github.com/gophpeek>"
+LABEL maintainer="Cbox <https://github.com/cboxdk>"
 
 # Set working directory
 WORKDIR {{ .WorkDir }}
@@ -810,11 +810,11 @@ RUN composer dump-autoload --optimize && \
     php bin/console cache:warmup --env=prod
 {{- end }}
 
-# Copy PHPeek PM configuration (overrides default)
-COPY phpeek-pm.yaml /etc/phpeek-pm/config.yaml
+# Copy Cbox Init configuration (overrides default)
+COPY cbox-init.yaml /etc/cbox-init/config.yaml
 
 # The base image already exposes ports 80, 443, 9180 (API), 9090 (metrics)
-# and uses PHPeek PM as PID 1 with auto-detection for Laravel/Symfony/WordPress
+# and uses Cbox Init as PID 1 with auto-detection for Laravel/Symfony/WordPress
 {{- end }}
 `
 
@@ -860,7 +860,7 @@ http {
                application/xml application/xml+rss text/javascript application/x-javascript;
 
     # Upstream pool for Node.js instances
-    # PHPeek PM assigns PORT = port_base + instance_index
+    # Cbox Init assigns PORT = port_base + instance_index
     upstream nodejs_backend {
         least_conn;  # Load balancing method
         keepalive 32;

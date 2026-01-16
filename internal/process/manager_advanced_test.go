@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // TestManager_AdjustScale tests the AdjustScale function

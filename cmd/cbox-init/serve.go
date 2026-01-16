@@ -10,24 +10,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/api"
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/autotune"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/logger"
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
-	"github.com/gophpeek/phpeek-pm/internal/process"
-	"github.com/gophpeek/phpeek-pm/internal/setup"
-	"github.com/gophpeek/phpeek-pm/internal/signals"
-	"github.com/gophpeek/phpeek-pm/internal/tracing"
-	"github.com/gophpeek/phpeek-pm/internal/watcher"
+	"github.com/cboxdk/init/internal/api"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/autotune"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/metrics"
+	"github.com/cboxdk/init/internal/process"
+	"github.com/cboxdk/init/internal/setup"
+	"github.com/cboxdk/init/internal/signals"
+	"github.com/cboxdk/init/internal/tracing"
+	"github.com/cboxdk/init/internal/watcher"
 	"github.com/spf13/cobra"
 )
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the process manager daemon",
-	Long: `Start PHPeek PM in daemon mode to manage processes.
+	Long: `Start Cbox Init in daemon mode to manage processes.
 
 This is the default mode when no subcommand is specified. It starts all configured
 processes, handles graceful shutdown, and provides observability endpoints.`,
@@ -53,7 +53,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	cfgPath := getConfigPath()
 
 	// Display banner
-	fmt.Fprintf(os.Stderr, "\n🚀 PHPeek Process Manager v%s\n", version)
+	fmt.Fprintf(os.Stderr, "\n🚀 Cbox Init v%s\n", version)
 	fmt.Fprintf(os.Stderr, "   Production-grade process supervisor for Docker containers\n\n")
 
 	// Determine working directory
@@ -105,7 +105,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	log := logger.New(cfg.Global.LogLevel, cfg.Global.LogFormat)
 	slog.SetDefault(log)
 
-	slog.Info("PHPeek PM starting",
+	slog.Info("Cbox Init starting",
 		"version", version,
 		"pid", os.Getpid(),
 		"workdir", workdir,
@@ -476,5 +476,5 @@ func performGracefulShutdown(cfg *config.Config, pm *process.Manager, apiServer 
 	// Log successful shutdown to audit log
 	auditLogger.LogSystemShutdown(reason, true) // Graceful = true
 
-	slog.Info("PHPeek PM shutdown complete")
+	slog.Info("Cbox Init shutdown complete")
 }

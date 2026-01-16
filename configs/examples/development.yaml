@@ -70,10 +70,10 @@ processes:
       timeout: 60
 
 # Development Workflow:
-# 1. phpeek-pm serve -c configs/examples/development.yaml
+# 1. cbox-init serve -c configs/examples/development.yaml
 #    → Only PHP-FPM starts
 #
-# 2. In another terminal: phpeek-pm tui
+# 2. In another terminal: cbox-init tui
 #    → See php-fpm running, nginx/horizon/queue stopped
 #
 # 3. In TUI:

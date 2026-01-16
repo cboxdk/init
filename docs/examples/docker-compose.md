@@ -6,7 +6,7 @@ weight: 35
 
 # Docker Compose Example
 
-Deploy PHP applications with Docker Compose using PHPeek PM for process management and environment-specific configuration.
+Deploy PHP applications with Docker Compose using Cbox Init for process management and environment-specific configuration.
 
 ## Use Cases
 
@@ -44,10 +44,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
 
-      # PHPeek PM settings
-      PHPEEK_PM_GLOBAL_METRICS_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_LOG_LEVEL: "info"
-      PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE: "3"
+      # Cbox Init settings
+      CBOX_INIT_GLOBAL_METRICS_ENABLED: "true"
+      CBOX_INIT_GLOBAL_LOG_LEVEL: "info"
+      CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE: "3"
 
     deploy:
       resources:
@@ -131,11 +131,11 @@ COPY . .
 # Install dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Copy PHPeek PM
-COPY --from=ghcr.io/gophpeek/phpeek-pm:latest /phpeek-pm /usr/local/bin/phpeek-pm
+# Copy Cbox Init
+COPY --from=ghcr.io/cboxdk/init:latest /cbox-init /usr/local/bin/cbox-init
 
 # Copy configurations
-COPY docker/phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY docker/cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
 # Set permissions
@@ -144,8 +144,8 @@ RUN chown -R www-data:www-data /var/www/html
 # Expose ports
 EXPOSE 80 9090
 
-# Run PHPeek PM as PID 1
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+# Run Cbox Init as PID 1
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Multi-Environment Setup
@@ -164,10 +164,10 @@ services:
       APP_ENV: local
       APP_DEBUG: "true"
       PHP_FPM_AUTOTUNE_PROFILE: "dev"
-      PHPEEK_PM_GLOBAL_LOG_LEVEL: "debug"
-      PHPEEK_PM_GLOBAL_LOG_FORMAT: "text"  # Human-readable
-      PHPEEK_PM_PROCESS_HORIZON_ENABLED: "false"
-      PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE: "1"
+      CBOX_INIT_GLOBAL_LOG_LEVEL: "debug"
+      CBOX_INIT_GLOBAL_LOG_FORMAT: "text"  # Human-readable
+      CBOX_INIT_PROCESS_HORIZON_ENABLED: "false"
+      CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE: "1"
 
     volumes:
       - ./:/var/www/html  # Mount source code for development
@@ -196,9 +196,9 @@ services:
       APP_ENV: staging
       APP_DEBUG: "false"
       PHP_FPM_AUTOTUNE_PROFILE: "medium"
-      PHPEEK_PM_GLOBAL_LOG_LEVEL: "info"
-      PHPEEK_PM_GLOBAL_METRICS_ENABLED: "true"
-      PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE: "3"
+      CBOX_INIT_GLOBAL_LOG_LEVEL: "info"
+      CBOX_INIT_GLOBAL_METRICS_ENABLED: "true"
+      CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE: "3"
 
     deploy:
       resources:
@@ -219,12 +219,12 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       PHP_FPM_AUTOTUNE_PROFILE: "heavy"
-      PHPEEK_PM_GLOBAL_LOG_LEVEL: "warn"
-      PHPEEK_PM_GLOBAL_LOG_REDACTION_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_METRICS_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_API_ENABLED: "true"
-      PHPEEK_PM_GLOBAL_API_AUTH: ${API_TOKEN}
-      PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE: "10"
+      CBOX_INIT_GLOBAL_LOG_LEVEL: "warn"
+      CBOX_INIT_GLOBAL_LOG_REDACTION_ENABLED: "true"
+      CBOX_INIT_GLOBAL_METRICS_ENABLED: "true"
+      CBOX_INIT_GLOBAL_API_ENABLED: "true"
+      CBOX_INIT_GLOBAL_API_AUTH: ${API_TOKEN}
+      CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE: "10"
 
     deploy:
       resources:
@@ -261,7 +261,7 @@ services:
 ```yaml
 services:
   app:
-    command: ["/wait-for-db.sh", "&&", "/usr/local/bin/phpeek-pm"]
+    command: ["/wait-for-db.sh", "&&", "/usr/local/bin/cbox-init"]
 ```
 
 **wait-for-db.sh:**
@@ -340,7 +340,7 @@ services:
     volumes:
       - ./:/var/www/html              # Source code
       - ./docker/nginx.conf:/etc/nginx/nginx.conf
-      - ./docker/phpeek-pm.yaml:/etc/phpeek-pm/phpeek-pm.yaml
+      - ./docker/cbox-init.yaml:/etc/cbox-init/cbox-init.yaml
 ```
 
 ## Scaling with Docker Compose
@@ -390,7 +390,7 @@ version: '3.8'
 
 services:
   app:
-    # ... Laravel app with PHPeek PM
+    # ... Laravel app with Cbox Init
 
   prometheus:
     image: prom/prometheus:latest
@@ -422,7 +422,7 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'phpeek-pm'
+  - job_name: 'cbox-init'
     static_configs:
       - targets: ['app:9090']
 ```
@@ -433,7 +433,7 @@ scrape_configs:
 version: '3.8'
 
 services:
-  # PHP application with PHPeek PM
+  # PHP application with Cbox Init
   app:
     build: .
     ports:
@@ -594,8 +594,8 @@ BACKUP_HEARTBEAT_URL=https://hc-ping.com/uuid
 APP_ENV=local
 APP_DEBUG=true
 PHP_FPM_AUTOTUNE_PROFILE=dev
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=1
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=1
 ```
 
 ### .env.production
@@ -604,9 +604,9 @@ PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=1
 APP_ENV=production
 APP_DEBUG=false
 PHP_FPM_AUTOTUNE_PROFILE=heavy
-PHPEEK_PM_GLOBAL_LOG_LEVEL=warn
-PHPEEK_PM_GLOBAL_LOG_REDACTION_ENABLED=true
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=10
+CBOX_INIT_GLOBAL_LOG_LEVEL=warn
+CBOX_INIT_GLOBAL_LOG_REDACTION_ENABLED=true
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=10
 ```
 
 ## Multi-Profile Deployment
@@ -684,7 +684,7 @@ database + redis (parallel)
         ↓
     app starts
         ↓
-PHPeek PM runs pre-start hooks
+Cbox Init runs pre-start hooks
         ↓
 PHP-FPM → Nginx → Horizon → Queue
 ```
@@ -695,7 +695,7 @@ PHP-FPM → Nginx → Horizon → Queue
 # Stop services gracefully
 docker-compose down
 
-# PHPeek PM handles:
+# Cbox Init handles:
 # 1. Stop accepting new requests
 # 2. Finish current jobs (Horizon)
 # 3. Terminate queue workers
@@ -713,7 +713,7 @@ services:
     volumes:
       # Hot reload for development
       - ./:/var/www/html
-      - ./docker/phpeek-pm.yaml:/etc/phpeek-pm/phpeek-pm.yaml
+      - ./docker/cbox-init.yaml:/etc/cbox-init/cbox-init.yaml
 
       # Prevent node_modules from mounting
       - /var/www/html/node_modules
@@ -729,7 +729,7 @@ services:
       - app-storage:/var/www/html/storage
 
       # Read-only config
-      - ./phpeek-pm.yaml:/etc/phpeek-pm/phpeek-pm.yaml:ro
+      - ./cbox-init.yaml:/etc/cbox-init/cbox-init.yaml:ro
 ```
 
 ## Monitoring Integration
@@ -742,7 +742,7 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'phpeek-pm'
+  - job_name: 'cbox-init'
     static_configs:
       - targets:
           - app:9090

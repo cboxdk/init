@@ -99,14 +99,14 @@ func (g *Generator) Generate(files []string) error {
 	return nil
 }
 
-// generateConfig generates phpeek-pm.yaml
+// generateConfig generates cbox-init.yaml
 func (g *Generator) generateConfig() error {
 	content, err := GenerateConfig(g.config)
 	if err != nil {
 		return err
 	}
 
-	path := filepath.Join(g.outDir, "phpeek-pm.yaml")
+	path := filepath.Join(g.outDir, "cbox-init.yaml")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}

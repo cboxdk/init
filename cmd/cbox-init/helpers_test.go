@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // TestResolveAutotuneThreshold tests the threshold resolution logic
@@ -207,7 +207,7 @@ func TestCheckExistingFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create some test files
-	if err := os.WriteFile(filepath.Join(tmpDir, "phpeek-pm.yaml"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "cbox-init.yaml"), []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "Dockerfile"), []byte("test"), 0644); err != nil {
@@ -226,7 +226,7 @@ func TestCheckExistingFiles(t *testing.T) {
 			dir:       tmpDir,
 			files:     []string{"config"},
 			wantCount: 1,
-			wantFiles: []string{"phpeek-pm.yaml"},
+			wantFiles: []string{"cbox-init.yaml"},
 		},
 		{
 			name:      "find existing dockerfile",
@@ -247,7 +247,7 @@ func TestCheckExistingFiles(t *testing.T) {
 			dir:       tmpDir,
 			files:     []string{"config", "dockerfile", "docker-compose"},
 			wantCount: 2,
-			wantFiles: []string{"phpeek-pm.yaml", "Dockerfile"},
+			wantFiles: []string{"cbox-init.yaml", "Dockerfile"},
 		},
 		{
 			name:      "non-existent directory",
@@ -353,8 +353,8 @@ func TestResolveAutotuneProfile(t *testing.T) {
 // TestResolveConfigPath tests config path resolution
 func TestResolveConfigPath(t *testing.T) {
 	// Save original env
-	origConfig := os.Getenv("PHPEEK_PM_CONFIG")
-	defer os.Setenv("PHPEEK_PM_CONFIG", origConfig)
+	origConfig := os.Getenv("CBOX_INIT_CONFIG")
+	defer os.Setenv("CBOX_INIT_CONFIG", origConfig)
 
 	tmpDir := t.TempDir()
 
@@ -380,7 +380,7 @@ func TestResolveConfigPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("PHPEEK_PM_CONFIG", tt.envPath)
+			os.Setenv("CBOX_INIT_CONFIG", tt.envPath)
 			result := ResolveConfigPath(tt.cliPath)
 			if result.Source != tt.wantSource {
 				t.Errorf("ResolveConfigPath(%q).Source = %v, want %v", tt.cliPath, result.Source, tt.wantSource)
@@ -390,7 +390,7 @@ func TestResolveConfigPath(t *testing.T) {
 
 	// Test fallback separately - result depends on whether user config exists
 	t.Run("fallback when CLI and ENV empty", func(t *testing.T) {
-		os.Setenv("PHPEEK_PM_CONFIG", "")
+		os.Setenv("CBOX_INIT_CONFIG", "")
 		result := ResolveConfigPath("")
 		// Result should be either "user config", "system config", or "local config"
 		validSources := []string{"user config", "system config", "local config"}
@@ -408,7 +408,7 @@ func TestResolveConfigPath(t *testing.T) {
 
 	// Test that CLI path is returned as-is
 	t.Run("CLI path is returned unchanged", func(t *testing.T) {
-		os.Setenv("PHPEEK_PM_CONFIG", "")
+		os.Setenv("CBOX_INIT_CONFIG", "")
 		testPath := "/custom/path/to/config.yaml"
 		result := ResolveConfigPath(testPath)
 		if result.Path != testPath {
@@ -419,7 +419,7 @@ func TestResolveConfigPath(t *testing.T) {
 	// Test that ENV path is returned when set
 	t.Run("ENV path is returned when set", func(t *testing.T) {
 		envPath := filepath.Join(tmpDir, "env-config.yaml")
-		os.Setenv("PHPEEK_PM_CONFIG", envPath)
+		os.Setenv("CBOX_INIT_CONFIG", envPath)
 		result := ResolveConfigPath("")
 		if result.Path != envPath {
 			t.Errorf("ResolveConfigPath(\"\").Path = %v, want %v", result.Path, envPath)
@@ -521,7 +521,7 @@ func TestGetFilenameHelper(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"config", "phpeek-pm.yaml"},
+		{"config", "cbox-init.yaml"},
 		{"docker-compose", "docker-compose.yml"},
 		{"dockerfile", "Dockerfile"},
 		{"unknown", "unknown"},

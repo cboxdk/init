@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/logger"
-	"github.com/gophpeek/phpeek-pm/internal/process"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/process"
 )
 
-// APIClient connects to a running PHPeek PM daemon via API
+// APIClient connects to a running Cbox Init daemon via API
 type APIClient struct {
 	baseURL    string
 	socketPath string
@@ -36,9 +36,9 @@ func NewAPIClient(baseURL, auth string) *APIClient {
 
 	// Auto-detect socket paths (priority order)
 	socketPaths := []string{
-		"/var/run/phpeek-pm.sock",
-		"/tmp/phpeek-pm.sock",
-		"/run/phpeek-pm.sock",
+		"/var/run/cbox-init.sock",
+		"/tmp/cbox-init.sock",
+		"/run/cbox-init.sock",
 	}
 
 	// Try each socket path

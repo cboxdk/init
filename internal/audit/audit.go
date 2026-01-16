@@ -383,12 +383,12 @@ func (l *Logger) LogSystemStart(version string) {
 		EventType: EventSystemStart,
 		Actor: Actor{
 			Type: "system",
-			ID:   "phpeek-pm",
+			ID:   "cbox-init",
 		},
 		Action: "start",
 		Resource: Resource{
 			Type: "system",
-			ID:   "phpeek-pm",
+			ID:   "cbox-init",
 		},
 		Status:  StatusSuccess,
 		Message: "PHPeek PM started",
@@ -409,12 +409,12 @@ func (l *Logger) LogSystemShutdown(reason string, graceful bool) {
 		EventType: EventSystemShutdown,
 		Actor: Actor{
 			Type: "system",
-			ID:   "phpeek-pm",
+			ID:   "cbox-init",
 		},
 		Action: "shutdown",
 		Resource: Resource{
 			Type: "system",
-			ID:   "phpeek-pm",
+			ID:   "cbox-init",
 		},
 		Status:  status,
 		Message: "PHPeek PM shutdown",

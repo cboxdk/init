@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/acl"
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/process"
-	tlsmgr "github.com/gophpeek/phpeek-pm/internal/tls"
+	"github.com/cboxdk/init/internal/acl"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/process"
+	tlsmgr "github.com/cboxdk/init/internal/tls"
 )
 
 // DefaultMaxRequestBodySize is the default request body size limit (8MB)

@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/process"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/process"
 )
 
 // createTestManager creates a real manager with minimal config for testing
@@ -964,7 +964,7 @@ func TestServer_StartSocketListener(t *testing.T) {
 	}{
 		{
 			name:        "valid socket path",
-			socketPath:  "/tmp/phpeek-pm-test.sock",
+			socketPath:  "/tmp/cbox-init-test.sock",
 			expectError: false,
 		},
 		{
@@ -1231,7 +1231,7 @@ func TestServer_HandleStackLogs(t *testing.T) {
 func TestServer_SocketCleanup(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	mgr := createTestManager(t)
-	socketPath := "/tmp/phpeek-pm-cleanup-test.sock"
+	socketPath := "/tmp/cbox-init-cleanup-test.sock"
 
 	// Clean up any existing socket
 	os.Remove(socketPath)

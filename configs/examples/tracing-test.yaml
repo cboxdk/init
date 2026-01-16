@@ -9,7 +9,7 @@ global:
   tracing_enabled: true
   tracing_exporter: stdout
   tracing_sample_rate: 1.0
-  tracing_service_name: phpeek-pm-test
+  tracing_service_name: cbox-init-test
 
 processes:
   test-process:

@@ -2,7 +2,7 @@
 set -e
 
 echo "==================================================================="
-echo "PHPeek PM - Complete Test Suite"
+echo "Cbox Init - Complete Test Suite"
 echo "==================================================================="
 echo ""
 
@@ -56,9 +56,9 @@ echo "3. Binary Tests"
 echo "==================================================================="
 echo ""
 
-run_test "Binary Exists" "test -f build/phpeek-pm"
-run_test "Binary Executable" "test -x build/phpeek-pm"
-run_test "Binary Size Check" "test $(stat -f%z build/phpeek-pm 2>/dev/null || stat -c%s build/phpeek-pm) -lt 50000000"
+run_test "Binary Exists" "test -f build/cbox-init"
+run_test "Binary Executable" "test -x build/cbox-init"
+run_test "Binary Size Check" "test $(stat -f%z build/cbox-init 2>/dev/null || stat -c%s build/cbox-init) -lt 50000000"
 
 # 4. Integration Tests (Docker required)
 if command -v docker &> /dev/null; then
@@ -69,8 +69,8 @@ if command -v docker &> /dev/null; then
 
     for distro in alpine debian ubuntu; do
         run_test "Integration Test - $distro" "
-            docker build -f tests/integration/Dockerfile.$distro -t phpeek-pm-test-$distro . > /dev/null 2>&1 && \
-            docker run --rm phpeek-pm-test-$distro
+            docker build -f tests/integration/Dockerfile.$distro -t cbox-init-test-$distro . > /dev/null 2>&1 && \
+            docker run --rm cbox-init-test-$distro
         "
     done
 else
@@ -87,7 +87,7 @@ echo "==================================================================="
 echo ""
 
 # Create test config
-cat > /tmp/phpeek-test-config.yaml <<EOF
+cat > /tmp/cbox-test-config.yaml <<EOF
 version: "1.0"
 global:
   shutdown_timeout: 10
@@ -111,30 +111,30 @@ processes:
       success_threshold: 1
 EOF
 
-run_test "Start PHPeek PM" "
-    PHPEEK_PM_CONFIG=/tmp/phpeek-test-config.yaml ./build/phpeek-pm > /tmp/phpeek-test.log 2>&1 &
-    PHPEEK_PID=\$!
+run_test "Start Cbox Init" "
+    CBOX_INIT_CONFIG=/tmp/cbox-test-config.yaml ./build/cbox-init > /tmp/cbox-test.log 2>&1 &
+    CBOX_PID=\$!
     sleep 3
-    kill -0 \$PHPEEK_PID 2>/dev/null
-    echo \$PHPEEK_PID > /tmp/phpeek-test.pid
+    kill -0 \$CBOX_PID 2>/dev/null
+    echo \$CBOX_PID > /tmp/cbox-test.pid
 "
 
-if [ -f /tmp/phpeek-test.pid ]; then
-    PHPEEK_PID=$(cat /tmp/phpeek-test.pid)
+if [ -f /tmp/cbox-test.pid ]; then
+    CBOX_PID=$(cat /tmp/cbox-test.pid)
 
     run_test "Metrics Endpoint" "curl -sf http://localhost:9090/metrics > /dev/null"
     run_test "API Health Endpoint" "curl -sf http://localhost:9180/api/v1/health | grep -q healthy"
     run_test "API Processes Endpoint" "curl -sf http://localhost:9180/api/v1/processes | grep -q sleeper"
 
     run_test "Graceful Shutdown" "
-        kill -TERM \$PHPEEK_PID
+        kill -TERM \$CBOX_PID
         sleep 3
-        ! kill -0 \$PHPEEK_PID 2>/dev/null
+        ! kill -0 \$CBOX_PID 2>/dev/null
     "
 
     # Cleanup
-    kill -KILL $PHPEEK_PID 2>/dev/null || true
-    rm -f /tmp/phpeek-test.pid /tmp/phpeek-test.log /tmp/phpeek-test-config.yaml
+    kill -KILL $CBOX_PID 2>/dev/null || true
+    rm -f /tmp/cbox-test.pid /tmp/cbox-test.log /tmp/cbox-test-config.yaml
 fi
 
 # 6. Configuration Tests
@@ -155,7 +155,7 @@ processes:
     command: ['sleep', '1']
     priority: 10
 EOF
-    PHPEEK_PM_CONFIG=/tmp/test-valid-config.yaml ./build/phpeek-pm > /dev/null 2>&1 &
+    CBOX_INIT_CONFIG=/tmp/test-valid-config.yaml ./build/cbox-init > /dev/null 2>&1 &
     PID=\$!
     sleep 1
     kill -TERM \$PID 2>/dev/null
@@ -183,7 +183,7 @@ processes:
     priority: 10
     restart: never
 EOF
-    PHPEEK_PM_CONFIG=/tmp/perf-test-config.yaml ./build/phpeek-pm > /dev/null 2>&1 &
+    CBOX_INIT_CONFIG=/tmp/perf-test-config.yaml ./build/cbox-init > /dev/null 2>&1 &
     PID=\$!
     sleep 1
     END=\$(date +%s)

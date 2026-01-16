@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/process"
-	"github.com/gophpeek/phpeek-pm/internal/scaffold"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/process"
+	"github.com/cboxdk/init/internal/scaffold"
 	"github.com/spf13/cobra"
 )
 
@@ -77,19 +77,19 @@ func TestVersionCommand(t *testing.T) {
 		{
 			name:    "full version output",
 			args:    []string{"version"},
-			wantOut: []string{"PHPeek Process Manager", "v", "phpeek.com"},
+			wantOut: []string{"Cbox Init", "v", "cbox.dk"},
 		},
 		{
 			name:    "short version output",
 			args:    []string{"version", "--short"},
 			wantOut: []string{version}, // Just the version number
-			notWant: []string{"PHPeek Process Manager"},
+			notWant: []string{"Cbox Init"},
 		},
 		{
 			name:    "short version with -s flag",
 			args:    []string{"version", "-s"},
 			wantOut: []string{version},
-			notWant: []string{"PHPeek Process Manager"},
+			notWant: []string{"Cbox Init"},
 		},
 	}
 
@@ -297,7 +297,7 @@ func TestRootCommandHelp(t *testing.T) {
 	output := executeCommand(t, rootCmd, "--help")
 
 	expectedStrings := []string{
-		"PHPeek PM",
+		"Cbox Init",
 		"process manager",
 		"Docker containers",
 		"serve",
@@ -359,13 +359,13 @@ func TestScaffoldCommandHelp(t *testing.T) {
 func TestGetConfigPathPriority(t *testing.T) {
 	// Save original state
 	origCfgFile := cfgFile
-	origEnv := os.Getenv("PHPEEK_PM_CONFIG")
+	origEnv := os.Getenv("CBOX_INIT_CONFIG")
 	defer func() {
 		cfgFile = origCfgFile
 		if origEnv != "" {
-			os.Setenv("PHPEEK_PM_CONFIG", origEnv)
+			os.Setenv("CBOX_INIT_CONFIG", origEnv)
 		} else {
-			os.Unsetenv("PHPEEK_PM_CONFIG")
+			os.Unsetenv("CBOX_INIT_CONFIG")
 		}
 	}()
 
@@ -399,9 +399,9 @@ func TestGetConfigPathPriority(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfgFile = tt.cfgFile
 			if tt.envVar != "" {
-				os.Setenv("PHPEEK_PM_CONFIG", tt.envVar)
+				os.Setenv("CBOX_INIT_CONFIG", tt.envVar)
 			} else {
-				os.Unsetenv("PHPEEK_PM_CONFIG")
+				os.Unsetenv("CBOX_INIT_CONFIG")
 			}
 
 			result := getConfigPath()
@@ -604,7 +604,7 @@ func TestGetFilename(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"config", "phpeek-pm.yaml"},
+		{"config", "cbox-init.yaml"},
 		{"docker-compose", "docker-compose.yml"},
 		{"dockerfile", "Dockerfile"},
 		{"unknown", "unknown"},
@@ -671,7 +671,7 @@ func TestScaffoldCommand(t *testing.T) {
 		output, _ := cmd.CombinedOutput()
 
 		// Check if config file was created
-		configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+		configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 		if _, err := os.Stat(configPath); err == nil {
 			t.Log("Config file was generated successfully")
 
@@ -797,23 +797,23 @@ func TestVersionConstant(t *testing.T) {
 func TestConfigPathFallback(t *testing.T) {
 	// Save original state
 	origCfgFile := cfgFile
-	origEnv := os.Getenv("PHPEEK_PM_CONFIG")
+	origEnv := os.Getenv("CBOX_INIT_CONFIG")
 	defer func() {
 		cfgFile = origCfgFile
 		if origEnv != "" {
-			os.Setenv("PHPEEK_PM_CONFIG", origEnv)
+			os.Setenv("CBOX_INIT_CONFIG", origEnv)
 		} else {
-			os.Unsetenv("PHPEEK_PM_CONFIG")
+			os.Unsetenv("CBOX_INIT_CONFIG")
 		}
 	}()
 
 	// Clear all config sources
 	cfgFile = ""
-	os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := getConfigPath()
 
-	// Should return some default path (phpeek-pm.yaml or a system path)
+	// Should return some default path (cbox-init.yaml or a system path)
 	if result == "" {
 		t.Error("getConfigPath should return a non-empty default path")
 	}
@@ -1100,7 +1100,7 @@ func TestConfirmOverwriteFunction(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create existing file
-	existingFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	existingFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if err := os.WriteFile(existingFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -1143,7 +1143,7 @@ func TestScaffoldAllPresets(t *testing.T) {
 			output, _ := cmd.CombinedOutput()
 
 			// Check if config was generated
-			configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+			configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 			if _, err := os.Stat(configPath); err == nil {
 				t.Logf("Generated config for preset %s", preset)
 
@@ -1185,7 +1185,7 @@ func TestScaffoldWithFlags(t *testing.T) {
 		)
 		output, _ := cmd.CombinedOutput()
 
-		configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+		configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 		if _, err := os.Stat(configPath); err == nil {
 			content, _ := os.ReadFile(configPath)
 			if strings.Contains(string(content), "my-custom-app") {
@@ -1206,7 +1206,7 @@ func TestScaffoldWithFlags(t *testing.T) {
 		)
 		output, _ := cmd.CombinedOutput()
 
-		configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+		configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 		if _, err := os.Stat(configPath); err == nil {
 			t.Log("scaffold with queue-workers flag succeeded")
 		} else {
@@ -1256,18 +1256,18 @@ func TestMultipleConfigPaths(t *testing.T) {
 	// Test with environment variable
 	t.Run("environment variable", func(t *testing.T) {
 		origCfgFile := cfgFile
-		origEnv := os.Getenv("PHPEEK_PM_CONFIG")
+		origEnv := os.Getenv("CBOX_INIT_CONFIG")
 		defer func() {
 			cfgFile = origCfgFile
 			if origEnv != "" {
-				os.Setenv("PHPEEK_PM_CONFIG", origEnv)
+				os.Setenv("CBOX_INIT_CONFIG", origEnv)
 			} else {
-				os.Unsetenv("PHPEEK_PM_CONFIG")
+				os.Unsetenv("CBOX_INIT_CONFIG")
 			}
 		}()
 
 		cfgFile = ""
-		os.Setenv("PHPEEK_PM_CONFIG", "/env/path/config.yaml")
+		os.Setenv("CBOX_INIT_CONFIG", "/env/path/config.yaml")
 		result := getConfigPath()
 		if result != "/env/path/config.yaml" {
 			t.Errorf("expected env path, got %s", result)
@@ -1565,23 +1565,23 @@ processes:
 	}
 }
 
-// TestConfigPathEnvironmentVariable tests PHPEEK_PM_CONFIG env var handling
+// TestConfigPathEnvironmentVariable tests CBOX_INIT_CONFIG env var handling
 func TestConfigPathEnvironmentVariable(t *testing.T) {
 	// Save original state
 	origCfgFile := cfgFile
-	origEnv := os.Getenv("PHPEEK_PM_CONFIG")
+	origEnv := os.Getenv("CBOX_INIT_CONFIG")
 	defer func() {
 		cfgFile = origCfgFile
 		if origEnv != "" {
-			os.Setenv("PHPEEK_PM_CONFIG", origEnv)
+			os.Setenv("CBOX_INIT_CONFIG", origEnv)
 		} else {
-			os.Unsetenv("PHPEEK_PM_CONFIG")
+			os.Unsetenv("CBOX_INIT_CONFIG")
 		}
 	}()
 
 	t.Run("env var is respected when flag not set", func(t *testing.T) {
 		cfgFile = ""
-		os.Setenv("PHPEEK_PM_CONFIG", "/custom/env/path.yaml")
+		os.Setenv("CBOX_INIT_CONFIG", "/custom/env/path.yaml")
 
 		result := getConfigPath()
 		if result != "/custom/env/path.yaml" {
@@ -1591,7 +1591,7 @@ func TestConfigPathEnvironmentVariable(t *testing.T) {
 
 	t.Run("flag overrides env var", func(t *testing.T) {
 		cfgFile = "/flag/path.yaml"
-		os.Setenv("PHPEEK_PM_CONFIG", "/env/path.yaml")
+		os.Setenv("CBOX_INIT_CONFIG", "/env/path.yaml")
 
 		result := getConfigPath()
 		if result != "/flag/path.yaml" {
@@ -1887,7 +1887,7 @@ func TestRootCommandUseLine(t *testing.T) {
 		t.Error("root command should have Use string")
 	}
 
-	if !strings.Contains(rootCmd.Use, "phpeek-pm") {
+	if !strings.Contains(rootCmd.Use, "cbox-init") {
 		t.Logf("Note: root Use is '%s'", rootCmd.Use)
 	}
 }
@@ -2102,7 +2102,7 @@ func TestScaffoldFullCycle(t *testing.T) {
 		_, _ = cmd.CombinedOutput()
 
 		// Check all files were created
-		files := []string{"phpeek-pm.yaml", "Dockerfile", "docker-compose.yml"}
+		files := []string{"cbox-init.yaml", "Dockerfile", "docker-compose.yml"}
 		for _, f := range files {
 			path := filepath.Join(tmpDir, f)
 			if _, err := os.Stat(path); err == nil {
@@ -2123,7 +2123,7 @@ func TestScaffoldFullCycle(t *testing.T) {
 		_, _ = cmd.CombinedOutput()
 
 		// Check config was created
-		configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+		configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 		if _, err := os.Stat(configPath); err == nil {
 			content, _ := os.ReadFile(configPath)
 			if strings.Contains(string(content), "version") {
@@ -2143,7 +2143,7 @@ func TestScaffoldFullCycle(t *testing.T) {
 		)
 		_, _ = cmd.CombinedOutput()
 
-		configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+		configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 		if _, err := os.Stat(configPath); err == nil {
 			t.Log("Symfony config created")
 		}
@@ -2559,7 +2559,7 @@ func TestScaffoldWithCustomOutput(t *testing.T) {
 	output, err := cmd.CombinedOutput()
 
 	// Should create config in custom directory
-	configFile := filepath.Join(outputDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(outputDir, "cbox-init.yaml")
 	if _, statErr := os.Stat(configFile); statErr != nil && err == nil {
 		t.Logf("Expected config file at %s, output:\n%s", configFile, string(output))
 	}
@@ -2636,7 +2636,7 @@ func TestScaffoldAllPresetsComprehensive(t *testing.T) {
 			}
 
 			// Check that config file was created
-			configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+			configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 			if _, statErr := os.Stat(configFile); statErr != nil {
 				t.Logf("Config file not created for preset %s: %v", preset, statErr)
 			}
@@ -2723,14 +2723,14 @@ func TestCheckConfigDefaultPathSubprocess(t *testing.T) {
 	if os.Getenv("BE_CHECK_DEFAULT") != "1" {
 		return
 	}
-	// Run without explicit config, relies on finding local phpeek-pm.yaml
+	// Run without explicit config, relies on finding local cbox-init.yaml
 	rootCmd.SetArgs([]string{"check-config"})
 	_ = rootCmd.Execute()
 }
 
 // TestCheckConfigDefaultPath tests check-config with default path lookup
 func TestCheckConfigDefaultPath(t *testing.T) {
-	// Change to temp dir where phpeek-pm.yaml doesn't exist
+	// Change to temp dir where cbox-init.yaml doesn't exist
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
 	defer func() { _ = os.Chdir(oldWd) }()
@@ -2777,8 +2777,8 @@ func TestGetConfigPathWithEnvVar(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfgFile = tt.cfgFile
 			if tt.envVar != "" {
-				os.Setenv("PHPEEK_PM_CONFIG", tt.envVar)
-				defer os.Unsetenv("PHPEEK_PM_CONFIG")
+				os.Setenv("CBOX_INIT_CONFIG", tt.envVar)
+				defer os.Unsetenv("CBOX_INIT_CONFIG")
 			}
 
 			result := getConfigPath()
@@ -2814,7 +2814,7 @@ func TestScaffoldAppNameFlag(t *testing.T) {
 	output, _ := cmd.CombinedOutput()
 
 	// Check config file was created
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if data, err := os.ReadFile(configFile); err == nil {
 		// Config should reference the app name somewhere
 		if !strings.Contains(string(data), customAppName) && !strings.Contains(string(data), "my-custom") {
@@ -2849,7 +2849,7 @@ func TestScaffoldQueueWorkersFlag(t *testing.T) {
 	output, _ := cmd.CombinedOutput()
 
 	// Check config file was created
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if data, err := os.ReadFile(configFile); err == nil {
 		// Config should contain queue worker configuration
 		if !strings.Contains(string(data), "scale") {
@@ -2893,7 +2893,7 @@ func TestVersionShortForm(t *testing.T) {
 
 // TestRootCmdWithInvalidSubcommand tests root command with invalid subcommand
 func TestRootCmdWithInvalidSubcommand(t *testing.T) {
-	cmd := exec.Command(os.Args[0], "-test.run=TestHelperProcess", "--", "phpeek-pm", "nonexistent-command")
+	cmd := exec.Command(os.Args[0], "-test.run=TestHelperProcess", "--", "cbox-init", "nonexistent-command")
 	cmd.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1")
 	output, _ := cmd.CombinedOutput()
 
@@ -3383,7 +3383,7 @@ func TestScaffoldWithBothDockerFiles(t *testing.T) {
 	_, _ = cmd.CombinedOutput()
 
 	// Check if both files were generated
-	generatedFiles := []string{"phpeek-pm.yaml", "Dockerfile", "docker-compose.yml"}
+	generatedFiles := []string{"cbox-init.yaml", "Dockerfile", "docker-compose.yml"}
 	foundCount := 0
 	for _, file := range generatedFiles {
 		path := filepath.Join(tmpDir, file)
@@ -3398,31 +3398,31 @@ func TestScaffoldWithBothDockerFiles(t *testing.T) {
 func TestGetConfigPathWithDefaultPaths(t *testing.T) {
 	// Save original state
 	origCfgFile := cfgFile
-	origEnv := os.Getenv("PHPEEK_PM_CONFIG")
+	origEnv := os.Getenv("CBOX_INIT_CONFIG")
 	defer func() {
 		cfgFile = origCfgFile
 		if origEnv != "" {
-			os.Setenv("PHPEEK_PM_CONFIG", origEnv)
+			os.Setenv("CBOX_INIT_CONFIG", origEnv)
 		} else {
-			os.Unsetenv("PHPEEK_PM_CONFIG")
+			os.Unsetenv("CBOX_INIT_CONFIG")
 		}
 	}()
 
 	t.Run("uses fallback when no config exists", func(t *testing.T) {
 		cfgFile = ""
-		os.Unsetenv("PHPEEK_PM_CONFIG")
+		os.Unsetenv("CBOX_INIT_CONFIG")
 
 		result := getConfigPath()
 
-		// Should return phpeek-pm.yaml as fallback
-		if result != "phpeek-pm.yaml" && !strings.Contains(result, "phpeek") {
-			t.Errorf("expected fallback to be phpeek-pm.yaml or similar, got: %s", result)
+		// Should return cbox-init.yaml as fallback
+		if result != "cbox-init.yaml" && !strings.Contains(result, "cbox") {
+			t.Errorf("expected fallback to be cbox-init.yaml or similar, got: %s", result)
 		}
 	})
 
 	t.Run("finds existing config in default location", func(t *testing.T) {
 		// Create a temporary config file
-		tmpFile, err := os.CreateTemp("", "phpeek-pm*.yaml")
+		tmpFile, err := os.CreateTemp("", "cbox-init*.yaml")
 		if err != nil {
 			t.Skip("Cannot create temp file")
 		}
@@ -3431,7 +3431,7 @@ func TestGetConfigPathWithDefaultPaths(t *testing.T) {
 
 		// Set cfgFile directly since we can't easily mock os.Stat paths
 		cfgFile = tmpFile.Name()
-		os.Unsetenv("PHPEEK_PM_CONFIG")
+		os.Unsetenv("CBOX_INIT_CONFIG")
 
 		result := getConfigPath()
 
@@ -3580,9 +3580,9 @@ func TestScaffoldGenericPreset(t *testing.T) {
 	output, _ := cmd.CombinedOutput()
 
 	// Check if config file was generated
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if _, err := os.Stat(configFile); err == nil {
-		t.Log("phpeek-pm.yaml was generated for generic preset")
+		t.Log("cbox-init.yaml was generated for generic preset")
 	} else {
 		t.Logf("Config not generated for generic preset (output: %s)", string(output))
 	}
@@ -3610,9 +3610,9 @@ func TestScaffoldSymfonyPreset(t *testing.T) {
 	output, _ := cmd.CombinedOutput()
 
 	// Check if config file was generated
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if _, err := os.Stat(configFile); err == nil {
-		t.Log("phpeek-pm.yaml was generated for symfony preset")
+		t.Log("cbox-init.yaml was generated for symfony preset")
 	} else {
 		t.Logf("Config not generated for symfony preset (output: %s)", string(output))
 	}
@@ -3646,9 +3646,9 @@ func TestScaffoldWithCustomAppName(t *testing.T) {
 	}
 
 	// Check if config file was generated
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if _, err := os.Stat(configFile); err == nil {
-		t.Log("phpeek-pm.yaml was generated with custom app name")
+		t.Log("cbox-init.yaml was generated with custom app name")
 	}
 }
 
@@ -3674,9 +3674,9 @@ func TestScaffoldWithQueueWorkers(t *testing.T) {
 	_, _ = cmd.CombinedOutput()
 
 	// Check if config file was generated
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if _, err := os.Stat(configFile); err == nil {
-		t.Log("phpeek-pm.yaml was generated with custom queue workers")
+		t.Log("cbox-init.yaml was generated with custom queue workers")
 	}
 }
 
@@ -4000,7 +4000,7 @@ func TestScaffoldForceOverwrite(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create an existing config file
-	existingConfig := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	existingConfig := filepath.Join(tmpDir, "cbox-init.yaml")
 	if err := os.WriteFile(existingConfig, []byte("# existing config"), 0644); err != nil {
 		t.Fatalf("failed to create existing config: %v", err)
 	}
@@ -4047,7 +4047,7 @@ func TestScaffoldWithHorizon(t *testing.T) {
 	_, _ = cmd.CombinedOutput()
 
 	// Check if config was generated with horizon
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if content, err := os.ReadFile(configFile); err == nil {
 		if strings.Contains(string(content), "horizon") {
 			t.Log("Horizon process was included in scaffold")
@@ -4077,7 +4077,7 @@ func TestScaffoldWithScheduler(t *testing.T) {
 	_, _ = cmd.CombinedOutput()
 
 	// Check if config was generated with scheduler
-	configFile := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configFile := filepath.Join(tmpDir, "cbox-init.yaml")
 	if content, err := os.ReadFile(configFile); err == nil {
 		if strings.Contains(string(content), "scheduler") || strings.Contains(string(content), "schedule:run") {
 			t.Log("Scheduler process was included in scaffold")
@@ -4738,7 +4738,7 @@ func TestAutotuneENVThresholdSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 processes:
   php-fpm:
@@ -4776,7 +4776,7 @@ func TestAutotuneCLIThresholdSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 processes:
   php-fpm:
@@ -4813,7 +4813,7 @@ func TestAutotuneConfigThresholdSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   autotune_memory_threshold: 0.8
@@ -4852,7 +4852,7 @@ func TestAutotuneInvalidProfileSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 processes:
   php-fpm:
@@ -4891,7 +4891,7 @@ func TestServeDryRunAutotuneSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 processes:
   php-fpm:
@@ -4929,7 +4929,7 @@ func TestServeValidateOnlySubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   shutdown_timeout: 30
@@ -4969,7 +4969,7 @@ func TestAutotuneAllProfilesSubprocess(t *testing.T) {
 
 	tmpDir := os.Getenv("CONFIG_DIR")
 	profile := os.Getenv("AUTOTUNE_PROFILE")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 processes:
   php-fpm:
@@ -5091,7 +5091,7 @@ func TestStartMetricsServerSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   metrics_port: 0
@@ -5131,7 +5131,7 @@ func TestStartAPIServerSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   api_port: 0
@@ -5398,7 +5398,7 @@ func TestServeWithMetricsSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   shutdown_timeout: 5
@@ -5439,7 +5439,7 @@ func TestServeWithAPISubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   shutdown_timeout: 5
@@ -5685,7 +5685,7 @@ func TestServeFullIntegrationSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   shutdown_timeout: 5
@@ -5727,7 +5727,7 @@ func TestServeWithWatchModeSubprocess(t *testing.T) {
 	}
 
 	tmpDir := os.Getenv("CONFIG_DIR")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 global:
   shutdown_timeout: 5
@@ -6004,7 +6004,7 @@ func TestConfirmOverwriteWithExisting(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create existing file
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	_ = os.WriteFile(configPath, []byte("test"), 0644)
 
 	// Save original stdin/stderr
@@ -6038,7 +6038,7 @@ func TestConfirmOverwriteAccept(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create existing file
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	_ = os.WriteFile(configPath, []byte("test"), 0644)
 
 	// Save original stdin/stderr
@@ -6282,7 +6282,7 @@ func TestServeAutotuneProfileSubprocess(t *testing.T) {
 
 	tmpDir := os.Getenv("CONFIG_DIR")
 	profile := os.Getenv("AUTOTUNE_PROFILE")
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	configContent := `version: "1.0"
 processes:
   php-fpm:
@@ -6433,8 +6433,8 @@ func TestWaitForShutdownOrReloadWithReloadChannel(t *testing.T) {
 // TestResolveConfigPathEnvVar tests ENV variable priority
 func TestResolveConfigPathEnvVar(t *testing.T) {
 	// Set ENV variable
-	os.Setenv("PHPEEK_PM_CONFIG", "/custom/env/path.yaml")
-	defer os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Setenv("CBOX_INIT_CONFIG", "/custom/env/path.yaml")
+	defer os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := ResolveConfigPath("")
 	if result.Path != "/custom/env/path.yaml" {
@@ -6447,8 +6447,8 @@ func TestResolveConfigPathEnvVar(t *testing.T) {
 
 // TestResolveConfigPathCLIOverridesEnv tests CLI flag priority over ENV
 func TestResolveConfigPathCLIOverridesEnv(t *testing.T) {
-	os.Setenv("PHPEEK_PM_CONFIG", "/env/path.yaml")
-	defer os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Setenv("CBOX_INIT_CONFIG", "/env/path.yaml")
+	defer os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := ResolveConfigPath("/cli/path.yaml")
 	if result.Path != "/cli/path.yaml" {
@@ -6462,7 +6462,7 @@ func TestResolveConfigPathCLIOverridesEnv(t *testing.T) {
 // TestResolveConfigPathLocalDefault tests local config default
 func TestResolveConfigPathLocalDefault(t *testing.T) {
 	// Ensure no ENV is set
-	os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := ResolveConfigPath("")
 	// Should fall back to local config (unless system or user config exists)
@@ -6598,7 +6598,7 @@ func TestCheckExistingFilesNone(t *testing.T) {
 func TestCheckExistingFilesSome(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Create one file
-	if err := os.WriteFile(filepath.Join(tmpDir, "phpeek-pm.yaml"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "cbox-init.yaml"), []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -6785,7 +6785,7 @@ func TestGetConfigPathWithUserHome(t *testing.T) {
 	}()
 
 	// Create user config directory and file
-	userConfigDir := filepath.Join(tmpHome, ".phpeek", "pm")
+	userConfigDir := filepath.Join(tmpHome, ".cbox", "init")
 	if err := os.MkdirAll(userConfigDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -6796,11 +6796,11 @@ func TestGetConfigPathWithUserHome(t *testing.T) {
 
 	// Clear cfgFile and env
 	cfgFile = ""
-	os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := getConfigPath()
-	// Should find user config (path contains .phpeek)
-	if !strings.Contains(result, ".phpeek") && result != "phpeek-pm.yaml" {
+	// Should find user config (path contains .cbox)
+	if !strings.Contains(result, ".cbox") && result != "cbox-init.yaml" {
 		t.Errorf("getConfigPath() = %q, expected user config path", result)
 	}
 }
@@ -7024,7 +7024,7 @@ func TestScaffoldGenerator(t *testing.T) {
 			_ = cmd.Run()
 
 			// Check if config was generated
-			configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+			configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 			if _, err := os.Stat(configPath); err == nil {
 				t.Logf("Generated config for %s preset", preset)
 			}
@@ -7426,8 +7426,8 @@ func TestGetConfigPathEnvVar(t *testing.T) {
 	}()
 
 	cfgFile = ""
-	os.Setenv("PHPEEK_PM_CONFIG", "/test/env/config.yaml")
-	defer os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Setenv("CBOX_INIT_CONFIG", "/test/env/config.yaml")
+	defer os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := getConfigPath()
 	if result != "/test/env/config.yaml" {
@@ -7443,8 +7443,8 @@ func TestGetConfigPathCfgFile(t *testing.T) {
 	}()
 
 	cfgFile = "/test/flag/config.yaml"
-	os.Setenv("PHPEEK_PM_CONFIG", "/test/env/config.yaml")
-	defer os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Setenv("CBOX_INIT_CONFIG", "/test/env/config.yaml")
+	defer os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := getConfigPath()
 	if result != "/test/flag/config.yaml" {
@@ -7460,7 +7460,7 @@ func TestGetConfigPathDefault(t *testing.T) {
 	}()
 
 	cfgFile = ""
-	os.Unsetenv("PHPEEK_PM_CONFIG")
+	os.Unsetenv("CBOX_INIT_CONFIG")
 
 	result := getConfigPath()
 	// Should return some default path
@@ -7574,9 +7574,9 @@ func TestRunScaffoldValidPreset(t *testing.T) {
 	runScaffold(cmd, []string{"php"})
 
 	// Check that config was generated
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) && !exitCalled {
-		t.Error("Expected phpeek-pm.yaml to be generated")
+		t.Error("Expected cbox-init.yaml to be generated")
 	}
 }
 
@@ -7740,7 +7740,7 @@ func TestRunScaffoldAllPresetsDirect(t *testing.T) {
 			runScaffold(cmd, []string{preset})
 
 			// Check that config was generated
-			configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+			configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 			if _, err := os.Stat(configPath); err == nil {
 				t.Logf("Preset %s generated config successfully", preset)
 			}
@@ -7872,7 +7872,7 @@ func TestWaitForShutdownOrReloadWithReloadChan(t *testing.T) {
 // TestRunDryRunDirect tests runDryRun directly
 func TestRunDryRunDirect(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 
 	cfg := &config.Config{
 		Version: "1.0",
@@ -7931,7 +7931,7 @@ func TestConfirmOverwriteWithFilesNoInput(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create the file
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	if err := os.WriteFile(configPath, []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -8123,7 +8123,7 @@ func TestGetFilenameMapping(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"config", "phpeek-pm.yaml"},
+		{"config", "cbox-init.yaml"},
 		{"docker-compose", "docker-compose.yml"},
 		{"dockerfile", "Dockerfile"},
 		{"unknown", "unknown"},
@@ -8437,7 +8437,7 @@ func TestConfirmOverwriteWithYes(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create the file
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	if err := os.WriteFile(configPath, []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}

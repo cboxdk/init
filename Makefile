@@ -1,10 +1,10 @@
 .PHONY: build clean test install
 
 # Build variables
-BINARY_NAME=phpeek-pm
+BINARY_NAME=cbox-init
 VERSION=1.0.0
 BUILD_DIR=build
-CMD_DIR=cmd/phpeek-pm
+CMD_DIR=cmd/cbox-init
 
 # Go build flags for static binary
 LDFLAGS=-ldflags "-w -s -X main.version=$(VERSION)"
@@ -12,7 +12,7 @@ STATIC_FLAGS=CGO_ENABLED=0
 
 # Build the binary
 build:
-	@echo "🔨 Building PHPeek Process Manager..."
+	@echo "🔨 Building Cbox Init..."
 	@mkdir -p $(BUILD_DIR)
 	$(STATIC_FLAGS) go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 	@echo "✅ Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
@@ -60,8 +60,8 @@ test-integration:
 	@echo "🧪 Running integration tests..."
 	@for distro in alpine debian ubuntu; do \
 		echo "Testing on $$distro..."; \
-		docker build -f tests/integration/Dockerfile.$$distro -t phpeek-pm-test-$$distro . && \
-		docker run --rm phpeek-pm-test-$$distro || exit 1; \
+		docker build -f tests/integration/Dockerfile.$$distro -t cbox-init-test-$$distro . && \
+		docker run --rm cbox-init-test-$$distro || exit 1; \
 	done
 	@echo "✅ All integration tests passed"
 
@@ -97,7 +97,7 @@ dev: build
 
 # Show help
 help:
-	@echo "PHPeek Process Manager - Make targets:"
+	@echo "Cbox Init - Make targets:"
 	@echo "  build      - Build binary for current platform"
 	@echo "  build-all  - Build for all platforms (Linux, macOS, AMD64, ARM64)"
 	@echo "  clean      - Remove build artifacts"

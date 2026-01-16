@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gophpeek/phpeek-pm/internal/process"
+	"github.com/cboxdk/init/internal/process"
 )
 
 // Helper to create a minimal model for view testing

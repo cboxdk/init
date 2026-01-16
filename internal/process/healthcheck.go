@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/metrics"
 )
 
 // HealthChecker defines the interface for health checks.

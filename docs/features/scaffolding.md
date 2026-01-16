@@ -6,22 +6,22 @@ weight: 27
 
 # Configuration Scaffolding
 
-PHPeek PM includes powerful scaffolding tools to quickly generate production-ready configuration files. Instead of writing configs from scratch, use presets for common PHP frameworks and deployment scenarios.
+Cbox Init includes powerful scaffolding tools to quickly generate production-ready configuration files. Instead of writing configs from scratch, use presets for common PHP frameworks and deployment scenarios.
 
 ## Quick Start
 
 ```bash
 # Generate Laravel configuration
-./phpeek-pm scaffold laravel
+./cbox-init scaffold laravel
 
 # With Docker files
-./phpeek-pm scaffold laravel --dockerfile --docker-compose
+./cbox-init scaffold laravel --dockerfile --docker-compose
 
 # Interactive mode (guided prompts)
-./phpeek-pm scaffold --interactive
+./cbox-init scaffold --interactive
 
 # Specify output directory
-./phpeek-pm scaffold laravel --output ./docker --docker-compose --observability
+./cbox-init scaffold laravel --output ./docker --docker-compose --observability
 ```
 
 ## Available Presets
@@ -59,7 +59,7 @@ PHPeek PM includes powerful scaffolding tools to quickly generate production-rea
 **Complete Laravel application with all essential services.**
 
 ```bash
-./phpeek-pm scaffold laravel --output ./config
+./cbox-init scaffold laravel --output ./config
 ```
 
 **Includes:**
@@ -108,10 +108,10 @@ processes:
 
 ```bash
 # Add observability to any preset
-./phpeek-pm scaffold laravel --observability
-./phpeek-pm scaffold wordpress --observability
-./phpeek-pm scaffold magento --observability --docker-compose
-./phpeek-pm scaffold nextjs --observability --dockerfile --nginx
+./cbox-init scaffold laravel --observability
+./cbox-init scaffold wordpress --observability
+./cbox-init scaffold magento --observability --docker-compose
+./cbox-init scaffold nextjs --observability --dockerfile --nginx
 ```
 
 **The `--observability` flag enables:**
@@ -138,7 +138,7 @@ global:
 **Symfony application with Messenger queue workers.**
 
 ```bash
-./phpeek-pm scaffold symfony --output ./config
+./cbox-init scaffold symfony --output ./config
 ```
 
 **Includes:**
@@ -171,7 +171,7 @@ processes:
 **Basic PHP application with PHP-FPM and Nginx.**
 
 ```bash
-./phpeek-pm scaffold php --output ./config
+./cbox-init scaffold php --output ./config
 ```
 
 **Includes:**
@@ -189,7 +189,7 @@ processes:
 **WordPress application with WP-CLI cron replacement.**
 
 ```bash
-./phpeek-pm scaffold wordpress --output ./config --dockerfile
+./cbox-init scaffold wordpress --output ./config --dockerfile
 ```
 
 **Includes:**
@@ -231,7 +231,7 @@ processes:
 **Magento 2 application with queue consumers, cron, and indexer.**
 
 ```bash
-./phpeek-pm scaffold magento --output ./config --dockerfile --docker-compose
+./cbox-init scaffold magento --output ./config --dockerfile --docker-compose
 ```
 
 **Includes:**
@@ -290,7 +290,7 @@ processes:
 **Drupal CMS with Drush cron.**
 
 ```bash
-./phpeek-pm scaffold drupal --output ./config --dockerfile
+./cbox-init scaffold drupal --output ./config --dockerfile
 ```
 
 **Includes:**
@@ -332,7 +332,7 @@ processes:
 **Next.js application with standalone output mode.**
 
 ```bash
-./phpeek-pm scaffold nextjs --output ./config --dockerfile --nginx
+./cbox-init scaffold nextjs --output ./config --dockerfile --nginx
 ```
 
 **Includes:**
@@ -380,7 +380,7 @@ upstream nodejs_backend {
 **Nuxt 3 application with Nitro server.**
 
 ```bash
-./phpeek-pm scaffold nuxt --output ./config --dockerfile --nginx
+./cbox-init scaffold nuxt --output ./config --dockerfile --nginx
 ```
 
 **Includes:**
@@ -408,7 +408,7 @@ processes:
 **Generic Node.js application with background workers.**
 
 ```bash
-./phpeek-pm scaffold nodejs --output ./config --dockerfile --nginx
+./cbox-init scaffold nodejs --output ./config --dockerfile --nginx
 ```
 
 **Includes:**
@@ -446,7 +446,7 @@ processes:
 ### Required
 
 ```bash
-phpeek-pm scaffold <preset>
+cbox-init scaffold <preset>
 ```
 
 **Available presets:**
@@ -485,21 +485,21 @@ Node.js Frameworks:
 
 ```bash
 # Basic usage
-phpeek-pm scaffold laravel
+cbox-init scaffold laravel
 
 # Customize application name and workers
-phpeek-pm scaffold laravel --app-name api-service --queue-workers 5
+cbox-init scaffold laravel --app-name api-service --queue-workers 5
 
 # Generate with Docker files
-phpeek-pm scaffold laravel --dockerfile --docker-compose --output ./docker
+cbox-init scaffold laravel --dockerfile --docker-compose --output ./docker
 
 # Production setup with full observability (tracing + metrics + API)
-phpeek-pm scaffold laravel --observability --docker-compose
+cbox-init scaffold laravel --observability --docker-compose
 
 # Any preset with observability
-phpeek-pm scaffold wordpress --observability
-phpeek-pm scaffold magento --observability --docker-compose
-phpeek-pm scaffold nextjs --observability --dockerfile --nginx
+cbox-init scaffold wordpress --observability
+cbox-init scaffold magento --observability --docker-compose
+cbox-init scaffold nextjs --observability --dockerfile --nginx
 ```
 
 ## Interactive Mode
@@ -507,7 +507,7 @@ phpeek-pm scaffold nextjs --observability --dockerfile --nginx
 **Guided configuration with prompts.**
 
 ```bash
-./phpeek-pm scaffold --interactive
+./cbox-init scaffold --interactive
 ```
 
 ### Prompt Flow
@@ -590,13 +590,13 @@ Configuration:
 Generate configuration? [y/n]: y
 
 ✅ Files generated:
-   - phpeek-pm.yaml
+   - cbox-init.yaml
    - docker-compose.yml
 ```
 
 ## Generated Files
 
-### phpeek-pm.yaml
+### cbox-init.yaml
 
 **Main configuration file** with process definitions, health checks, and global settings.
 
@@ -630,7 +630,7 @@ processes:
 **Generated with `--docker-compose` flag.**
 
 **Includes:**
-- Application container with PHPeek PM
+- Application container with Cbox Init
 - MySQL 8.0 database
 - Redis cache/queue
 - Prometheus metrics (production preset)
@@ -683,7 +683,7 @@ services:
 **Multi-stage PHP 8.2 Docker image:**
 - Base: Official PHP-FPM with extensions
 - Dependencies: Composer packages + system libraries
-- PHPeek PM binary
+- Cbox Init binary
 - Optimized layers with caching
 - Production-ready settings
 - Health check integration
@@ -697,8 +697,8 @@ RUN apk add --no-cache \
     postgresql-dev \
     && docker-php-ext-install pdo pdo_pgsql opcache
 
-# Copy PHPeek PM binary
-COPY --from=builder /app/phpeek-pm /usr/local/bin/phpeek-pm
+# Copy Cbox Init binary
+COPY --from=builder /app/cbox-init /usr/local/bin/cbox-init
 
 # Copy application
 WORKDIR /var/www/html
@@ -710,11 +710,11 @@ RUN composer install --no-dev --optimize-autoloader
 # Configure PHP-FPM
 COPY php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 
-# Copy PHPeek PM config
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+# Copy Cbox Init config
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # Run as PID 1
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Customization Workflow
@@ -722,14 +722,14 @@ ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
 ### 1. Generate Base Configuration
 
 ```bash
-./phpeek-pm scaffold laravel --output ./myapp
+./cbox-init scaffold laravel --output ./myapp
 ```
 
 ### 2. Review Generated Files
 
 ```bash
 cd ./myapp
-cat phpeek-pm.yaml  # Check process configuration
+cat cbox-init.yaml  # Check process configuration
 ```
 
 ### 3. Customize for Your Needs
@@ -771,13 +771,13 @@ processes:
 ### 4. Validate Configuration
 
 ```bash
-phpeek-pm check-config --config ./myapp/phpeek-pm.yaml --strict
+cbox-init check-config --config ./myapp/cbox-init.yaml --strict
 ```
 
 ### 5. Test with Dry Run
 
 ```bash
-phpeek-pm --config ./myapp/phpeek-pm.yaml --dry-run
+cbox-init --config ./myapp/cbox-init.yaml --dry-run
 ```
 
 ### 6. Deploy
@@ -787,7 +787,7 @@ phpeek-pm --config ./myapp/phpeek-pm.yaml --dry-run
 cd ./myapp && docker-compose up -d
 
 # Or standalone
-phpeek-pm --config ./myapp/phpeek-pm.yaml
+cbox-init --config ./myapp/cbox-init.yaml
 ```
 
 ## Preset Comparison Matrix
@@ -839,32 +839,32 @@ phpeek-pm --config ./myapp/phpeek-pm.yaml
 
 ```bash
 # Generate Laravel config for local development
-./phpeek-pm scaffold laravel \
+./cbox-init scaffold laravel \
   --output ./docker \
   --app-name my-laravel-app \
   --queue-workers 2
 
-# Result: phpeek-pm.yaml with 2 queue workers, API + Metrics enabled
+# Result: cbox-init.yaml with 2 queue workers, API + Metrics enabled
 ```
 
 ### Example 2: Production Deployment with Observability
 
 ```bash
 # Generate production config with full observability stack
-./phpeek-pm scaffold production \
+./cbox-init scaffold production \
   --output ./production \
   --app-name my-app-prod \
   --docker-compose
 
 # Result:
-# - phpeek-pm.yaml (with tracing, metrics, API)
+# - cbox-init.yaml (with tracing, metrics, API)
 # - docker-compose.yml (with Prometheus + Grafana)
 ```
 
 ### Example 3: Interactive Configuration
 
 ```bash
-./phpeek-pm scaffold --interactive
+./cbox-init scaffold --interactive
 
 # Sample session:
 # Select a preset: 1 (Laravel)
@@ -878,24 +878,24 @@ phpeek-pm --config ./myapp/phpeek-pm.yaml
 # Generate docker-compose.yml? [n]: y
 # Generate Dockerfile? [n]: n
 #
-# ✅ Generated: phpeek-pm.yaml, docker-compose.yml
+# ✅ Generated: cbox-init.yaml, docker-compose.yml
 ```
 
 ### Example 4: Minimal Customization Starting Point
 
 ```bash
 # Start with minimal template for full customization
-./phpeek-pm scaffold minimal --output ./custom
+./cbox-init scaffold minimal --output ./custom
 
-# Edit phpeek-pm.yaml manually to add your processes
-vim ./custom/phpeek-pm.yaml
+# Edit cbox-init.yaml manually to add your processes
+vim ./custom/cbox-init.yaml
 ```
 
 ### Example 5: Symfony with Messenger
 
 ```bash
 # Generate Symfony config with custom worker count
-./phpeek-pm scaffold symfony \
+./cbox-init scaffold symfony \
   --output ./symfony-app \
   --app-name symfony-api \
   --queue-workers 4 \
@@ -908,12 +908,12 @@ vim ./custom/phpeek-pm.yaml
 
 ```bash
 # Generate WordPress config with WP-CLI cron
-./phpeek-pm scaffold wordpress \
+./cbox-init scaffold wordpress \
   --output ./wordpress \
   --app-name my-blog \
   --dockerfile
 
-# Result: phpeek-pm.yaml with WP-CLI cron (runs every minute)
+# Result: cbox-init.yaml with WP-CLI cron (runs every minute)
 # Don't forget: define('DISABLE_WP_CRON', true); in wp-config.php
 ```
 
@@ -921,7 +921,7 @@ vim ./custom/phpeek-pm.yaml
 
 ```bash
 # Generate Magento 2 config with full stack
-./phpeek-pm scaffold magento \
+./cbox-init scaffold magento \
   --output ./magento \
   --app-name my-store \
   --queue-workers 4 \
@@ -935,7 +935,7 @@ vim ./custom/phpeek-pm.yaml
 
 ```bash
 # Generate Drupal config with Drush cron
-./phpeek-pm scaffold drupal \
+./cbox-init scaffold drupal \
   --output ./drupal \
   --app-name my-cms \
   --dockerfile
@@ -983,7 +983,7 @@ type Config struct {
 - Multi-stage PHP 8.2 build
 - PHP extensions installation
 - Composer dependencies
-- PHPeek PM binary integration
+- Cbox Init binary integration
 
 ### Generator
 
@@ -1001,30 +1001,30 @@ type Config struct {
 
 ```bash
 # Don't start from scratch - choose similar preset
-./phpeek-pm scaffold laravel  # For Laravel apps
-./phpeek-pm scaffold symfony   # For Symfony apps
+./cbox-init scaffold laravel  # For Laravel apps
+./cbox-init scaffold symfony   # For Symfony apps
 ```
 
 ### 2. Validate Early
 
 ```bash
 # Always validate after generation
-./phpeek-pm check-config --config phpeek-pm.yaml --strict
+./cbox-init check-config --config cbox-init.yaml --strict
 ```
 
 ### 3. Test with Dry Run
 
 ```bash
 # Verify configuration before deployment
-./phpeek-pm --config phpeek-pm.yaml --dry-run
+./cbox-init --config cbox-init.yaml --dry-run
 ```
 
 ### 4. Version Control
 
 ```bash
 # Commit generated configs to Git for reproducibility
-git add phpeek-pm.yaml docker-compose.yml
-git commit -m "Add PHPeek PM configuration"
+git add cbox-init.yaml docker-compose.yml
+git commit -m "Add Cbox Init configuration"
 ```
 
 ### 5. Use Environment Variables for Secrets
@@ -1032,7 +1032,7 @@ git commit -m "Add PHPeek PM configuration"
 ```yaml
 # Don't hardcode secrets
 global:
-  api_auth: "${PHPEEK_PM_API_TOKEN}"  # Load from env
+  api_auth: "${CBOX_INIT_API_TOKEN}"  # Load from env
 
 processes:
   app:
@@ -1080,12 +1080,12 @@ global:
 
 **Solution:**
 ```bash
-# Ensure using correct PHPeek PM binary
-./phpeek-pm scaffold laravel  # Local binary
-phpeek-pm scaffold laravel     # Installed globally
+# Ensure using correct Cbox Init binary
+./cbox-init scaffold laravel  # Local binary
+cbox-init scaffold laravel     # Installed globally
 
 # Check version
-./phpeek-pm --version
+./cbox-init --version
 ```
 
 ### Permission Denied on Output Directory
@@ -1099,7 +1099,7 @@ mkdir -p ./output
 chmod 755 ./output
 
 # Or use different output location
-./phpeek-pm scaffold laravel --output ~/projects/myapp
+./cbox-init scaffold laravel --output ~/projects/myapp
 ```
 
 ### Generated Config Has Errors
@@ -1109,7 +1109,7 @@ chmod 755 ./output
 **Solution:**
 ```bash
 # Check what's wrong
-./phpeek-pm check-config --config phpeek-pm.yaml
+./cbox-init check-config --config cbox-init.yaml
 
 # Common fixes:
 # 1. Circular dependencies - remove or reorder depends_on

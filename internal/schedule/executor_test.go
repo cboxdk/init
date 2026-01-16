@@ -211,9 +211,9 @@ func TestProcessExecutor_Execute_ProcessEnvVars(t *testing.T) {
 	logger := testLogger()
 	e := NewProcessExecutor(logger)
 
-	// Test that PHPEEK_PM_PROCESS and PHPEEK_PM_SCHEDULED are set
+	// Test that CBOX_INIT_PROCESS and CBOX_INIT_SCHEDULED are set
 	_ = e.RegisterProcess("test", ProcessConfig{
-		Command: []string{"sh", "-c", "test $PHPEEK_PM_PROCESS = test && test $PHPEEK_PM_SCHEDULED = true"},
+		Command: []string{"sh", "-c", "test $CBOX_INIT_PROCESS = test && test $CBOX_INIT_SCHEDULED = true"},
 	})
 
 	ctx := context.Background()
@@ -223,7 +223,7 @@ func TestProcessExecutor_Execute_ProcessEnvVars(t *testing.T) {
 		t.Errorf("Execute() error = %v", err)
 	}
 	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0 (PHPEEK_PM_* env vars should be set)", exitCode)
+		t.Errorf("exitCode = %d, want 0 (CBOX_INIT_* env vars should be set)", exitCode)
 	}
 }
 

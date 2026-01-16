@@ -1,6 +1,6 @@
 // Package readiness manages container readiness file for Kubernetes integration.
 //
-// The readiness manager creates a file (e.g., /tmp/phpeek-ready) when all tracked
+// The readiness manager creates a file (e.g., /tmp/cbox-ready) when all tracked
 // processes are healthy/running, enabling Kubernetes readiness probes to determine
 // if the container is ready to receive traffic.
 //
@@ -12,12 +12,12 @@
 //
 // # Usage
 //
-// Configure readiness in your phpeek-pm.yaml:
+// Configure readiness in your cbox-init.yaml:
 //
 //	global:
 //	  readiness:
 //	    enabled: true
-//	    path: "/tmp/phpeek-ready"
+//	    path: "/tmp/cbox-ready"
 //	    mode: "all_healthy"
 //	    processes:
 //	      - php-fpm
@@ -27,7 +27,7 @@
 //
 //	readinessProbe:
 //	  exec:
-//	    command: ["test", "-f", "/tmp/phpeek-ready"]
+//	    command: ["test", "-f", "/tmp/cbox-ready"]
 //	  initialDelaySeconds: 5
 //	  periodSeconds: 5
 //
@@ -48,7 +48,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // ProcessState represents a process state for readiness evaluation.

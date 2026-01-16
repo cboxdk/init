@@ -126,7 +126,7 @@ func TestConfigValidator_ValidatePHPFPM_WithMockScript(t *testing.T) {
 	cv := NewConfigValidator(logger)
 
 	// Create a temporary directory for mock binaries
-	tmpDir, err := os.MkdirTemp("", "phpeek-validator-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-validator-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestConfigValidator_ValidateNginx_WithMockScript(t *testing.T) {
 	cv := NewConfigValidator(logger)
 
 	// Create a temporary directory for mock binaries
-	tmpDir, err := os.MkdirTemp("", "phpeek-validator-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-validator-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestConfigValidator_ValidateAll_WithErrors(t *testing.T) {
 	cv := NewConfigValidator(logger)
 
 	// Create a temporary directory for mock binaries
-	tmpDir, err := os.MkdirTemp("", "phpeek-validator-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-validator-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

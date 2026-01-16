@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	instrumentationName = "phpeek-pm"
+	instrumentationName = "cbox-init"
 )
 
 // StartProcessManagerSpan creates a span for process manager operations

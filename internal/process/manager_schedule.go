@@ -3,7 +3,7 @@ package process
 import (
 	"context"
 
-	"github.com/gophpeek/phpeek-pm/internal/schedule"
+	"github.com/cboxdk/init/internal/schedule"
 )
 
 // GetScheduler returns the scheduler for scheduled processes.

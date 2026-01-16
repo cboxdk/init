@@ -178,17 +178,17 @@ global:
 
 See [Management API](../observability/api) for complete API documentation.
 
-> **Note:** The API is enabled by default to support the TUI and remote management. Set `api_enabled: false` (or `PHPEEK_PM_GLOBAL_API_ENABLED=false`) to disable it entirely.
+> **Note:** The API is enabled by default to support the TUI and remote management. Set `api_enabled: false` (or `CBOX_INIT_GLOBAL_API_ENABLED=false`) to disable it entirely.
 
 ### Container Readiness Configuration
 
-For Kubernetes integration, PHPeek PM can manage a readiness file that indicates when all processes are healthy:
+For Kubernetes integration, Cbox Init can manage a readiness file that indicates when all processes are healthy:
 
 ```yaml
 global:
   readiness:
     enabled: true
-    path: "/tmp/phpeek-ready"
+    path: "/tmp/cbox-ready"
     mode: "all_healthy"
     processes:
       - php-fpm
@@ -197,7 +197,7 @@ global:
 
 **Settings:**
 - `enabled` - Enable/disable readiness file management (default: `false`)
-- `path` - Path to the readiness file (default: `/tmp/phpeek-ready`)
+- `path` - Path to the readiness file (default: `/tmp/cbox-ready`)
 - `mode` - Readiness evaluation mode: `all_healthy` or `all_running` (default: `all_healthy`)
 - `content` - Custom file content when ready (optional)
 - `processes` - Specific processes to track (empty = all processes)
@@ -206,7 +206,7 @@ global:
 ```yaml
 readinessProbe:
   exec:
-    command: ["test", "-f", "/tmp/phpeek-ready"]
+    command: ["test", "-f", "/tmp/cbox-ready"]
   initialDelaySeconds: 5
   periodSeconds: 5
 ```
@@ -219,16 +219,16 @@ All global settings can be overridden via environment variables:
 
 ```bash
 # Override log level
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug ./phpeek-pm
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug ./cbox-init
 
 # Override shutdown timeout
-PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT=60 ./phpeek-pm
+CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT=60 ./cbox-init
 
 # Enable metrics
-PHPEEK_PM_GLOBAL_METRICS_ENABLED=true ./phpeek-pm
+CBOX_INIT_GLOBAL_METRICS_ENABLED=true ./cbox-init
 ```
 
-**Pattern:** `PHPEEK_PM_GLOBAL_<SETTING_NAME>=<value>`
+**Pattern:** `CBOX_INIT_GLOBAL_<SETTING_NAME>=<value>`
 
 See [Environment Variables](environment-variables) for complete reference.
 
@@ -261,7 +261,7 @@ global:
   # Kubernetes Integration
   readiness:
     enabled: true
-    path: "/tmp/phpeek-ready"
+    path: "/tmp/cbox-ready"
     mode: "all_healthy"
     processes:
       - php-fpm

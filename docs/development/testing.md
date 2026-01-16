@@ -1,12 +1,12 @@
 ---
 title: "Testing"
-description: "Comprehensive E2E testing with Playwright for PHPeek PM Web UI"
+description: "Comprehensive E2E testing with Playwright for Cbox Init Web UI"
 weight: 52
 ---
 
 # Testing
 
-Comprehensive end-to-end testing using Playwright for the PHPeek PM Web UI.
+Comprehensive end-to-end testing using Playwright for the Cbox Init Web UI.
 
 ## Overview
 

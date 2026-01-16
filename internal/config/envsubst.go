@@ -217,15 +217,15 @@ func applyEnvOverridesMap(raw map[string]interface{}) error {
 		value := parts[1]
 
 		switch {
-		case strings.HasPrefix(key, "PHPEEK_PM_GLOBAL_"):
-			segment := strings.TrimPrefix(key, "PHPEEK_PM_GLOBAL_")
+		case strings.HasPrefix(key, "CBOX_INIT_GLOBAL_"):
+			segment := strings.TrimPrefix(key, "CBOX_INIT_GLOBAL_")
 			path := buildPathFromKey(segment, globalFieldTree)
 			if len(path) == 0 {
 				continue
 			}
 			setNestedValue(globalMap, path, parseEnvValue(value))
-		case strings.HasPrefix(key, "PHPEEK_PM_PROCESS_"):
-			segment := strings.TrimPrefix(key, "PHPEEK_PM_PROCESS_")
+		case strings.HasPrefix(key, "CBOX_INIT_PROCESS_"):
+			segment := strings.TrimPrefix(key, "CBOX_INIT_PROCESS_")
 			applyProcessEnvOverride(processesMap, segment, value)
 		}
 	}

@@ -4,8 +4,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/scaffold"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/scaffold"
 )
 
 // ThresholdResult contains the resolved memory threshold and its source
@@ -113,27 +113,27 @@ func ResolveConfigPath(cliPath string) ConfigPathResult {
 	}
 
 	// ENV variable
-	if envPath := os.Getenv("PHPEEK_PM_CONFIG"); envPath != "" {
+	if envPath := os.Getenv("CBOX_INIT_CONFIG"); envPath != "" {
 		return ConfigPathResult{Path: envPath, Source: "ENV variable"}
 	}
 
 	// User config directory
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		userConfig := homeDir + "/.phpeek/pm/config.yaml"
+		userConfig := homeDir + "/.cbox/init/config.yaml"
 		if _, err := os.Stat(userConfig); err == nil {
 			return ConfigPathResult{Path: userConfig, Source: "user config"}
 		}
 	}
 
 	// System config
-	systemConfig := "/etc/phpeek/pm/config.yaml"
+	systemConfig := "/etc/cbox/init/config.yaml"
 	if _, err := os.Stat(systemConfig); err == nil {
 		return ConfigPathResult{Path: systemConfig, Source: "system config"}
 	}
 
 	// Local config (default)
-	return ConfigPathResult{Path: "phpeek-pm.yaml", Source: "local config"}
+	return ConfigPathResult{Path: "cbox-init.yaml", Source: "local config"}
 }
 
 // FormatAutotuneOutput formats the autotune results for display

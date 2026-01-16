@@ -6,7 +6,7 @@ weight: 44
 
 # Distributed Tracing
 
-PHPeek PM supports distributed tracing using OpenTelemetry for deep observability into process lifecycle operations. Integrate with Jaeger, Grafana Tempo, Honeycomb, or any OpenTelemetry-compatible backend.
+Cbox Init supports distributed tracing using OpenTelemetry for deep observability into process lifecycle operations. Integrate with Jaeger, Grafana Tempo, Honeycomb, or any OpenTelemetry-compatible backend.
 
 ## Overview
 
@@ -29,7 +29,7 @@ global:
   tracing_exporter: otlp-grpc
   tracing_endpoint: localhost:4317
   tracing_sample_rate: 1.0
-  tracing_service_name: phpeek-pm
+  tracing_service_name: cbox-init
 ```
 
 **With Jaeger:**
@@ -42,7 +42,7 @@ docker run -d --name jaeger \
   -p 4317:4317 \
   jaegertracing/all-in-one:latest
 
-# Configure PHPeek PM
+# Configure Cbox Init
 global:
   tracing_enabled: true
   tracing_exporter: otlp-grpc
@@ -70,7 +70,7 @@ global:
   tracing_sample_rate: 1.0           # Default: 1.0 (100%)
 
   # Service name in traces
-  tracing_service_name: phpeek-pm    # Default: phpeek-pm
+  tracing_service_name: cbox-init    # Default: cbox-init
 ```
 
 ### Exporter Types
@@ -156,13 +156,13 @@ global:
 
 ## Instrumented Operations
 
-PHPeek PM automatically creates spans for key process lifecycle operations:
+Cbox Init automatically creates spans for key process lifecycle operations:
 
 ### Process Manager Operations
 
 #### 1. `process_manager.start` (Root Span)
 
-**Triggered:** Overall PHPeek PM startup
+**Triggered:** Overall Cbox Init startup
 
 **Attributes:**
 - `process.count` - Number of processes being started
@@ -257,7 +257,7 @@ docker run -d \
   jaegertracing/all-in-one:latest
 ```
 
-**Configure PHPeek PM:**
+**Configure Cbox Init:**
 
 ```yaml
 global:
@@ -265,12 +265,12 @@ global:
   tracing_exporter: otlp-grpc
   tracing_endpoint: localhost:4317
   tracing_sample_rate: 1.0
-  tracing_service_name: phpeek-pm-production
+  tracing_service_name: cbox-init-production
 ```
 
 **View traces:**
 - Open: http://localhost:16686
-- Service: `phpeek-pm-production`
+- Service: `cbox-init-production`
 - Operation: `process_manager.start`, `process_manager.start_process`
 
 ### Grafana Tempo
@@ -298,7 +298,7 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
 ```
 
-**Configure PHPeek PM:**
+**Configure Cbox Init:**
 
 ```yaml
 global:
@@ -306,17 +306,17 @@ global:
   tracing_exporter: otlp-grpc
   tracing_endpoint: tempo:4317
   tracing_sample_rate: 0.1
-  tracing_service_name: phpeek-pm
+  tracing_service_name: cbox-init
 ```
 
 **Query in Grafana:**
 - Add Tempo data source
 - Explore → Tempo
-- Search for service: `phpeek-pm`
+- Search for service: `cbox-init`
 
 ### Honeycomb
 
-**Configure PHPeek PM:**
+**Configure Cbox Init:**
 
 ```yaml
 global:
@@ -324,7 +324,7 @@ global:
   tracing_exporter: otlp-grpc
   tracing_endpoint: api.honeycomb.io:443
   tracing_sample_rate: 1.0
-  tracing_service_name: phpeek-pm
+  tracing_service_name: cbox-init
 ```
 
 **Set API key:**
@@ -333,8 +333,8 @@ global:
 # Via environment variable
 export OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=YOUR_API_KEY"
 
-# Run PHPeek PM
-./phpeek-pm
+# Run Cbox Init
+./cbox-init
 ```
 
 ### OpenTelemetry Collector
@@ -366,7 +366,7 @@ service:
       exporters: [jaeger, tempo]
 ```
 
-**Configure PHPeek PM:**
+**Configure Cbox Init:**
 
 ```yaml
 global:
@@ -387,10 +387,10 @@ services:
   app:
     build: .
     environment:
-      - PHPEEK_PM_GLOBAL_TRACING_ENABLED=true
-      - PHPEEK_PM_GLOBAL_TRACING_EXPORTER=otlp-grpc
-      - PHPEEK_PM_GLOBAL_TRACING_ENDPOINT=jaeger:4317
-      - PHPEEK_PM_GLOBAL_TRACING_SAMPLE_RATE=1.0
+      - CBOX_INIT_GLOBAL_TRACING_ENABLED=true
+      - CBOX_INIT_GLOBAL_TRACING_EXPORTER=otlp-grpc
+      - CBOX_INIT_GLOBAL_TRACING_ENDPOINT=jaeger:4317
+      - CBOX_INIT_GLOBAL_TRACING_SAMPLE_RATE=1.0
     depends_on:
       - jaeger
 
@@ -412,7 +412,7 @@ services:
 **Trace process startup times:**
 
 1. Enable tracing with 100% sampling
-2. Start PHPeek PM
+2. Start Cbox Init
 3. Query for `process_manager.start` span
 4. View child spans for each process
 5. Identify slow-starting processes
@@ -637,11 +637,11 @@ tracing_sample_rate: 0.01
 ```yaml
 # ✅ Good (includes environment)
 global:
-  tracing_service_name: phpeek-pm-production
+  tracing_service_name: cbox-init-production
 
 # ❌ Generic
 global:
-  tracing_service_name: phpeek-pm
+  tracing_service_name: cbox-init
 ```
 
 ### 4. Combine with Metrics

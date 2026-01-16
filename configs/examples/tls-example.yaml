@@ -16,10 +16,10 @@ global:
   # TLS Configuration for API Server
   api_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/certs/server.crt"
-    key_file: "/etc/phpeek-pm/certs/server.key"
+    cert_file: "/etc/cbox-init/certs/server.crt"
+    key_file: "/etc/cbox-init/certs/server.key"
     # Optional: CA certificate for mutual TLS (mTLS)
-    # ca_file: "/etc/phpeek-pm/certs/ca.crt"
+    # ca_file: "/etc/cbox-init/certs/ca.crt"
     # Client authentication: none | request | require | verify
     client_auth: "none"
     # Minimum TLS version: TLS 1.0 | TLS 1.1 | TLS 1.2 | TLS 1.3
@@ -42,8 +42,8 @@ global:
   # TLS Configuration for Metrics Server
   metrics_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/certs/metrics.crt"
-    key_file: "/etc/phpeek-pm/certs/metrics.key"
+    cert_file: "/etc/cbox-init/certs/metrics.crt"
+    key_file: "/etc/cbox-init/certs/metrics.key"
     # Can use same or different certificates than API
     client_auth: "none"
     min_version: "TLS 1.2"
@@ -70,9 +70,9 @@ processes:
 # global:
 #   api_tls:
 #     enabled: true
-#     cert_file: "/etc/phpeek-pm/certs/server.crt"
-#     key_file: "/etc/phpeek-pm/certs/server.key"
-#     ca_file: "/etc/phpeek-pm/certs/ca.crt"  # CA that signed client certs
+#     cert_file: "/etc/cbox-init/certs/server.crt"
+#     key_file: "/etc/cbox-init/certs/server.key"
+#     ca_file: "/etc/cbox-init/certs/ca.crt"  # CA that signed client certs
 #     client_auth: "verify"  # Require and verify client certificates
 #     min_version: "TLS 1.3"
 
@@ -99,10 +99,10 @@ processes:
 # 2. Obtain certificates:
 #    certbot certonly --standalone -d your-domain.com
 #
-# 3. Configure PHPeek PM:
+# 3. Configure Cbox Init:
 #    cert_file: "/etc/letsencrypt/live/your-domain.com/fullchain.pem"
 #    key_file: "/etc/letsencrypt/live/your-domain.com/privkey.pem"
 #    auto_reload: true  # Automatically reload after renewal
 #
 # 4. Setup auto-renewal:
-#    certbot renew --deploy-hook "systemctl reload phpeek-pm"
+#    certbot renew --deploy-hook "systemctl reload cbox-init"

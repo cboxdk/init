@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gophpeek/phpeek-pm/internal/autotune"
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/autotune"
+	"github.com/cboxdk/init/internal/config"
 	"github.com/spf13/cobra"
 )
 
 var checkConfigCmd = &cobra.Command{
 	Use:   "check-config",
 	Short: "Validate configuration file",
-	Long:  `Validate the PHPeek PM configuration file and report any errors or warnings`,
+	Long:  `Validate the Cbox Init configuration file and report any errors or warnings`,
 	Run:   runCheckConfig,
 }
 
@@ -161,27 +161,27 @@ func getConfigPath() string {
 	}
 
 	// 2. Try environment variable
-	if envPath := os.Getenv("PHPEEK_PM_CONFIG"); envPath != "" {
+	if envPath := os.Getenv("CBOX_INIT_CONFIG"); envPath != "" {
 		return envPath
 	}
 
 	// 3. Try default paths in priority order
 	defaultPaths := []string{
 		// User-specific config (highest priority for defaults)
-		os.ExpandEnv("$HOME/.phpeek/pm/config.yaml"),
-		os.ExpandEnv("$HOME/.phpeek/pm/config.yml"),
+		os.ExpandEnv("$HOME/.cbox/init/config.yaml"),
+		os.ExpandEnv("$HOME/.cbox/init/config.yml"),
 
 		// System-wide configs
-		"/etc/phpeek/pm/config.yaml",
-		"/etc/phpeek/pm/config.yml",
+		"/etc/cbox/init/config.yaml",
+		"/etc/cbox/init/config.yml",
 
 		// Legacy paths (backward compatibility)
-		"/etc/phpeek-pm/phpeek-pm.yaml",
-		"/etc/phpeek-pm/phpeek-pm.yml",
+		"/etc/cbox-init/cbox-init.yaml",
+		"/etc/cbox-init/cbox-init.yml",
 
 		// Current directory (lowest priority)
-		"phpeek-pm.yaml",
-		"phpeek-pm.yml",
+		"cbox-init.yaml",
+		"cbox-init.yml",
 	}
 
 	for _, path := range defaultPaths {
@@ -191,5 +191,5 @@ func getConfigPath() string {
 	}
 
 	// Fallback to local yaml (will error later if doesn't exist)
-	return "phpeek-pm.yaml"
+	return "cbox-init.yaml"
 }

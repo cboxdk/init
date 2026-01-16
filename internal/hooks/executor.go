@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/metrics"
 )
 
 // Executor executes lifecycle hooks with retry logic
@@ -131,7 +131,7 @@ func (e *Executor) executeOnce(ctx context.Context, hook *config.Hook) error {
 
 func (e *Executor) buildEnv(hook *config.Hook) []string {
 	env := []string{
-		fmt.Sprintf("PHPEEK_PM_HOOK_NAME=%s", hook.Name),
+		fmt.Sprintf("CBOX_INIT_HOOK_NAME=%s", hook.Name),
 	}
 
 	for key, value := range hook.Env {

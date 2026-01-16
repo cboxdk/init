@@ -6,7 +6,7 @@ weight: 13
 
 # Process Configuration
 
-Complete reference for configuring individual processes managed by PHPeek PM.
+Complete reference for configuring individual processes managed by Cbox Init.
 
 ## Basic Process Structure
 
@@ -191,7 +191,7 @@ processes:
 **Security Best Practice:**
 - Run services with minimal required privileges
 - Use dedicated service users (www-data, nginx) instead of root
-- PHPeek PM will warn if running as root without user/group specified
+- Cbox Init will warn if running as root without user/group specified
 
 ### depends_on
 
@@ -236,7 +236,7 @@ processes:
 
 **Type:** `bool`
 **Default:** `true`
-**Description:** Enable or disable forwarding of the process' STDOUT/STDERR streams to PHPeek's logger.
+**Description:** Enable or disable forwarding of the process' STDOUT/STDERR streams to Cbox's logger.
 
 ```yaml
 processes:
@@ -505,16 +505,16 @@ Override process settings via environment variables:
 
 ```bash
 # Enable/disable process
-PHPEEK_PM_PROCESS_NGINX_ENABLED=false
+CBOX_INIT_PROCESS_NGINX_ENABLED=false
 
 # Change scale
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=5
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=5
 
 # Override command (JSON array)
-PHPEEK_PM_PROCESS_APP_COMMAND='["./my-app","--port=8080"]'
+CBOX_INIT_PROCESS_APP_COMMAND='["./my-app","--port=8080"]'
 ```
 
-**Pattern:** `PHPEEK_PM_PROCESS_<NAME>_<SETTING>=<value>`
+**Pattern:** `CBOX_INIT_PROCESS_<NAME>_<SETTING>=<value>`
 
 See [Environment Variables](environment-variables) for complete reference.
 

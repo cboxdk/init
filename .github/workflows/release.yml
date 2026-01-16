@@ -34,21 +34,21 @@ jobs:
       - name: Generate checksums
         run: |
           cd build
-          sha256sum phpeek-pm-* > checksums.txt
+          sha256sum cbox-init-* > checksums.txt
           cat checksums.txt
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binaries
-          path: build/phpeek-pm-*
+          path: build/cbox-init-*
           retention-days: 1
 
       - name: Create release notes
         id: release_notes
         run: |
           cat > release-notes.md <<EOF
-          # PHPeek Process Manager v${{ steps.version.outputs.VERSION }}
+          # Cbox Init v${{ steps.version.outputs.VERSION }}
 
           Production-grade PID 1 process manager for Docker containers with Laravel-first design.
 
@@ -66,37 +66,37 @@ jobs:
 
           ### Linux AMD64
           \`\`\`bash
-          wget https://github.com/gophpeek/phpeek-pm/releases/download/v${{ steps.version.outputs.VERSION }}/phpeek-pm-linux-amd64
-          chmod +x phpeek-pm-linux-amd64
-          sudo mv phpeek-pm-linux-amd64 /usr/local/bin/phpeek-pm
+          wget https://github.com/cboxdk/init/releases/download/v${{ steps.version.outputs.VERSION }}/cbox-init-linux-amd64
+          chmod +x cbox-init-linux-amd64
+          sudo mv cbox-init-linux-amd64 /usr/local/bin/cbox-init
           \`\`\`
 
           ### Linux ARM64
           \`\`\`bash
-          wget https://github.com/gophpeek/phpeek-pm/releases/download/v${{ steps.version.outputs.VERSION }}/phpeek-pm-linux-arm64
-          chmod +x phpeek-pm-linux-arm64
-          sudo mv phpeek-pm-linux-arm64 /usr/local/bin/phpeek-pm
+          wget https://github.com/cboxdk/init/releases/download/v${{ steps.version.outputs.VERSION }}/cbox-init-linux-arm64
+          chmod +x cbox-init-linux-arm64
+          sudo mv cbox-init-linux-arm64 /usr/local/bin/cbox-init
           \`\`\`
 
           ### macOS AMD64 (Intel)
           \`\`\`bash
-          wget https://github.com/gophpeek/phpeek-pm/releases/download/v${{ steps.version.outputs.VERSION }}/phpeek-pm-darwin-amd64
-          chmod +x phpeek-pm-darwin-amd64
-          sudo mv phpeek-pm-darwin-amd64 /usr/local/bin/phpeek-pm
+          wget https://github.com/cboxdk/init/releases/download/v${{ steps.version.outputs.VERSION }}/cbox-init-darwin-amd64
+          chmod +x cbox-init-darwin-amd64
+          sudo mv cbox-init-darwin-amd64 /usr/local/bin/cbox-init
           \`\`\`
 
           ### macOS ARM64 (Apple Silicon)
           \`\`\`bash
-          wget https://github.com/gophpeek/phpeek-pm/releases/download/v${{ steps.version.outputs.VERSION }}/phpeek-pm-darwin-arm64
-          chmod +x phpeek-pm-darwin-arm64
-          sudo mv phpeek-pm-darwin-arm64 /usr/local/bin/phpeek-pm
+          wget https://github.com/cboxdk/init/releases/download/v${{ steps.version.outputs.VERSION }}/cbox-init-darwin-arm64
+          chmod +x cbox-init-darwin-arm64
+          sudo mv cbox-init-darwin-arm64 /usr/local/bin/cbox-init
           \`\`\`
 
           ## Verification
 
           Verify the checksums:
           \`\`\`bash
-          wget https://github.com/gophpeek/phpeek-pm/releases/download/v${{ steps.version.outputs.VERSION }}/checksums.txt
+          wget https://github.com/cboxdk/init/releases/download/v${{ steps.version.outputs.VERSION }}/checksums.txt
           sha256sum -c checksums.txt
           \`\`\`
 
@@ -104,35 +104,35 @@ jobs:
 
           Docker images are available on GitHub Container Registry:
           \`\`\`bash
-          docker pull ghcr.io/gophpeek/phpeek-pm:v${{ steps.version.outputs.VERSION }}
+          docker pull ghcr.io/cboxdk/init:v${{ steps.version.outputs.VERSION }}
           # or
-          docker pull ghcr.io/gophpeek/phpeek-pm:latest
+          docker pull ghcr.io/cboxdk/init:latest
           \`\`\`
 
           Use in your Dockerfile:
           \`\`\`dockerfile
-          FROM ghcr.io/gophpeek/phpeek-pm:v${{ steps.version.outputs.VERSION }}
-          COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+          FROM ghcr.io/cboxdk/init:v${{ steps.version.outputs.VERSION }}
+          COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
           \`\`\`
 
           Or copy binary from release:
           \`\`\`dockerfile
           FROM alpine:3.19
           RUN apk add --no-cache ca-certificates tzdata wget
-          RUN wget -O /usr/local/bin/phpeek-pm \\
-              https://github.com/gophpeek/phpeek-pm/releases/download/v${{ steps.version.outputs.VERSION }}/phpeek-pm-linux-amd64 && \\
-              chmod +x /usr/local/bin/phpeek-pm
-          ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+          RUN wget -O /usr/local/bin/cbox-init \\
+              https://github.com/cboxdk/init/releases/download/v${{ steps.version.outputs.VERSION }}/cbox-init-linux-amd64 && \\
+              chmod +x /usr/local/bin/cbox-init
+          ENTRYPOINT ["/usr/local/bin/cbox-init"]
           \`\`\`
 
           ## Documentation
 
-          - [Getting Started](https://github.com/gophpeek/phpeek-pm/blob/main/docs/getting-started/quickstart.md)
-          - [Installation Guide](https://github.com/gophpeek/phpeek-pm/blob/main/docs/getting-started/installation.md)
-          - [Docker Integration](https://github.com/gophpeek/phpeek-pm/blob/main/docs/getting-started/docker-integration.md)
-          - [Configuration Examples](https://github.com/gophpeek/phpeek-pm/tree/main/configs/examples)
-          - [Prometheus Metrics](https://github.com/gophpeek/phpeek-pm/blob/main/docs/observability/metrics.md)
-          - [Management API](https://github.com/gophpeek/phpeek-pm/blob/main/docs/observability/api.md)
+          - [Getting Started](https://github.com/cboxdk/init/blob/main/docs/getting-started/quickstart.md)
+          - [Installation Guide](https://github.com/cboxdk/init/blob/main/docs/getting-started/installation.md)
+          - [Docker Integration](https://github.com/cboxdk/init/blob/main/docs/getting-started/docker-integration.md)
+          - [Configuration Examples](https://github.com/cboxdk/init/tree/main/configs/examples)
+          - [Prometheus Metrics](https://github.com/cboxdk/init/blob/main/docs/observability/metrics.md)
+          - [Management API](https://github.com/cboxdk/init/blob/main/docs/observability/api.md)
 
           ## Quick Start
 
@@ -153,7 +153,7 @@ jobs:
 
           Run:
           \`\`\`bash
-          phpeek-pm --config phpeek-pm.yaml
+          cbox-init --config cbox-init.yaml
           \`\`\`
           EOF
 
@@ -161,10 +161,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            build/phpeek-pm-linux-amd64
-            build/phpeek-pm-linux-arm64
-            build/phpeek-pm-darwin-amd64
-            build/phpeek-pm-darwin-arm64
+            build/cbox-init-linux-amd64
+            build/cbox-init-linux-arm64
+            build/cbox-init-darwin-amd64
+            build/cbox-init-darwin-arm64
             build/checksums.txt
           body_path: release-notes.md
           draft: false
@@ -235,9 +235,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
-            binary: phpeek-pm-linux-amd64
+            binary: cbox-init-linux-amd64
           - os: macos-latest
-            binary: phpeek-pm-darwin-amd64
+            binary: cbox-init-darwin-amd64
 
     steps:
       - name: Download release artifacts
@@ -264,8 +264,8 @@ jobs:
               restart: never
           EOF
 
-          # Run phpeek-pm in background
-          PHPEEK_PM_CONFIG=test-config.yaml ./${{ matrix.binary }} &
+          # Run cbox-init in background
+          CBOX_INIT_CONFIG=test-config.yaml ./${{ matrix.binary }} &
           PID=$!
 
           # Wait for startup

@@ -6,7 +6,7 @@ weight: 20
 
 # Dependency Management
 
-PHPeek PM uses a Directed Acyclic Graph (DAG) to manage process dependencies and ensure correct startup ordering.
+Cbox Init uses a Directed Acyclic Graph (DAG) to manage process dependencies and ensure correct startup ordering.
 
 ## Overview
 
@@ -288,7 +288,7 @@ processes:
 
 ```bash
 # Use environment variables to control dependencies
-export PHPEEK_PM_PROCESS_CACHE_ENABLED=${ENABLE_CACHE:-false}
+export CBOX_INIT_PROCESS_CACHE_ENABLED=${ENABLE_CACHE:-false}
 ```
 
 ```yaml

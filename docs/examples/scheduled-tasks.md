@@ -6,7 +6,7 @@ weight: 33
 
 # Scheduled Tasks Example
 
-Run periodic tasks like backups, reports, and maintenance jobs using PHPeek PM's built-in cron scheduler.
+Run periodic tasks like backups, reports, and maintenance jobs using Cbox Init's built-in cron scheduler.
 
 ## Use Cases
 
@@ -19,7 +19,7 @@ Run periodic tasks like backups, reports, and maintenance jobs using PHPeek PM's
 
 ## Cron Schedule Format
 
-PHPeek PM uses standard 5-field cron expressions:
+Cbox Init uses standard 5-field cron expressions:
 
 ```
 ┌───────────── minute (0-59)
@@ -319,7 +319,7 @@ heartbeat:
 
 ## Task Statistics
 
-PHPeek PM tracks execution statistics for each scheduled task:
+Cbox Init tracks execution statistics for each scheduled task:
 
 ### Via Prometheus Metrics
 
@@ -328,12 +328,12 @@ PHPeek PM tracks execution statistics for each scheduled task:
 curl http://localhost:9090/metrics | grep scheduled_task
 
 # Available metrics:
-# - phpeek_pm_scheduled_task_last_run_timestamp
-# - phpeek_pm_scheduled_task_next_run_timestamp
-# - phpeek_pm_scheduled_task_last_exit_code
-# - phpeek_pm_scheduled_task_duration_seconds
-# - phpeek_pm_scheduled_task_total{status="success"}
-# - phpeek_pm_scheduled_task_total{status="failure"}
+# - cbox_init_scheduled_task_last_run_timestamp
+# - cbox_init_scheduled_task_next_run_timestamp
+# - cbox_init_scheduled_task_last_exit_code
+# - cbox_init_scheduled_task_duration_seconds
+# - cbox_init_scheduled_task_total{status="success"}
+# - cbox_init_scheduled_task_total{status="failure"}
 ```
 
 ### Via Management API
@@ -361,19 +361,19 @@ curl http://localhost:9180/api/v1/processes | jq '.[] | select(.scheduled==true)
 Scheduled tasks receive additional environment variables:
 
 ```bash
-PHPEEK_PM_PROCESS_NAME=database-backup
-PHPEEK_PM_INSTANCE_ID=database-backup-run-123
-PHPEEK_PM_SCHEDULED=true
-PHPEEK_PM_SCHEDULE="0 2 * * *"
-PHPEEK_PM_START_TIME=1732162800
+CBOX_INIT_PROCESS_NAME=database-backup
+CBOX_INIT_INSTANCE_ID=database-backup-run-123
+CBOX_INIT_SCHEDULED=true
+CBOX_INIT_SCHEDULE="0 2 * * *"
+CBOX_INIT_START_TIME=1732162800
 ```
 
 **Use in scripts:**
 ```bash
 #!/bin/bash
-echo "Task: $PHPEEK_PM_PROCESS_NAME"
-echo "Run ID: $PHPEEK_PM_INSTANCE_ID"
-echo "Started at: $(date -d @$PHPEEK_PM_START_TIME)"
+echo "Task: $CBOX_INIT_PROCESS_NAME"
+echo "Run ID: $CBOX_INIT_INSTANCE_ID"
+echo "Started at: $(date -d @$CBOX_INIT_START_TIME)"
 ```
 
 ## Docker Compose Integration
@@ -386,8 +386,8 @@ services:
     build: .
     environment:
       # Enable specific tasks
-      PHPEEK_PM_PROCESS_DATABASE_BACKUP_ENABLED: "true"
-      PHPEEK_PM_PROCESS_WEEKLY_MAINTENANCE_ENABLED: "false"
+      CBOX_INIT_PROCESS_DATABASE_BACKUP_ENABLED: "true"
+      CBOX_INIT_PROCESS_WEEKLY_MAINTENANCE_ENABLED: "false"
 
       # Configure heartbeats
       BACKUP_HEARTBEAT_URL: "https://hc-ping.com/${BACKUP_UUID}"
@@ -419,7 +419,7 @@ spec:
           restartPolicy: Never
 ```
 
-**PHPeek PM Alternative:**
+**Cbox Init Alternative:**
 ```yaml
 # Single long-running pod with multiple scheduled tasks
 apiVersion: apps/v1
@@ -434,8 +434,8 @@ spec:
       - name: scheduler
         image: myapp:latest
         env:
-          - name: PHPEEK_PM_CONFIG
-            value: /etc/phpeek/scheduled-tasks.yaml
+          - name: CBOX_INIT_CONFIG
+            value: /etc/cbox/scheduled-tasks.yaml
 ```
 
 **Benefits:**
@@ -651,13 +651,13 @@ docker logs app | jq 'select(.labels.service=="backup")'
 
 ```bash
 # Last run time
-curl -s http://localhost:9090/metrics | grep "phpeek_pm_scheduled_task_last_run_timestamp{task=\"database-backup\"}"
+curl -s http://localhost:9090/metrics | grep "cbox_init_scheduled_task_last_run_timestamp{task=\"database-backup\"}"
 
 # Success rate
-curl -s http://localhost:9090/metrics | grep "phpeek_pm_scheduled_task_total{task=\"database-backup\"}"
+curl -s http://localhost:9090/metrics | grep "cbox_init_scheduled_task_total{task=\"database-backup\"}"
 
 # Duration
-curl -s http://localhost:9090/metrics | grep "phpeek_pm_scheduled_task_duration_seconds{task=\"database-backup\"}"
+curl -s http://localhost:9090/metrics | grep "cbox_init_scheduled_task_duration_seconds{task=\"database-backup\"}"
 ```
 
 ### Alerts
@@ -668,13 +668,13 @@ groups:
   - name: scheduled_tasks
     rules:
       - alert: ScheduledTaskFailed
-        expr: phpeek_pm_scheduled_task_last_exit_code != 0
+        expr: cbox_init_scheduled_task_last_exit_code != 0
         for: 5m
         annotations:
           summary: "Scheduled task {{ $labels.task }} failed"
 
       - alert: ScheduledTaskNotRunning
-        expr: time() - phpeek_pm_scheduled_task_last_run_timestamp > 86400
+        expr: time() - cbox_init_scheduled_task_last_run_timestamp > 86400
         annotations:
           summary: "Task {{ $labels.task }} hasn't run in 24h"
 ```
@@ -688,7 +688,7 @@ groups:
 # Test cron expression
 # Use crontab.guru or similar tool
 
-# Verify PHPeek PM parsed it correctly
+# Verify Cbox Init parsed it correctly
 docker logs app | grep "Scheduled task"
 ```
 

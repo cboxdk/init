@@ -1,4 +1,4 @@
-# PHPeek Process Manager
+# Cbox Init
 
 Production-grade PID 1 process manager for Docker containers with Laravel-first design.
 
@@ -21,8 +21,8 @@ Production-grade PID 1 process manager for Docker containers with Laravel-first 
 # Build
 make build
 
-# Run (looks for phpeek-pm.yaml in current directory)
-./build/phpeek-pm
+# Run (looks for cbox-init.yaml in current directory)
+./build/cbox-init
 ```
 
 ### Minimal Configuration
@@ -46,10 +46,10 @@ processes:
 ```dockerfile
 FROM php:8.3-fpm-alpine
 
-COPY --from=builder /app/phpeek-pm /usr/local/bin/phpeek-pm
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY --from=builder /app/cbox-init /usr/local/bin/cbox-init
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Development

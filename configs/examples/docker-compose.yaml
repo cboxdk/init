@@ -70,7 +70,7 @@ services:
     environment:
       - PHP_FPM_AUTOTUNE_PROFILE=light  # ENV sets light
     command:
-      - "phpeek-pm"
+      - "cbox-init"
       - "--php-fpm-profile=heavy"  # CLI overrides to heavy
     deploy:
       resources:

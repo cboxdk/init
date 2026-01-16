@@ -74,7 +74,7 @@ func TestExpandEnv(t *testing.T) {
 
 func TestLoadWithEnvExpansion(t *testing.T) {
 	// Create temporary config file with environment variables
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -133,7 +133,7 @@ processes:
 }
 
 func TestLoadWithEnvExpansion_WithDefaults(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestLoadWithEnvExpansion_InvalidFile(t *testing.T) {
 }
 
 func TestLoadWithEnvExpansion_InvalidYAML(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

@@ -1,12 +1,12 @@
 #!/bin/sh
 set -e
 
-echo "=== PHPeek PM Integration Tests ==="
+echo "=== Cbox Init Integration Tests ==="
 echo ""
 
 # Test 1: Binary exists and is executable
 echo "✓ Test 1: Binary Check"
-if [ ! -x /usr/local/bin/phpeek-pm ]; then
+if [ ! -x /usr/local/bin/cbox-init ]; then
     echo "✗ FAILED: Binary not executable"
     exit 1
 fi
@@ -15,23 +15,23 @@ echo ""
 
 # Test 2: Version check
 echo "✓ Test 2: Version Check"
-/usr/local/bin/phpeek-pm --version 2>&1 || true
+/usr/local/bin/cbox-init --version 2>&1 || true
 echo ""
 
 # Test 3: Configuration validation
 echo "✓ Test 3: Configuration Validation"
-if [ ! -f /etc/phpeek-pm/phpeek-pm.yaml ]; then
+if [ ! -f /etc/cbox-init/cbox-init.yaml ]; then
     echo "✗ FAILED: Config file not found"
     exit 1
 fi
 echo "  Config file exists"
 echo ""
 
-# Test 4: Start PHPeek PM in background
+# Test 4: Start Cbox Init in background
 echo "✓ Test 4: Process Startup"
-/usr/local/bin/phpeek-pm &
-PHPEEK_PID=$!
-echo "  PHPeek PM started with PID: $PHPEEK_PID"
+/usr/local/bin/cbox-init &
+CBOX_PID=$!
+echo "  Cbox Init started with PID: $CBOX_PID"
 
 # Wait for startup
 sleep 3
@@ -39,11 +39,11 @@ sleep 3
 # Test 5: Check process is running
 echo ""
 echo "✓ Test 5: Process Running"
-if ! kill -0 $PHPEEK_PID 2>/dev/null; then
-    echo "✗ FAILED: PHPeek PM not running"
+if ! kill -0 $CBOX_PID 2>/dev/null; then
+    echo "✗ FAILED: Cbox Init not running"
     exit 1
 fi
-echo "  PHPeek PM is running"
+echo "  Cbox Init is running"
 
 # Test 6: Check managed processes
 echo ""
@@ -59,7 +59,7 @@ done
 
 if [ $found_sleep -eq 0 ]; then
     echo "✗ FAILED: Managed process not found"
-    kill $PHPEEK_PID 2>/dev/null || true
+    kill $CBOX_PID 2>/dev/null || true
     exit 1
 fi
 echo "  Managed processes are running"
@@ -68,7 +68,7 @@ echo "  Managed processes are running"
 echo ""
 echo "✓ Test 7: Metrics Endpoint"
 if command -v curl > /dev/null 2>&1; then
-    if curl -s --max-time 2 http://localhost:9090/metrics | grep -q "phpeek_pm"; then
+    if curl -s --max-time 2 http://localhost:9090/metrics | grep -q "cbox_init"; then
         echo "  Metrics endpoint is responding"
     else
         echo "  ⚠ Metrics endpoint not responding (non-fatal)"
@@ -98,18 +98,18 @@ echo "  Waiting for managed processes to complete (sleep 5)..."
 # Wait for auto-exit (should happen after ~5 seconds when sleep processes finish)
 # Give it up to 10 seconds total
 for i in 1 2 3 4 5 6 7 8 9 10; do
-    if ! kill -0 $PHPEEK_PID 2>/dev/null; then
-        echo "  PHPeek PM auto-exited after managed processes died (${i}s elapsed)"
+    if ! kill -0 $CBOX_PID 2>/dev/null; then
+        echo "  Cbox Init auto-exited after managed processes died (${i}s elapsed)"
         break
     fi
     sleep 1
 done
 
 # Check if process stopped
-if kill -0 $PHPEEK_PID 2>/dev/null; then
-    echo "  ✗ FAILED: PHPeek PM still running after 10s"
-    kill -KILL $PHPEEK_PID 2>/dev/null || true
-    wait $PHPEEK_PID 2>/dev/null || true
+if kill -0 $CBOX_PID 2>/dev/null; then
+    echo "  ✗ FAILED: Cbox Init still running after 10s"
+    kill -KILL $CBOX_PID 2>/dev/null || true
+    wait $CBOX_PID 2>/dev/null || true
     exit 1
 fi
 

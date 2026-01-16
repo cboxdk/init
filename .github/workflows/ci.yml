@@ -89,7 +89,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binaries
-          path: build/phpeek-pm-*
+          path: build/cbox-init-*
           retention-days: 7
 
   integration-test:
@@ -111,26 +111,26 @@ jobs:
           path: build/
 
       - name: Make binaries executable
-        run: chmod +x build/phpeek-pm-*
+        run: chmod +x build/cbox-init-*
 
       - name: Run integration tests - ${{ matrix.distro }}
         run: |
           docker build \
             -f tests/integration/Dockerfile.${{ matrix.distro }} \
-            -t phpeek-pm-test-${{ matrix.distro }} \
+            -t cbox-init-test-${{ matrix.distro }} \
             .
 
           docker run --rm \
-            --name phpeek-pm-test-${{ matrix.distro }} \
-            phpeek-pm-test-${{ matrix.distro }}
+            --name cbox-init-test-${{ matrix.distro }} \
+            cbox-init-test-${{ matrix.distro }}
 
       - name: Test with real workload
         run: |
           docker run -d \
-            --name phpeek-pm-workload-${{ matrix.distro }} \
+            --name cbox-init-workload-${{ matrix.distro }} \
             -p 9090:9090 \
             -p 9180:9180 \
-            phpeek-pm-test-${{ matrix.distro }}
+            cbox-init-test-${{ matrix.distro }}
 
           # Wait for startup with retries
           echo "Waiting for services to be ready..."
@@ -158,4 +158,4 @@ jobs:
           curl -f http://localhost:9180/api/v1/health || exit 1
 
           # Cleanup
-          docker stop phpeek-pm-workload-${{ matrix.distro }}
+          docker stop cbox-init-workload-${{ matrix.distro }}

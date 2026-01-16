@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // createScheduleTestManager creates a manager with scheduler for testing

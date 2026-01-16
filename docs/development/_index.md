@@ -1,12 +1,12 @@
 ---
 title: "Development"
-description: "Development guides for PHPeek PM testing and contribution"
+description: "Development guides for Cbox Init testing and contribution"
 weight: 50
 ---
 
 # Development
 
-Development guides and resources for contributing to PHPeek PM.
+Development guides and resources for contributing to Cbox Init.
 
 ## Contents
 
@@ -32,8 +32,8 @@ make test              # Go tests with race detection
 ## Project Structure
 
 ```
-phpeek-pm/
-├── cmd/phpeek-pm/      # Main entry point
+cbox-init/
+├── cmd/cbox-init/      # Main entry point
 ├── internal/           # Go packages
 │   ├── config/        # Configuration
 │   ├── process/       # Process management

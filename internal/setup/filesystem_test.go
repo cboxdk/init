@@ -33,14 +33,14 @@ func TestIsReadOnlyRoot(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original env var
-			originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-			defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+			originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+			defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 			// Set test env var
 			if tt.envVar != "" {
-				os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", tt.envVar)
+				os.Setenv("CBOX_INIT_READ_ONLY_ROOT", tt.envVar)
 			} else {
-				os.Unsetenv("PHPEEK_PM_READ_ONLY_ROOT")
+				os.Unsetenv("CBOX_INIT_READ_ONLY_ROOT")
 			}
 
 			got := IsReadOnlyRoot()
@@ -53,11 +53,11 @@ func TestIsReadOnlyRoot(t *testing.T) {
 
 func TestIsReadOnlyRoot_FileSystemCheck(t *testing.T) {
 	// Save original env var
-	originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-	defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+	originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+	defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 	// Unset env var to test actual filesystem check
-	os.Unsetenv("PHPEEK_PM_READ_ONLY_ROOT")
+	os.Unsetenv("CBOX_INIT_READ_ONLY_ROOT")
 
 	result := IsReadOnlyRoot()
 
@@ -70,7 +70,7 @@ func TestIsReadOnlyRoot_FileSystemCheck(t *testing.T) {
 	}
 
 	// Verify the test file is cleaned up
-	testFile := "/tmp/.phpeek-pm-write-test"
+	testFile := "/tmp/.cbox-init-write-test"
 	if _, err := os.Stat(testFile); err == nil {
 		t.Errorf("Test file %s was not cleaned up", testFile)
 	}
@@ -85,26 +85,26 @@ func TestGetRuntimeDir(t *testing.T) {
 		{
 			name:         "writable root filesystem",
 			readOnlyEnv:  "",
-			expectedPath: "/var/run/phpeek-pm",
+			expectedPath: "/var/run/cbox-init",
 		},
 		{
 			name:         "read-only root filesystem",
 			readOnlyEnv:  "true",
-			expectedPath: "/run/phpeek-pm",
+			expectedPath: "/run/cbox-init",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original env var
-			originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-			defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+			originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+			defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 			// Set test env var
 			if tt.readOnlyEnv != "" {
-				os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", tt.readOnlyEnv)
+				os.Setenv("CBOX_INIT_READ_ONLY_ROOT", tt.readOnlyEnv)
 			} else {
-				os.Unsetenv("PHPEEK_PM_READ_ONLY_ROOT")
+				os.Unsetenv("CBOX_INIT_READ_ONLY_ROOT")
 			}
 
 			// Call GetRuntimeDir
@@ -145,11 +145,11 @@ func TestGetRuntimeDir_CreationError(t *testing.T) {
 	// but we can test the code path by using a path that might fail
 
 	// Save original env var
-	originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-	defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+	originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+	defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 	// Normal case should work
-	os.Unsetenv("PHPEEK_PM_READ_ONLY_ROOT")
+	os.Unsetenv("CBOX_INIT_READ_ONLY_ROOT")
 	dir, err := GetRuntimeDir()
 	if err != nil {
 		// If this fails, it might be a permission issue in the test environment
@@ -169,7 +169,7 @@ func TestEnsureWritableDir(t *testing.T) {
 	}{
 		{
 			name:        "create directory in writable location",
-			path:        filepath.Join(os.TempDir(), "phpeek-test-writable"),
+			path:        filepath.Join(os.TempDir(), "cbox-test-writable"),
 			readOnlyEnv: "",
 			checkPath: func(inputPath, returnedPath string) error {
 				if inputPath != returnedPath {
@@ -184,7 +184,7 @@ func TestEnsureWritableDir(t *testing.T) {
 			readOnlyEnv: "true",
 			checkPath: func(inputPath, returnedPath string) error {
 				// Should return alternative path in /run
-				if !strings.HasPrefix(returnedPath, "/run/phpeek-pm") {
+				if !strings.HasPrefix(returnedPath, "/run/cbox-init") {
 					return os.ErrInvalid
 				}
 				return nil
@@ -206,14 +206,14 @@ func TestEnsureWritableDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original env var
-			originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-			defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+			originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+			defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 			// Set test env var
 			if tt.readOnlyEnv != "" {
-				os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", tt.readOnlyEnv)
+				os.Setenv("CBOX_INIT_READ_ONLY_ROOT", tt.readOnlyEnv)
 			} else {
-				os.Unsetenv("PHPEEK_PM_READ_ONLY_ROOT")
+				os.Unsetenv("CBOX_INIT_READ_ONLY_ROOT")
 			}
 
 			// Call EnsureWritableDir
@@ -253,14 +253,14 @@ func TestEnsureWritableDir(t *testing.T) {
 
 func TestEnsureWritableDir_FallbackToRun(t *testing.T) {
 	// Test that when a directory can't be created at original path,
-	// it falls back to /run/phpeek-pm in read-only mode
+	// it falls back to /run/cbox-init in read-only mode
 
 	// Save original env var
-	originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-	defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+	originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+	defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 	// Set read-only mode
-	os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", "true")
+	os.Setenv("CBOX_INIT_READ_ONLY_ROOT", "true")
 
 	// Try to create in a path that would fail
 	path := "/root/some/path/that/wont/work"
@@ -276,8 +276,8 @@ func TestEnsureWritableDir_FallbackToRun(t *testing.T) {
 	// Should have gotten an alternative path
 	defer os.RemoveAll(got)
 
-	if !strings.HasPrefix(got, "/run/phpeek-pm") {
-		t.Errorf("Expected fallback path in /run/phpeek-pm, got %s", got)
+	if !strings.HasPrefix(got, "/run/cbox-init") {
+		t.Errorf("Expected fallback path in /run/cbox-init, got %s", got)
 	}
 
 	// Verify directory exists
@@ -292,14 +292,14 @@ func TestEnsureWritableDir_ErrorInWritableMode(t *testing.T) {
 	// Test error handling when not in read-only mode but mkdir fails
 
 	// Save original env var
-	originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-	defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+	originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+	defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 	// Ensure we're not in read-only mode
-	os.Unsetenv("PHPEEK_PM_READ_ONLY_ROOT")
+	os.Unsetenv("CBOX_INIT_READ_ONLY_ROOT")
 
 	// Try to create a file first, then try to create a directory with same name
-	tmpFile, err := os.CreateTemp("", "phpeek-test-*")
+	tmpFile, err := os.CreateTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}

@@ -8,14 +8,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gophpeek/phpeek-pm/internal/scaffold"
+	"github.com/cboxdk/init/internal/scaffold"
 	"github.com/spf13/cobra"
 )
 
 var scaffoldCmd = &cobra.Command{
 	Use:   "scaffold [preset]",
-	Short: "Generate PHPeek PM configuration files",
-	Long: `Scaffold generates PHPeek PM configuration files for common use cases.
+	Short: "Generate Cbox Init configuration files",
+	Long: `Scaffold generates Cbox Init configuration files for common use cases.
 
 Available presets:
   PHP:
@@ -34,10 +34,10 @@ Available presets:
 Use --observability to add tracing, metrics, and API to any preset.
 
 Examples:
-  phpeek-pm scaffold laravel
-  phpeek-pm scaffold wordpress --observability
-  phpeek-pm scaffold nextjs --dockerfile --nginx
-  phpeek-pm scaffold magento --docker-compose --observability`,
+  cbox-init scaffold laravel
+  cbox-init scaffold wordpress --observability
+  cbox-init scaffold nextjs --dockerfile --nginx
+  cbox-init scaffold magento --docker-compose --observability`,
 	Args: cobra.MaximumNArgs(1),
 	Run:  runScaffold,
 }
@@ -112,7 +112,7 @@ func runScaffold(cmd *cobra.Command, args []string) {
 	}
 
 	// Display configuration summary
-	fmt.Fprintf(os.Stderr, "\n📦 PHPeek PM Scaffold Generator\n\n")
+	fmt.Fprintf(os.Stderr, "\n📦 Cbox Init Scaffold Generator\n\n")
 	fmt.Fprintf(os.Stderr, "Preset:        %s\n", preset)
 	fmt.Fprintf(os.Stderr, "App Name:      %s\n", gen.GetConfig().AppName)
 	fmt.Fprintf(os.Stderr, "Output Dir:    %s\n", outputDir)
@@ -153,12 +153,12 @@ func runScaffold(cmd *cobra.Command, args []string) {
 	fmt.Fprintf(os.Stderr, "\n✅ Scaffold complete!\n\n")
 	fmt.Fprintf(os.Stderr, "Generated files in: %s\n", outputDir)
 	fmt.Fprintf(os.Stderr, "\nNext steps:\n")
-	fmt.Fprintf(os.Stderr, "  1. Review phpeek-pm.yaml\n")
+	fmt.Fprintf(os.Stderr, "  1. Review cbox-init.yaml\n")
 	fmt.Fprintf(os.Stderr, "  2. Customize for your needs\n")
 	if generateDocker || generateCompose {
 		fmt.Fprintf(os.Stderr, "  3. Build and run: docker-compose up\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "  3. Run: phpeek-pm serve\n")
+		fmt.Fprintf(os.Stderr, "  3. Run: cbox-init serve\n")
 	}
 }
 
@@ -313,7 +313,7 @@ func confirmOverwrite(dir string, files []string) bool {
 func getFilename(file string) string {
 	switch file {
 	case "config":
-		return "phpeek-pm.yaml"
+		return "cbox-init.yaml"
 	case "docker-compose":
 		return "docker-compose.yml"
 	case "dockerfile":

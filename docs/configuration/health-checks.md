@@ -426,7 +426,7 @@ health_check:
 curl http://localhost:9090/metrics | grep health
 
 # Example output
-phpeek_pm_process_health_status{process="nginx"} 1  # 1 = healthy
+cbox_init_process_health_status{process="nginx"} 1  # 1 = healthy
 ```
 
 ### Via Management API

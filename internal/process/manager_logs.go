@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/gophpeek/phpeek-pm/internal/logger"
+	"github.com/cboxdk/init/internal/logger"
 )
 
 // GetLogs returns log entries for a specific process.

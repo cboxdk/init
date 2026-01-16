@@ -1,6 +1,6 @@
 ---
 title: "Configuration Overview"
-description: "Complete YAML configuration reference for all PHPeek PM settings and options"
+description: "Complete YAML configuration reference for all Cbox Init settings and options"
 weight: 11
 ---
 
@@ -10,7 +10,7 @@ weight: 11
 
 For now, please refer to:
 - [Quickstart Guide](../getting-started/quickstart) - Basic configuration walkthrough
-- [Example Configurations](https://github.com/gophpeek/phpeek-pm/tree/main/configs/examples) - Working YAML examples
+- [Example Configurations](https://github.com/cboxdk/init/tree/main/configs/examples) - Working YAML examples
 
 ## Coming Soon
 

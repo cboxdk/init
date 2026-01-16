@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // MultilineBuffer buffers multiline log entries (e.g., stack traces)

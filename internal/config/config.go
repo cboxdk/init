@@ -11,24 +11,24 @@ import (
 
 // Load loads configuration from YAML file and environment variables.
 // Configuration is loaded with the following priority (highest to lowest):
-//   1. Environment variables (PHPEEK_PM_* prefix)
+//   1. Environment variables (CBOX_INIT_* prefix)
 //   2. YAML file values
 //   3. Default values set by SetDefaults()
 //
 // Configuration file search order:
-//   1. PHPEEK_PM_CONFIG environment variable
-//   2. /etc/phpeek-pm/phpeek-pm.yaml (system-wide)
-//   3. phpeek-pm.yaml (current directory)
+//   1. CBOX_INIT_CONFIG environment variable
+//   2. /etc/cbox-init/cbox-init.yaml (system-wide)
+//   3. cbox-init.yaml (current directory)
 //
 // Returns an error if the configuration file cannot be read or parsed.
 func Load() (*Config, error) {
 	// Default config path
-	configPath := os.Getenv("PHPEEK_PM_CONFIG")
+	configPath := os.Getenv("CBOX_INIT_CONFIG")
 	if configPath == "" {
-		configPath = "/etc/phpeek-pm/phpeek-pm.yaml"
+		configPath = "/etc/cbox-init/cbox-init.yaml"
 		// Fallback to local config if system path doesn't exist
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			configPath = "phpeek-pm.yaml"
+			configPath = "cbox-init.yaml"
 		}
 	}
 

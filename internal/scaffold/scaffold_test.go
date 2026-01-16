@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -199,8 +199,8 @@ func TestGenerateDockerfile(t *testing.T) {
 	}
 
 	// Check base image
-	if !strings.Contains(content, "FROM gophpeek/php-fpm-nginx:") {
-		t.Error("Dockerfile should use gophpeek/php-fpm-nginx base image")
+	if !strings.Contains(content, "FROM cboxdk/php-fpm-nginx:") {
+		t.Error("Dockerfile should use cboxdk/php-fpm-nginx base image")
 	}
 
 	// Check composer
@@ -208,9 +208,9 @@ func TestGenerateDockerfile(t *testing.T) {
 		t.Error("Laravel Dockerfile should run composer install")
 	}
 
-	// Check PHPeek PM
-	if !strings.Contains(content, "phpeek-pm") {
-		t.Error("Dockerfile should reference phpeek-pm")
+	// Check Cbox Init
+	if !strings.Contains(content, "cbox-init") {
+		t.Error("Dockerfile should reference cbox-init")
 	}
 }
 
@@ -345,7 +345,7 @@ func TestGenerator_Generate(t *testing.T) {
 	}
 
 	// Verify files exist
-	files := []string{"phpeek-pm.yaml", "docker-compose.yml", "Dockerfile"}
+	files := []string{"cbox-init.yaml", "docker-compose.yml", "Dockerfile"}
 	for _, file := range files {
 		path := filepath.Join(tmpDir, file)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -371,9 +371,9 @@ func TestGenerator_Generate_ConfigOnly(t *testing.T) {
 	}
 
 	// Verify config exists
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Error("Expected phpeek-pm.yaml to exist")
+		t.Error("Expected cbox-init.yaml to exist")
 	}
 
 	// Verify docker-compose does not exist
@@ -488,9 +488,9 @@ func TestGenerator_Generate_DockerComposeOnly(t *testing.T) {
 	}
 
 	// Verify config does not exist
-	configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+	configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
-		t.Error("Expected phpeek-pm.yaml to not exist")
+		t.Error("Expected cbox-init.yaml to not exist")
 	}
 }
 
@@ -572,13 +572,13 @@ func TestGenerateDockerfile_PHP(t *testing.T) {
 	}
 
 	// Check base image
-	if !strings.Contains(content, "FROM gophpeek/php-fpm-nginx:") {
-		t.Error("Dockerfile should use gophpeek/php-fpm-nginx base image")
+	if !strings.Contains(content, "FROM cboxdk/php-fpm-nginx:") {
+		t.Error("Dockerfile should use cboxdk/php-fpm-nginx base image")
 	}
 
-	// Check PHPeek PM
-	if !strings.Contains(content, "phpeek-pm") {
-		t.Error("Dockerfile should reference phpeek-pm")
+	// Check Cbox Init
+	if !strings.Contains(content, "cbox-init") {
+		t.Error("Dockerfile should reference cbox-init")
 	}
 }
 
@@ -591,8 +591,8 @@ func TestGenerateDockerfile_Symfony(t *testing.T) {
 	}
 
 	// Check base image
-	if !strings.Contains(content, "FROM gophpeek/php-fpm-nginx:") {
-		t.Error("Dockerfile should use gophpeek/php-fpm-nginx base image")
+	if !strings.Contains(content, "FROM cboxdk/php-fpm-nginx:") {
+		t.Error("Dockerfile should use cboxdk/php-fpm-nginx base image")
 	}
 }
 
@@ -604,9 +604,9 @@ func TestGenerateDockerfile_PHP_Alt(t *testing.T) {
 		t.Fatalf("GenerateDockerfile failed: %v", err)
 	}
 
-	// Check PHPeek PM
-	if !strings.Contains(content, "phpeek-pm") {
-		t.Error("Dockerfile should reference phpeek-pm")
+	// Check Cbox Init
+	if !strings.Contains(content, "cbox-init") {
+		t.Error("Dockerfile should reference cbox-init")
 	}
 }
 
@@ -744,7 +744,7 @@ func TestGenerator_Generate_AllFilesForAllPresets(t *testing.T) {
 			}
 
 			// Verify all files exist
-			files := []string{"phpeek-pm.yaml", "docker-compose.yml", "Dockerfile"}
+			files := []string{"cbox-init.yaml", "docker-compose.yml", "Dockerfile"}
 			for _, file := range files {
 				path := filepath.Join(tmpDir, file)
 				if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -1002,9 +1002,9 @@ func TestGenerator_Generate_NodeJSPresets(t *testing.T) {
 			}
 
 			// Verify config file was created
-			configPath := filepath.Join(tmpDir, "phpeek-pm.yaml")
+			configPath := filepath.Join(tmpDir, "cbox-init.yaml")
 			if _, err := os.Stat(configPath); os.IsNotExist(err) {
-				t.Error("Expected phpeek-pm.yaml to be created")
+				t.Error("Expected cbox-init.yaml to be created")
 			}
 
 			// Read and verify content

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 // Manager manages TLS certificates with auto-reload capability

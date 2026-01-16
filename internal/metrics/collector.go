@@ -9,7 +9,7 @@ var (
 	// Process metrics
 	ProcessUp = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_up",
+			Name: "cbox_init_process_up",
 			Help: "Process status (1=running, 0=stopped)",
 		},
 		[]string{"name", "instance"},
@@ -17,7 +17,7 @@ var (
 
 	ProcessRestarts = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "phpeek_pm_process_restarts_total",
+			Name: "cbox_init_process_restarts_total",
 			Help: "Total number of process restarts",
 		},
 		[]string{"name", "reason"}, // reason: health_check, crash, manual
@@ -25,7 +25,7 @@ var (
 
 	ProcessStartTime = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_start_time_seconds",
+			Name: "cbox_init_process_start_time_seconds",
 			Help: "Unix timestamp when process started",
 		},
 		[]string{"name", "instance"},
@@ -33,7 +33,7 @@ var (
 
 	ProcessExitCode = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_last_exit_code",
+			Name: "cbox_init_process_last_exit_code",
 			Help: "Last exit code of process",
 		},
 		[]string{"name", "instance"},
@@ -42,7 +42,7 @@ var (
 	// Health check metrics
 	HealthCheckStatus = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_health_check_status",
+			Name: "cbox_init_health_check_status",
 			Help: "Health check status (1=healthy, 0=unhealthy)",
 		},
 		[]string{"name", "type"},
@@ -50,7 +50,7 @@ var (
 
 	HealthCheckDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "phpeek_pm_health_check_duration_seconds",
+			Name:    "cbox_init_health_check_duration_seconds",
 			Help:    "Health check duration in seconds",
 			Buckets: []float64{0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0},
 		},
@@ -59,7 +59,7 @@ var (
 
 	HealthCheckTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "phpeek_pm_health_check_total",
+			Name: "cbox_init_health_check_total",
 			Help: "Total number of health checks performed",
 		},
 		[]string{"name", "type", "status"}, // status: success, failure
@@ -67,7 +67,7 @@ var (
 
 	HealthCheckConsecutiveFails = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_health_check_consecutive_fails",
+			Name: "cbox_init_health_check_consecutive_fails",
 			Help: "Current consecutive health check failures",
 		},
 		[]string{"name"},
@@ -76,7 +76,7 @@ var (
 	// Scaling metrics
 	ProcessDesiredScale = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_desired_scale",
+			Name: "cbox_init_process_desired_scale",
 			Help: "Desired number of process instances",
 		},
 		[]string{"name"},
@@ -84,7 +84,7 @@ var (
 
 	ProcessCurrentScale = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_current_scale",
+			Name: "cbox_init_process_current_scale",
 			Help: "Current number of running instances",
 		},
 		[]string{"name"},
@@ -93,7 +93,7 @@ var (
 	// Supervisor metrics
 	SupervisorUptime = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_supervisor_uptime_seconds",
+			Name: "cbox_init_supervisor_uptime_seconds",
 			Help: "Supervisor uptime in seconds",
 		},
 		[]string{"name"},
@@ -102,7 +102,7 @@ var (
 	// Lifecycle hook metrics
 	HookExecutions = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "phpeek_pm_hook_executions_total",
+			Name: "cbox_init_hook_executions_total",
 			Help: "Total number of hook executions",
 		},
 		[]string{"name", "type", "status"}, // type: pre_start, post_start, pre_stop, post_stop; status: success, failure
@@ -110,7 +110,7 @@ var (
 
 	HookDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "phpeek_pm_hook_duration_seconds",
+			Name:    "cbox_init_hook_duration_seconds",
 			Help:    "Hook execution duration in seconds",
 			Buckets: []float64{0.1, 0.5, 1.0, 5.0, 10.0, 30.0, 60.0, 120.0},
 		},
@@ -120,21 +120,21 @@ var (
 	// Manager metrics
 	ManagerProcessCount = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_manager_process_count",
+			Name: "cbox_init_manager_process_count",
 			Help: "Total number of managed processes",
 		},
 	)
 
 	ManagerStartTime = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_manager_start_time_seconds",
+			Name: "cbox_init_manager_start_time_seconds",
 			Help: "Unix timestamp when manager started",
 		},
 	)
 
 	ShutdownDuration = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "phpeek_pm_shutdown_duration_seconds",
+			Name:    "cbox_init_shutdown_duration_seconds",
 			Help:    "Duration of graceful shutdown in seconds",
 			Buckets: []float64{1, 5, 10, 30, 60, 120, 180, 300},
 		},
@@ -143,7 +143,7 @@ var (
 	// Resource metrics (CPU, memory, etc.)
 	ProcessCPUPercent = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_cpu_percent",
+			Name: "cbox_init_process_cpu_percent",
 			Help: "Process CPU usage percentage (per-core, can exceed 100)",
 		},
 		[]string{"process", "instance"},
@@ -151,7 +151,7 @@ var (
 
 	ProcessMemoryBytes = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_memory_bytes",
+			Name: "cbox_init_process_memory_bytes",
 			Help: "Process memory usage in bytes",
 		},
 		[]string{"process", "instance", "type"}, // type: rss, vms
@@ -159,7 +159,7 @@ var (
 
 	ProcessMemoryPercent = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_memory_percent",
+			Name: "cbox_init_process_memory_percent",
 			Help: "Process memory usage as percentage of total system memory",
 		},
 		[]string{"process", "instance"},
@@ -167,7 +167,7 @@ var (
 
 	ProcessThreads = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_threads",
+			Name: "cbox_init_process_threads",
 			Help: "Number of threads in process",
 		},
 		[]string{"process", "instance"},
@@ -175,7 +175,7 @@ var (
 
 	ProcessFileDescriptors = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_process_file_descriptors",
+			Name: "cbox_init_process_file_descriptors",
 			Help: "Number of open file descriptors (Linux only)",
 		},
 		[]string{"process", "instance"},
@@ -183,7 +183,7 @@ var (
 
 	ResourceCollectionDuration = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "phpeek_pm_resource_collection_duration_seconds",
+			Name:    "cbox_init_resource_collection_duration_seconds",
 			Help:    "Time taken to collect resource metrics",
 			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05},
 		},
@@ -191,7 +191,7 @@ var (
 
 	ResourceCollectionErrors = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "phpeek_pm_resource_collection_errors_total",
+			Name: "cbox_init_resource_collection_errors_total",
 			Help: "Total resource collection errors",
 		},
 		[]string{"process", "instance"},
@@ -200,7 +200,7 @@ var (
 	// Build info
 	BuildInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "phpeek_pm_build_info",
+			Name: "cbox_init_build_info",
 			Help: "PHPeek PM build information",
 		},
 		[]string{"version", "go_version"},

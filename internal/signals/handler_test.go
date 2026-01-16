@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/testutil"
+	"github.com/cboxdk/init/internal/testutil"
 )
 
 func TestIsPID1(t *testing.T) {

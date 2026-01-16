@@ -1,4 +1,4 @@
-# PHPeek PM - Audit Logging Configuration Examples
+# Cbox Init - Audit Logging Configuration Examples
 # =================================================
 #
 # This file demonstrates comprehensive audit logging configurations
@@ -94,8 +94,8 @@ global:
   api_auth: "${API_BEARER_TOKEN}"  # Use environment variable
   api_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/certs/server.crt"
-    key_file: "/etc/phpeek-pm/certs/server.key"
+    cert_file: "/etc/cbox-init/certs/server.crt"
+    key_file: "/etc/cbox-init/certs/server.key"
 
   # Strict IP ACL (Whitelist Only)
   api_acl:
@@ -112,8 +112,8 @@ global:
   metrics_port: 9090
   metrics_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/certs/metrics.crt"
-    key_file: "/etc/phpeek-pm/certs/metrics.key"
+    cert_file: "/etc/cbox-init/certs/metrics.crt"
+    key_file: "/etc/cbox-init/certs/metrics.key"
   metrics_acl:
     enabled: true
     mode: "allow"
@@ -180,9 +180,9 @@ global:
   # TLS with Strong Ciphers
   api_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/certs/api-server.crt"
-    key_file: "/etc/phpeek-pm/certs/api-server.key"
-    client_ca_file: "/etc/phpeek-pm/certs/client-ca.crt"  # mTLS
+    cert_file: "/etc/cbox-init/certs/api-server.crt"
+    key_file: "/etc/cbox-init/certs/api-server.key"
+    client_ca_file: "/etc/cbox-init/certs/client-ca.crt"  # mTLS
 
   # Strict IP Whitelist
   api_acl:
@@ -197,8 +197,8 @@ global:
   metrics_port: 9443  # Non-standard port
   metrics_tls:
     enabled: true
-    cert_file: "/etc/phpeek-pm/certs/metrics-server.crt"
-    key_file: "/etc/phpeek-pm/certs/metrics-server.key"
+    cert_file: "/etc/cbox-init/certs/metrics-server.crt"
+    key_file: "/etc/cbox-init/certs/metrics-server.key"
   metrics_acl:
     enabled: true
     mode: "allow"
@@ -305,8 +305,8 @@ processes:
 # This example demonstrates what events are logged by audit logger
 
 # SYSTEM EVENTS:
-# - system.start: PHPeek PM startup (includes version)
-# - system.shutdown: PHPeek PM shutdown (includes reason, graceful flag)
+# - system.start: Cbox Init startup (includes version)
+# - system.shutdown: Cbox Init shutdown (includes reason, graceful flag)
 # - system.error: System-level errors
 
 # PROCESS EVENTS:
@@ -386,18 +386,18 @@ processes:
 # Log Collection Methods:
 #
 # 1. Docker Logs (stdout/stderr):
-#    docker logs phpeek-pm --follow | jq 'select(.msg == "audit_event")'
+#    docker logs cbox-init --follow | jq 'select(.msg == "audit_event")'
 #
 # 2. Kubernetes Logging:
-#    kubectl logs -f deployment/phpeek-pm | jq 'select(.msg == "audit_event")'
+#    kubectl logs -f deployment/cbox-init | jq 'select(.msg == "audit_event")'
 #
 # 3. ELK Stack (Elasticsearch, Logstash, Kibana):
 #    - Configure log driver: json-file or fluentd
 #    - Filter: msg == "audit_event"
-#    - Index: phpeek-audit-*
+#    - Index: cbox-audit-*
 #
 # 4. Loki/Grafana:
-#    - Label: {app="phpeek-pm", level="audit"}
+#    - Label: {app="cbox-init", level="audit"}
 #    - Query: {msg="audit_event"}
 #
 # 5. Splunk:
@@ -405,11 +405,11 @@ processes:
 #    - Search: msg="audit_event"
 #
 # 6. AWS CloudWatch Logs:
-#    - Log group: /ecs/phpeek-pm
+#    - Log group: /ecs/cbox-init
 #    - Filter pattern: { $.msg = "audit_event" }
 #
 # 7. File-based (for on-premise SIEM):
-#    docker logs phpeek-pm > /var/log/phpeek-pm/audit.json
+#    docker logs cbox-init > /var/log/cbox-init/audit.json
 
 ---
 # ============================================================================

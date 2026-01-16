@@ -354,13 +354,13 @@ func TestNormalizeProcessName(t *testing.T) {
 
 func TestApplyEnvOverridesMap_GlobalOverrides(t *testing.T) {
 	// Set up environment variables
-	os.Setenv("PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT", "60")
-	os.Setenv("PHPEEK_PM_GLOBAL_LOG_LEVEL", "debug")
-	os.Setenv("PHPEEK_PM_GLOBAL_METRICS_PORT", "9999")
+	os.Setenv("CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT", "60")
+	os.Setenv("CBOX_INIT_GLOBAL_LOG_LEVEL", "debug")
+	os.Setenv("CBOX_INIT_GLOBAL_METRICS_PORT", "9999")
 	defer func() {
-		os.Unsetenv("PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT")
-		os.Unsetenv("PHPEEK_PM_GLOBAL_LOG_LEVEL")
-		os.Unsetenv("PHPEEK_PM_GLOBAL_METRICS_PORT")
+		os.Unsetenv("CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT")
+		os.Unsetenv("CBOX_INIT_GLOBAL_LOG_LEVEL")
+		os.Unsetenv("CBOX_INIT_GLOBAL_METRICS_PORT")
 	}()
 
 	raw := make(map[string]interface{})
@@ -387,11 +387,11 @@ func TestApplyEnvOverridesMap_GlobalOverrides(t *testing.T) {
 
 func TestApplyEnvOverridesMap_ProcessOverrides(t *testing.T) {
 	// Set up environment variables
-	os.Setenv("PHPEEK_PM_PROCESS_PHPFPM_SCALE", "10")
-	os.Setenv("PHPEEK_PM_PROCESS_PHPFPM_ENV_DB_HOST", "postgres")
+	os.Setenv("CBOX_INIT_PROCESS_PHPFPM_SCALE", "10")
+	os.Setenv("CBOX_INIT_PROCESS_PHPFPM_ENV_DB_HOST", "postgres")
 	defer func() {
-		os.Unsetenv("PHPEEK_PM_PROCESS_PHPFPM_SCALE")
-		os.Unsetenv("PHPEEK_PM_PROCESS_PHPFPM_ENV_DB_HOST")
+		os.Unsetenv("CBOX_INIT_PROCESS_PHPFPM_SCALE")
+		os.Unsetenv("CBOX_INIT_PROCESS_PHPFPM_ENV_DB_HOST")
 	}()
 
 	raw := make(map[string]interface{})
@@ -426,7 +426,7 @@ func TestApplyEnvOverridesMap_ProcessOverrides(t *testing.T) {
 
 func TestLoadWithEnvExpansion_NoFile(t *testing.T) {
 	// Test loading when file doesn't exist (should use env vars only)
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -435,15 +435,15 @@ func TestLoadWithEnvExpansion_NoFile(t *testing.T) {
 	nonexistentPath := filepath.Join(tmpDir, "nonexistent.yaml")
 
 	// Set required env vars to create a valid config
-	os.Setenv("PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT", "30")
-	os.Setenv("PHPEEK_PM_GLOBAL_LOG_LEVEL", "info")
-	os.Setenv("PHPEEK_PM_GLOBAL_LOG_FORMAT", "json")
-	os.Setenv("PHPEEK_PM_PROCESS_TEST_COMMAND", `["sleep", "1"]`)
+	os.Setenv("CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT", "30")
+	os.Setenv("CBOX_INIT_GLOBAL_LOG_LEVEL", "info")
+	os.Setenv("CBOX_INIT_GLOBAL_LOG_FORMAT", "json")
+	os.Setenv("CBOX_INIT_PROCESS_TEST_COMMAND", `["sleep", "1"]`)
 	defer func() {
-		os.Unsetenv("PHPEEK_PM_GLOBAL_SHUTDOWN_TIMEOUT")
-		os.Unsetenv("PHPEEK_PM_GLOBAL_LOG_LEVEL")
-		os.Unsetenv("PHPEEK_PM_GLOBAL_LOG_FORMAT")
-		os.Unsetenv("PHPEEK_PM_PROCESS_TEST_COMMAND")
+		os.Unsetenv("CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT")
+		os.Unsetenv("CBOX_INIT_GLOBAL_LOG_LEVEL")
+		os.Unsetenv("CBOX_INIT_GLOBAL_LOG_FORMAT")
+		os.Unsetenv("CBOX_INIT_PROCESS_TEST_COMMAND")
 	}()
 
 	cfg, err := LoadWithEnvExpansion(nonexistentPath)

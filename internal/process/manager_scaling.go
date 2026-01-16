@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
+	"github.com/cboxdk/init/internal/metrics"
 )
 
 // ScaleProcess changes the number of instances for a process.

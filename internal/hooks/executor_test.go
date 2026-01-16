@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 func TestExecutor_SuccessfulExecution(t *testing.T) {
@@ -223,7 +223,7 @@ func TestExecutor_EnvironmentVariables(t *testing.T) {
 	tempDir := t.TempDir()
 	scriptPath := filepath.Join(tempDir, "test-env.sh")
 	script := `#!/bin/bash
-echo "HOOK_NAME=$PHPEEK_PM_HOOK_NAME"
+echo "HOOK_NAME=$CBOX_INIT_HOOK_NAME"
 echo "CUSTOM_VAR=$CUSTOM_VAR"
 `
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {

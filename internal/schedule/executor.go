@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/logger"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/logger"
 )
 
 // ProcessExecutor executes scheduled process commands directly
@@ -147,8 +147,8 @@ func (e *ProcessExecutor) setupCommand(ctx context.Context, processName string, 
 	for k, v := range cfg.Env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
-	cmd.Env = append(cmd.Env, fmt.Sprintf("PHPEEK_PM_PROCESS=%s", processName))
-	cmd.Env = append(cmd.Env, "PHPEEK_PM_SCHEDULED=true")
+	cmd.Env = append(cmd.Env, fmt.Sprintf("CBOX_INIT_PROCESS=%s", processName))
+	cmd.Env = append(cmd.Env, "CBOX_INIT_SCHEDULED=true")
 
 	// Setup output writers
 	if logWriter != nil {

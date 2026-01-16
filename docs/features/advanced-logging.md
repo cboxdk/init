@@ -6,7 +6,7 @@ weight: 25
 
 # Advanced Logging
 
-PHPeek PM provides enterprise-grade log processing with automatic level detection, multiline handling, JSON parsing, and sensitive data redaction.
+Cbox Init provides enterprise-grade log processing with automatic level detection, multiline handling, JSON parsing, and sensitive data redaction.
 
 ## Features
 
@@ -21,7 +21,7 @@ PHPeek PM provides enterprise-grade log processing with automatic level detectio
 
 ### Supported Formats
 
-PHPeek PM automatically detects log levels from:
+Cbox Init automatically detects log levels from:
 
 ```
 [ERROR] Database connection failed      → ERROR
@@ -73,7 +73,7 @@ Stack traces and multi-line errors get split:
 
 ### Solution
 
-PHPeek PM automatically reassembles multiline logs:
+Cbox Init automatically reassembles multiline logs:
 
 ```
 ✅ With multiline handling:
@@ -142,7 +142,7 @@ Stack trace:
 
 ### Automatic Field Extraction
 
-PHPeek PM parses JSON logs and extracts structured fields:
+Cbox Init parses JSON logs and extracts structured fields:
 
 **Input (JSON from application):**
 ```json
@@ -193,7 +193,7 @@ Custom:
 
 ### Automatic Redaction
 
-PHPeek PM automatically redacts sensitive information:
+Cbox Init automatically redacts sensitive information:
 
 **Redacted Patterns:**
 - Passwords: `password`, `passwd`, `pwd`
@@ -449,7 +449,7 @@ services:
       options:
         awslogs-region: us-east-1
         awslogs-group: /ecs/php-app
-        awslogs-stream: phpeek-pm
+        awslogs-stream: cbox-init
 ```
 
 ## Troubleshooting
@@ -483,7 +483,7 @@ global:
 
 **Test redaction:**
 ```bash
-echo 'password=secret123' | docker exec -i app /usr/local/bin/phpeek-pm --test-redaction
+echo 'password=secret123' | docker exec -i app /usr/local/bin/cbox-init --test-redaction
 ```
 
 ### Logs Too Verbose

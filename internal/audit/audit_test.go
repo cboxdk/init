@@ -497,7 +497,7 @@ func TestLogger_ConfigLoad(t *testing.T) {
 	logger := slog.New(handler)
 
 	auditLogger := NewLogger(logger, true)
-	auditLogger.LogConfigLoad("/etc/phpeek-pm/phpeek-pm.yaml", 5)
+	auditLogger.LogConfigLoad("/etc/cbox-init/cbox-init.yaml", 5)
 
 	// Parse output
 	var logEntry map[string]interface{}
@@ -751,7 +751,7 @@ func TestLogger_ConfigSaved(t *testing.T) {
 	logger := slog.New(handler)
 
 	auditLogger := NewLogger(logger, true)
-	auditLogger.LogConfigSaved("/etc/phpeek-pm/config.yaml")
+	auditLogger.LogConfigSaved("/etc/cbox-init/config.yaml")
 
 	// Parse output
 	var logEntry map[string]interface{}
@@ -771,7 +771,7 @@ func TestLogger_ConfigSaved(t *testing.T) {
 
 	// Verify embedded event contains path
 	eventJSON := logEntry["event_json"].(string)
-	if !strings.Contains(eventJSON, "/etc/phpeek-pm/config.yaml") {
+	if !strings.Contains(eventJSON, "/etc/cbox-init/config.yaml") {
 		t.Errorf("Expected event_json to contain config path, got: %s", eventJSON)
 	}
 	if !strings.Contains(eventJSON, "saved") {
@@ -786,7 +786,7 @@ func TestLogger_ConfigReloaded(t *testing.T) {
 	logger := slog.New(handler)
 
 	auditLogger := NewLogger(logger, true)
-	auditLogger.LogConfigReloaded("/etc/phpeek-pm/config.yaml")
+	auditLogger.LogConfigReloaded("/etc/cbox-init/config.yaml")
 
 	// Parse output
 	var logEntry map[string]interface{}
@@ -806,7 +806,7 @@ func TestLogger_ConfigReloaded(t *testing.T) {
 
 	// Verify embedded event contains path
 	eventJSON := logEntry["event_json"].(string)
-	if !strings.Contains(eventJSON, "/etc/phpeek-pm/config.yaml") {
+	if !strings.Contains(eventJSON, "/etc/cbox-init/config.yaml") {
 		t.Errorf("Expected event_json to contain config path, got: %s", eventJSON)
 	}
 	if !strings.Contains(eventJSON, "reloaded") {

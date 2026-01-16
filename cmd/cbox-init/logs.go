@@ -7,13 +7,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/logger"
-	"github.com/gophpeek/phpeek-pm/internal/process"
-	"github.com/gophpeek/phpeek-pm/internal/setup"
-	"github.com/gophpeek/phpeek-pm/internal/signals"
-	"github.com/gophpeek/phpeek-pm/internal/tui"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/process"
+	"github.com/cboxdk/init/internal/setup"
+	"github.com/cboxdk/init/internal/signals"
+	"github.com/cboxdk/init/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -25,11 +25,11 @@ var logsCmd = &cobra.Command{
 If no process names are specified, shows logs from all processes.
 
 Examples:
-  phpeek-pm logs                    # All processes
-  phpeek-pm logs nginx              # Single process
-  phpeek-pm logs nginx horizon      # Multiple processes
-  phpeek-pm logs --level=error      # Filter by level
-  phpeek-pm logs --tail=100         # Last 100 lines`,
+  cbox-init logs                    # All processes
+  cbox-init logs nginx              # Single process
+  cbox-init logs nginx horizon      # Multiple processes
+  cbox-init logs --level=error      # Filter by level
+  cbox-init logs --tail=100         # Last 100 lines`,
 	Run: runLogs,
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/readiness"
+	"github.com/cboxdk/init/internal/readiness"
 )
 
 // GetReadinessManager returns the readiness manager (may be nil).

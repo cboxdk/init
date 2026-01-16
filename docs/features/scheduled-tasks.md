@@ -6,7 +6,7 @@ weight: 22
 
 # Scheduled Tasks
 
-PHPeek PM includes a built-in cron-like scheduler for running periodic tasks without requiring a separate cron daemon.
+Cbox Init includes a built-in cron-like scheduler for running periodic tasks without requiring a separate cron daemon.
 
 ## Overview
 
@@ -116,26 +116,26 @@ schedule: "0 8 * * 0,6"
 Each scheduled task receives additional environment variables:
 
 ```bash
-PHPEEK_PM_PROCESS_NAME=backup-job
-PHPEEK_PM_INSTANCE_ID=backup-job-run-42
-PHPEEK_PM_SCHEDULED=true
-PHPEEK_PM_SCHEDULE="0 2 * * *"
-PHPEEK_PM_START_TIME=1732162800
+CBOX_INIT_PROCESS_NAME=backup-job
+CBOX_INIT_INSTANCE_ID=backup-job-run-42
+CBOX_INIT_SCHEDULED=true
+CBOX_INIT_SCHEDULE="0 2 * * *"
+CBOX_INIT_START_TIME=1732162800
 ```
 
 **Use in scripts:**
 ```bash
 #!/bin/bash
-echo "Task: $PHPEEK_PM_PROCESS_NAME"
-echo "Instance: $PHPEEK_PM_INSTANCE_ID"
-echo "Started: $(date -d @$PHPEEK_PM_START_TIME)"
+echo "Task: $CBOX_INIT_PROCESS_NAME"
+echo "Instance: $CBOX_INIT_INSTANCE_ID"
+echo "Started: $(date -d @$CBOX_INIT_START_TIME)"
 ```
 
 ## Statistics Tracking
 
 ### Per-Task Metrics
 
-PHPeek PM tracks execution statistics for each scheduled task:
+Cbox Init tracks execution statistics for each scheduled task:
 
 - **Last run time:** When task last executed
 - **Next run time:** When task will run next
@@ -149,20 +149,20 @@ PHPeek PM tracks execution statistics for each scheduled task:
 
 ```bash
 # Last execution timestamp
-phpeek_pm_scheduled_task_last_run_timestamp{task="backup-job"}
+cbox_init_scheduled_task_last_run_timestamp{task="backup-job"}
 
 # Next scheduled execution
-phpeek_pm_scheduled_task_next_run_timestamp{task="backup-job"}
+cbox_init_scheduled_task_next_run_timestamp{task="backup-job"}
 
 # Last exit code
-phpeek_pm_scheduled_task_last_exit_code{task="backup-job"}
+cbox_init_scheduled_task_last_exit_code{task="backup-job"}
 
 # Execution duration (histogram)
-phpeek_pm_scheduled_task_duration_seconds{task="backup-job"}
+cbox_init_scheduled_task_duration_seconds{task="backup-job"}
 
 # Total runs by status
-phpeek_pm_scheduled_task_total{task="backup-job",status="success"}
-phpeek_pm_scheduled_task_total{task="backup-job",status="failure"}
+cbox_init_scheduled_task_total{task="backup-job",status="success"}
+cbox_init_scheduled_task_total{task="backup-job",status="failure"}
 ```
 
 ### Management API
@@ -310,7 +310,7 @@ processes:
 
 ### Concurrency Control
 
-PHPeek PM provides native concurrency controls for scheduled tasks via configuration options.
+Cbox Init provides native concurrency controls for scheduled tasks via configuration options.
 
 #### schedule_max_concurrent
 
@@ -442,7 +442,7 @@ monthly-report:
 ```yaml
 # Prometheus alert
 - alert: ScheduledTaskFailed
-  expr: phpeek_pm_scheduled_task_last_exit_code != 0
+  expr: cbox_init_scheduled_task_last_exit_code != 0
   for: 5m
   annotations:
     summary: "Task {{ $labels.task }} failed"
@@ -454,7 +454,7 @@ monthly-report:
 ```yaml
 # Alert if task hasn't run in expected interval
 - alert: TaskNotRunning
-  expr: time() - phpeek_pm_scheduled_task_last_run_timestamp > 86400
+  expr: time() - cbox_init_scheduled_task_last_run_timestamp > 86400
   annotations:
     summary: "Task {{ $labels.task }} hasn't run in 24h"
 ```
@@ -463,22 +463,22 @@ monthly-report:
 
 ```promql
 # Task execution success rate
-sum(phpeek_pm_scheduled_task_total{status="success"}) /
-sum(phpeek_pm_scheduled_task_total) * 100
+sum(cbox_init_scheduled_task_total{status="success"}) /
+sum(cbox_init_scheduled_task_total) * 100
 
 # Average task duration
-avg(phpeek_pm_scheduled_task_duration_seconds)
+avg(cbox_init_scheduled_task_duration_seconds)
 
 # Next run time (time until next execution)
-phpeek_pm_scheduled_task_next_run_timestamp - time()
+cbox_init_scheduled_task_next_run_timestamp - time()
 ```
 
 ## Laravel Scheduler Integration
 
-### Option 1: PHPeek PM Native Scheduling
+### Option 1: Cbox Init Native Scheduling
 
 ```yaml
-# Define each task separately in PHPeek PM config
+# Define each task separately in Cbox Init config
 processes:
   backup-daily:
     command: ["php", "artisan", "backup:run"]
@@ -534,7 +534,7 @@ protected function schedule(Schedule $schedule)
 ### Hybrid Approach
 
 ```yaml
-# Critical tasks: PHPeek PM native (with heartbeats)
+# Critical tasks: Cbox Init native (with heartbeats)
 processes:
   critical-backup:
     command: ["php", "artisan", "backup:critical"]
@@ -555,15 +555,15 @@ processes:
 ```bash
 # Last run time
 curl http://localhost:9090/metrics | \
-  grep 'phpeek_pm_scheduled_task_last_run_timestamp{task="backup-job"}'
+  grep 'cbox_init_scheduled_task_last_run_timestamp{task="backup-job"}'
 
 # Success count
 curl http://localhost:9090/metrics | \
-  grep 'phpeek_pm_scheduled_task_total{task="backup-job",status="success"}'
+  grep 'cbox_init_scheduled_task_total{task="backup-job",status="success"}'
 
 # Average duration
 curl http://localhost:9090/metrics | \
-  grep 'phpeek_pm_scheduled_task_duration_seconds'
+  grep 'cbox_init_scheduled_task_duration_seconds'
 ```
 
 ### Via Management API

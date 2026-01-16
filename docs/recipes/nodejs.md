@@ -1,6 +1,6 @@
 # Node.js Applications
 
-PHPeek-PM is fully compatible with Node.js applications including Next.js, Nuxt, Remix, Express, Fastify, NestJS, and any other Node.js server.
+Cbox Init is fully compatible with Node.js applications including Next.js, Nuxt, Remix, Express, Fastify, NestJS, and any other Node.js server.
 
 ## Quick Start
 
@@ -61,7 +61,7 @@ processes:
 
 ### Port Management
 
-When scaling Node.js apps (`scale: N`), each instance needs a unique port. PHPeek-PM provides two mechanisms:
+When scaling Node.js apps (`scale: N`), each instance needs a unique port. Cbox Init provides two mechanisms:
 
 #### 1. `port_base` (Recommended)
 
@@ -84,11 +84,11 @@ app.listen(port);
 
 #### 2. Instance Index Environment Variable
 
-PHPeek-PM sets `PHPEEK_PM_INSTANCE_INDEX` (0, 1, 2, ...) for each instance:
+Cbox Init sets `CBOX_INIT_INSTANCE_INDEX` (0, 1, 2, ...) for each instance:
 
 ```javascript
 const basePort = 3000;
-const instanceIndex = parseInt(process.env.PHPEEK_PM_INSTANCE_INDEX || '0');
+const instanceIndex = parseInt(process.env.CBOX_INIT_INSTANCE_INDEX || '0');
 const port = basePort + instanceIndex;
 ```
 
@@ -117,7 +117,7 @@ server {
 
 ## Memory Leak Protection
 
-Node.js applications can suffer from memory leaks. PHPeek-PM can automatically restart processes that exceed a memory threshold:
+Node.js applications can suffer from memory leaks. Cbox Init can automatically restart processes that exceed a memory threshold:
 
 ```yaml
 processes:
@@ -256,7 +256,7 @@ processes:
 
 ### JSON Log Parsing
 
-PHPeek-PM can parse structured JSON logs (pino, winston, bunyan):
+Cbox Init can parse structured JSON logs (pino, winston, bunyan):
 
 ```yaml
 processes:
@@ -289,23 +289,23 @@ logging:
 
 ## PM2 Migration Guide
 
-| PM2 Feature | PHPeek-PM Equivalent |
+| PM2 Feature | Cbox Init Equivalent |
 |-------------|---------------------|
 | `pm2 start app.js` | `command: ["node", "app.js"]` |
 | `instances: 4` | `scale: 4` |
 | `exec_mode: "cluster"` | `scale: N` + `port_base` |
 | `max_memory_restart: "500M"` | `max_memory_mb: 500` |
-| `watch: true` | `phpeek-pm serve --watch` |
+| `watch: true` | `cbox-init serve --watch` |
 | `env_production: {...}` | `env: {...}` |
 | `cron_restart: "0 0 * * *"` | `schedule: "0 0 * * *"` |
 | `wait_ready: true` | `health_check` with `mode: readiness` |
 | `listen_timeout: 3000` | `health_check.initial_delay: 3` |
 | `kill_timeout: 5000` | `shutdown.timeout: 5` |
-| `pm2 logs` | `phpeek-pm tui` or API |
-| `pm2 monit` | `phpeek-pm tui` |
+| `pm2 logs` | `cbox-init tui` or API |
+| `pm2 monit` | `cbox-init tui` |
 | `pm2 reload` | API: `POST /processes/{name}/restart` |
 
-### ecosystem.config.js to phpeek-pm.yaml
+### ecosystem.config.js to cbox-init.yaml
 
 Before (PM2):
 ```javascript
@@ -324,7 +324,7 @@ module.exports = {
 };
 ```
 
-After (PHPeek-PM):
+After (Cbox Init):
 ```yaml
 processes:
   api:
@@ -345,18 +345,18 @@ The fastest way to get started is using the scaffold command:
 
 ```bash
 # Next.js - generates config, Dockerfile, nginx.conf
-phpeek-pm scaffold nextjs --dockerfile --nginx --docker-compose
+cbox-init scaffold nextjs --dockerfile --nginx --docker-compose
 
 # Nuxt 3
-phpeek-pm scaffold nuxt --dockerfile --nginx --docker-compose
+cbox-init scaffold nuxt --dockerfile --nginx --docker-compose
 
 # Generic Node.js (Express, Fastify, NestJS)
-phpeek-pm scaffold nodejs --dockerfile --nginx --docker-compose
+cbox-init scaffold nodejs --dockerfile --nginx --docker-compose
 ```
 
 This generates:
-- `phpeek-pm.yaml` - Process manager configuration
-- `Dockerfile` - Multi-stage build with PHPeek PM
+- `cbox-init.yaml` - Process manager configuration
+- `Dockerfile` - Multi-stage build with Cbox Init
 - `nginx.conf` - Reverse proxy with upstream load balancing
 - `docker-compose.yml` - Full stack with PostgreSQL, Redis
 
@@ -377,25 +377,25 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 FROM node:22-alpine AS runner
-# Install nginx and PHPeek PM
+# Install nginx and Cbox Init
 RUN apk add --no-cache nginx curl tini
-ARG PHPEEK_PM_VERSION=latest
+ARG CBOX_INIT_VERSION=latest
 ARG TARGETARCH
-RUN curl -fsSL "https://github.com/gophpeek/phpeek-pm/releases/${PHPEEK_PM_VERSION}/download/phpeek-pm-linux-${TARGETARCH}" \
-    -o /usr/local/bin/phpeek-pm && chmod +x /usr/local/bin/phpeek-pm
+RUN curl -fsSL "https://github.com/cboxdk/init/releases/${CBOX_INIT_VERSION}/download/cbox-init-linux-${TARGETARCH}" \
+    -o /usr/local/bin/cbox-init && chmod +x /usr/local/bin/cbox-init
 
 WORKDIR /app
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY phpeek-pm.yaml /etc/phpeek-pm/config.yaml
+COPY cbox-init.yaml /etc/cbox-init/config.yaml
 COPY nginx.conf /etc/nginx/nginx.conf
 
 ENV NODE_ENV=production HOSTNAME=0.0.0.0
 EXPOSE 80 9180 9090
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["/usr/local/bin/phpeek-pm", "serve", "--config", "/etc/phpeek-pm/config.yaml"]
+CMD ["/usr/local/bin/cbox-init", "serve", "--config", "/etc/cbox-init/config.yaml"]
 ```
 
 ### Generated nginx.conf (Load Balancing)
@@ -475,19 +475,19 @@ Generate configurations quickly:
 
 ```bash
 # Next.js preset with all files
-phpeek-pm scaffold nextjs --dockerfile --nginx --docker-compose
+cbox-init scaffold nextjs --dockerfile --nginx --docker-compose
 
 # Nuxt preset
-phpeek-pm scaffold nuxt --dockerfile --nginx
+cbox-init scaffold nuxt --dockerfile --nginx
 
 # Generic Node.js
-phpeek-pm scaffold nodejs --dockerfile --nginx
+cbox-init scaffold nodejs --dockerfile --nginx
 
 # Interactive mode (guided prompts)
-phpeek-pm scaffold --interactive
+cbox-init scaffold --interactive
 
 # Custom app name and output directory
-phpeek-pm scaffold nextjs --app-name my-nextjs-app --output ./docker
+cbox-init scaffold nextjs --app-name my-nextjs-app --output ./docker
 ```
 
 ## Best Practices

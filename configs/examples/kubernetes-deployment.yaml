@@ -5,14 +5,14 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: phpeek-config
+  name: cbox-config
   namespace: production
 data:
   # PHP-FPM auto-tune profile
   php_fpm_profile: "medium"
 
-  # PHPeek PM configuration
-  phpeek_pm_config: |
+  # Cbox Init configuration
+  cbox_init_config: |
     version: "1.0"
     global:
       shutdown_timeout: 60
@@ -52,7 +52,7 @@ spec:
         - name: PHP_FPM_AUTOTUNE_PROFILE
           valueFrom:
             configMapKeyRef:
-              name: phpeek-config
+              name: cbox-config
               key: php_fpm_profile
 
         # Container resource limits (auto-tuner uses these)

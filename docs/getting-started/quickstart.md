@@ -1,16 +1,16 @@
 ---
 title: "Quick Start"
-description: "Run your first multi-process container with PHPeek PM in 5 minutes"
+description: "Run your first multi-process container with Cbox Init in 5 minutes"
 weight: 4
 ---
 
 # Quick Start
 
-Get PHPeek PM running with a complete PHP-FPM and Nginx stack in just 5 minutes.
+Get Cbox Init running with a complete PHP-FPM and Nginx stack in just 5 minutes.
 
 ## Step 1: Create Configuration
 
-Create `phpeek-pm.yaml`:
+Create `cbox-init.yaml`:
 
 ```yaml
 version: "1.0"
@@ -57,13 +57,13 @@ FROM php:8.3-fpm-alpine
 # Install Nginx
 RUN apk add --no-cache nginx
 
-# Copy PHPeek PM binary
-COPY --from=gophpeek/phpeek-pm:latest \
-    /usr/local/bin/phpeek-pm \
-    /usr/local/bin/phpeek-pm
+# Copy Cbox Init binary
+COPY --from=cboxdk/init:latest \
+    /usr/local/bin/cbox-init \
+    /usr/local/bin/cbox-init
 
 # Copy configuration
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # Copy Nginx config
 COPY nginx.conf /etc/nginx/nginx.conf
@@ -72,8 +72,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY . /var/www/html
 WORKDIR /var/www/html
 
-# Use PHPeek PM as PID 1
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+# Use Cbox Init as PID 1
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Step 3: Build and Run
@@ -102,7 +102,7 @@ docker exec php-app ps aux
 
 # Expected output:
 # PID   USER     COMMAND
-#   1   root     /usr/local/bin/phpeek-pm
+#   1   root     /usr/local/bin/cbox-init
 #  10   www-data php-fpm: master process
 #  11   www-data php-fpm: pool www
 #  12   www-data php-fpm: pool www
@@ -129,7 +129,7 @@ docker logs php-app 2>&1 | grep "health check"
 # Send SIGTERM to container
 docker stop php-app
 
-# PHPeek PM will:
+# Cbox Init will:
 # 1. Stop accepting new requests
 # 2. Signal processes in reverse order (nginx, then php-fpm)
 # 3. Wait for graceful shutdown (30s timeout)
@@ -138,7 +138,7 @@ docker stop php-app
 
 ## What Just Happened?
 
-PHPeek PM orchestrated:
+Cbox Init orchestrated:
 
 1. **Startup Order**
    - Started PHP-FPM first (priority 10)

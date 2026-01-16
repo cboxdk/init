@@ -17,8 +17,8 @@ COPY . .
 ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags "-w -s -X main.version=${VERSION}" \
-    -o phpeek-pm \
-    ./cmd/phpeek-pm
+    -o cbox-init \
+    ./cmd/cbox-init
 
 # Runtime stage
 FROM alpine:3.19
@@ -29,19 +29,19 @@ RUN apk add --no-cache \
     tzdata
 
 # Create non-root user
-RUN addgroup -g 1000 phpeek && \
-    adduser -D -u 1000 -G phpeek phpeek
+RUN addgroup -g 1000 cbox && \
+    adduser -D -u 1000 -G cbox cbox
 
 # Copy binary from builder
-COPY --from=builder /build/phpeek-pm /usr/local/bin/phpeek-pm
-RUN chmod +x /usr/local/bin/phpeek-pm
+COPY --from=builder /build/cbox-init /usr/local/bin/cbox-init
+RUN chmod +x /usr/local/bin/cbox-init
 
 # Set up directories
-RUN mkdir -p /etc/phpeek-pm && \
-    chown -R phpeek:phpeek /etc/phpeek-pm
+RUN mkdir -p /etc/cbox-init && \
+    chown -R cbox:cbox /etc/cbox-init
 
 # Switch to non-root user
-USER phpeek
+USER cbox
 
 # Expose ports
 EXPOSE 9090 9180
@@ -50,5 +50,5 @@ EXPOSE 9090 9180
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
     CMD wget -q -O- http://localhost:9180/api/v1/health || exit 1
 
-# Run phpeek-pm
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+# Run cbox-init
+ENTRYPOINT ["/usr/local/bin/cbox-init"]

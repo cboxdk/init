@@ -5,7 +5,7 @@ build/
 *.dll
 *.so
 *.dylib
-/phpeek-pm
+/cbox-init
 
 # Test binary, built with `go test -c`
 *.test
@@ -23,6 +23,8 @@ vendor/
 # IDE
 .idea/
 .vscode/
+.serena/
+.claude/
 *.swp
 *.swo
 *~
@@ -32,5 +34,5 @@ vendor/
 Thumbs.db
 
 # Config overrides for local development
-phpeek-pm.local.yaml
+cbox-init.local.yaml
 *.local.yaml

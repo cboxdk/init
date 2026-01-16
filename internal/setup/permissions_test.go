@@ -68,7 +68,7 @@ func TestPermissionManager_Setup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary directory
-			tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+			tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 			if err != nil {
 				t.Fatalf("Failed to create temp dir: %v", err)
 			}
@@ -98,7 +98,7 @@ func TestPermissionManager_Setup(t *testing.T) {
 
 func TestPermissionManager_CreateDir(t *testing.T) {
 	logger := slog.Default()
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestDetectFramework(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+			tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 			if err != nil {
 				t.Fatalf("Failed to create temp dir: %v", err)
 			}
@@ -211,7 +211,7 @@ func TestFileExists(t *testing.T) {
 		{
 			name: "file exists",
 			setup: func() (string, error) {
-				f, err := os.CreateTemp("", "phpeek-test-*")
+				f, err := os.CreateTemp("", "cbox-test-*")
 				if err != nil {
 					return "", err
 				}
@@ -230,7 +230,7 @@ func TestFileExists(t *testing.T) {
 		{
 			name: "directory instead of file",
 			setup: func() (string, error) {
-				return os.MkdirTemp("", "phpeek-test-*")
+				return os.MkdirTemp("", "cbox-test-*")
 			},
 			expected: false,
 		},
@@ -265,7 +265,7 @@ func TestDirExists(t *testing.T) {
 		{
 			name: "directory exists",
 			setup: func() (string, error) {
-				return os.MkdirTemp("", "phpeek-test-*")
+				return os.MkdirTemp("", "cbox-test-*")
 			},
 			expected: true,
 		},
@@ -279,7 +279,7 @@ func TestDirExists(t *testing.T) {
 		{
 			name: "file instead of directory",
 			setup: func() (string, error) {
-				f, err := os.CreateTemp("", "phpeek-test-*")
+				f, err := os.CreateTemp("", "cbox-test-*")
 				if err != nil {
 					return "", err
 				}
@@ -314,7 +314,7 @@ func TestPermissionManager_Setup_ReadOnlyRoot(t *testing.T) {
 	logger := slog.Default()
 
 	// Create temp dir
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -326,11 +326,11 @@ func TestPermissionManager_Setup_ReadOnlyRoot(t *testing.T) {
 	}
 
 	// Save original env var
-	originalEnv := os.Getenv("PHPEEK_PM_READ_ONLY_ROOT")
-	defer os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", originalEnv)
+	originalEnv := os.Getenv("CBOX_INIT_READ_ONLY_ROOT")
+	defer os.Setenv("CBOX_INIT_READ_ONLY_ROOT", originalEnv)
 
 	// Set read-only root
-	os.Setenv("PHPEEK_PM_READ_ONLY_ROOT", "true")
+	os.Setenv("CBOX_INIT_READ_ONLY_ROOT", "true")
 
 	// Create permission manager and run setup
 	pm := NewPermissionManager(tmpDir, logger)
@@ -355,7 +355,7 @@ func TestPermissionManager_SetupLaravel_DirectoryCreationFailure(t *testing.T) {
 	logger := slog.Default()
 
 	// Create temp dir
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestPermissionManager_SetupSymfony_DirectoryCreationFailure(t *testing.T) {
 	logger := slog.Default()
 
 	// Create temp dir
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -422,7 +422,7 @@ func TestPermissionManager_SetupWordPress_DirectoryCreationFailure(t *testing.T)
 	logger := slog.Default()
 
 	// Create temp dir
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -451,7 +451,7 @@ func TestPermissionManager_ChownRecursive(t *testing.T) {
 	logger := slog.Default()
 
 	// Create temp dir with nested structure
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -483,7 +483,7 @@ func TestPermissionManager_ChownRecursive_WithError(t *testing.T) {
 	logger := slog.Default()
 
 	// Create temp dir
-	tmpDir, err := os.MkdirTemp("", "phpeek-test-*")
+	tmpDir, err := os.MkdirTemp("", "cbox-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

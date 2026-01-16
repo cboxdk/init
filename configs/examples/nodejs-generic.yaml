@@ -2,8 +2,8 @@
 # Works with Express, Fastify, Koa, NestJS, Hono, or any Node.js server
 #
 # Environment variables set per instance:
-#   - PHPEEK_PM_INSTANCE_INDEX: 0, 1, 2, ... (numeric index)
-#   - PHPEEK_PM_INSTANCE_ID: processname-0, processname-1, ...
+#   - CBOX_INIT_INSTANCE_INDEX: 0, 1, 2, ... (numeric index)
+#   - CBOX_INIT_INSTANCE_ID: processname-0, processname-1, ...
 #   - PORT: Auto-calculated from port_base + instance index (if port_base set)
 
 version: "1.0"
@@ -127,12 +127,12 @@ processes:
 ---
 # PM2 Migration Reference
 #
-# | PM2 ecosystem.config.js     | PHPeek-PM equivalent           |
+# | PM2 ecosystem.config.js     | Cbox Init equivalent           |
 # |-----------------------------|--------------------------------|
 # | instances: 4                | scale: 4                       |
 # | exec_mode: "cluster"        | scale: N + port_base           |
 # | max_memory_restart: "500M"  | max_memory_mb: 500             |
-# | watch: true                 | phpeek-pm serve --watch        |
+# | watch: true                 | cbox-init serve --watch        |
 # | env_production: {...}       | env: {...}                     |
 # | cron_restart: "0 0 * * *"   | schedule: "0 0 * * *"          |
 # | wait_ready: true            | health_check.mode: readiness   |

@@ -66,7 +66,7 @@ func (pm *PermissionManager) Setup() error {
 	// Detect read-only root filesystem
 	if IsReadOnlyRoot() {
 		pm.logger.Info("Read-only root filesystem detected, skipping permission setup",
-			"info", "Runtime state will use /run/phpeek-pm (tmpfs)")
+			"info", "Runtime state will use /run/cbox-init (tmpfs)")
 		return nil
 	}
 

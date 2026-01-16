@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/hooks"
-	"github.com/gophpeek/phpeek-pm/internal/logger"
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/hooks"
+	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/metrics"
 )
 
 // ProcessState represents the lifecycle state of a process instance.
@@ -399,9 +399,9 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 	// Set environment variables
 	envVars := append(os.Environ(), s.envVars(instanceID, instanceIndex)...)
 	envVars = append(envVars,
-		fmt.Sprintf("PHPEEK_SERVICE=%s", s.name),
-		fmt.Sprintf("PHPEEK_INSTANCE=%s", instanceID),
-		fmt.Sprintf("PHPEEK_PROCESS=%s", s.name),
+		fmt.Sprintf("CBOX_SERVICE=%s", s.name),
+		fmt.Sprintf("CBOX_INSTANCE=%s", instanceID),
+		fmt.Sprintf("CBOX_PROCESS=%s", s.name),
 	)
 	cmd.Env = envVars
 
@@ -1053,9 +1053,9 @@ func (s *Supervisor) envVars(instanceID string, instanceIndex int) []string {
 
 	// Add instance-specific variables
 	envs = append(envs,
-		fmt.Sprintf("PHPEEK_PM_PROCESS_NAME=%s", s.name),
-		fmt.Sprintf("PHPEEK_PM_INSTANCE_ID=%s", instanceID),
-		fmt.Sprintf("PHPEEK_PM_INSTANCE_INDEX=%d", instanceIndex),
+		fmt.Sprintf("CBOX_INIT_PROCESS_NAME=%s", s.name),
+		fmt.Sprintf("CBOX_INIT_INSTANCE_ID=%s", instanceID),
+		fmt.Sprintf("CBOX_INIT_INSTANCE_INDEX=%d", instanceIndex),
 	)
 
 	// Add PORT env var if port_base is configured (for Node.js/web apps)

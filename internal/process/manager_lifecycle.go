@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/deps"
-	"github.com/gophpeek/phpeek-pm/internal/hooks"
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
-	"github.com/gophpeek/phpeek-pm/internal/schedule"
-	"github.com/gophpeek/phpeek-pm/internal/tracing"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/deps"
+	"github.com/cboxdk/init/internal/hooks"
+	"github.com/cboxdk/init/internal/metrics"
+	"github.com/cboxdk/init/internal/schedule"
+	"github.com/cboxdk/init/internal/tracing"
 	"go.opentelemetry.io/otel/attribute"
 )
 

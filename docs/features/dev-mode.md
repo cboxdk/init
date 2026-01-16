@@ -6,7 +6,7 @@ weight: 28
 
 # Development Mode
 
-PHPeek PM includes a development mode with configuration file watching and automatic reload capabilities. When config changes are detected, PHPeek gracefully reloads, making it easier to iterate on configurations during development.
+Cbox Init includes a development mode with configuration file watching and automatic reload capabilities. When config changes are detected, Cbox gracefully reloads, making it easier to iterate on configurations during development.
 
 ## Overview
 
@@ -21,10 +21,10 @@ PHPeek PM includes a development mode with configuration file watching and autom
 
 ```bash
 # Enable dev mode with --dev flag
-./phpeek-pm serve --dev
+./cbox-init serve --dev
 
 # Or with explicit config path
-./phpeek-pm serve --config phpeek-pm.yaml --dev
+./cbox-init serve --config cbox-init.yaml --dev
 
 # Dev mode watches the config file and auto-reloads on changes
 ```
@@ -33,16 +33,16 @@ PHPeek PM includes a development mode with configuration file watching and autom
 
 ### 1. Startup
 
-PHPeek PM starts normally and initializes all processes with `--dev` flag:
+Cbox Init starts normally and initializes all processes with `--dev` flag:
 
 ```bash
-$ ./phpeek-pm serve --config myconfig.yaml --dev
+$ ./cbox-init serve --config myconfig.yaml --dev
 
-🚀 PHPeek Process Manager v1.0.0
+🚀 Cbox Init v1.0.0
 time=2025-11-23T15:23:38.935+01:00 level=INFO msg="Development mode enabled" watch_config=/path/to/myconfig.yaml
 time=2025-11-23T15:23:38.935+01:00 level=INFO msg="Config watcher started" path=/path/to/myconfig.yaml debounce=2s
 
-# PHPeek PM starts all processes normally...
+# Cbox Init starts all processes normally...
 ```
 
 ### 2. File Watching
@@ -50,7 +50,7 @@ time=2025-11-23T15:23:38.935+01:00 level=INFO msg="Config watcher started" path=
 Watcher monitors the configuration file for changes:
 
 ```bash
-# Terminal 1: PHPeek PM running with --dev
+# Terminal 1: Cbox Init running with --dev
 ```
 
 ```bash
@@ -83,7 +83,7 @@ time=2025-11-23T15:23:58.752+01:00 level=INFO msg="Initiating graceful shutdown"
 ```bash
 time=2025-11-23T15:24:10.123+01:00 level=INFO msg="Config file changed, triggering reload"
 time=2025-11-23T15:24:10.124+01:00 level=ERROR msg="Config reload failed" error="invalid config: depends_on contains unknown process: 'nonexistent-process'"
-# PHPeek PM continues running with old configuration
+# Cbox Init continues running with old configuration
 ```
 
 ### 5. Graceful Reload
@@ -100,19 +100,19 @@ time=2025-11-23T15:24:00.500+01:00 level=INFO msg="All processes stopped success
 
 ### 6. Exit Message
 
-PHPeek PM exits cleanly with message:
+Cbox Init exits cleanly with message:
 
 ```bash
-time=2025-11-23T15:24:00.752+01:00 level=INFO msg="Config reload complete - restart PHPeek PM to apply changes"
+time=2025-11-23T15:24:00.752+01:00 level=INFO msg="Config reload complete - restart Cbox Init to apply changes"
 ```
 
 ### 7. Manual Restart
 
-User restarts PHPeek PM to apply new configuration:
+User restarts Cbox Init to apply new configuration:
 
 ```bash
-$ ./phpeek-pm serve --config myconfig.yaml --dev
-# PHPeek PM starts with new configuration
+$ ./cbox-init serve --config myconfig.yaml --dev
+# Cbox Init starts with new configuration
 ```
 
 ## Configuration
@@ -121,7 +121,7 @@ $ ./phpeek-pm serve --config myconfig.yaml --dev
 
 ```bash
 # Enable dev mode
-./phpeek-pm serve --dev
+./cbox-init serve --dev
 ```
 
 **Not a config file setting:**
@@ -131,7 +131,7 @@ global:
   dev_mode: true  # Not a valid config option
 
 # ✅ Use --dev flag instead
-./phpeek-pm serve --dev
+./cbox-init serve --dev
 ```
 
 ## File Watcher Behavior
@@ -171,21 +171,21 @@ time=2025-11-23T15:24:21.000+01:00 level=DEBUG msg="Config change debounced" sin
 Watcher monitors the configuration file specified via:
 
 1. `--config` flag (explicit path)
-2. `PHPEEK_PM_CONFIG` environment variable
+2. `CBOX_INIT_CONFIG` environment variable
 3. Auto-detected paths (priority order):
-   - `phpeek-pm.yaml` (current directory)
-   - `/etc/phpeek-pm/phpeek-pm.yaml` (system-wide)
-   - `~/.phpeek/pm/config.yaml` (user-specific)
+   - `cbox-init.yaml` (current directory)
+   - `/etc/cbox-init/cbox-init.yaml` (system-wide)
+   - `~/.cbox/init/config.yaml` (user-specific)
 
 **Example:**
 ```bash
 # Watches explicit config
-./phpeek-pm serve --config custom.yaml --dev
+./cbox-init serve --config custom.yaml --dev
 # Watches: custom.yaml
 
 # Watches auto-detected config
-./phpeek-pm serve --dev
-# Watches: phpeek-pm.yaml (if exists)
+./cbox-init serve --dev
+# Watches: cbox-init.yaml (if exists)
 ```
 
 ## Validation Before Reload
@@ -218,7 +218,7 @@ processes:
 
 # Result: Error logged, reload aborted ❌
 time=2025-11-23T15:24:10.124+01:00 level=ERROR msg="Config reload failed" error="invalid config: scale must be integer"
-# PHPeek continues with old config
+# Cbox continues with old config
 ```
 
 ### Circular Dependency Example
@@ -239,9 +239,9 @@ time=2025-11-23T15:24:10.124+01:00 level=ERROR msg="Config reload failed" error=
 
 ### Typical Iteration Cycle
 
-**1. Start PHPeek with dev mode:**
+**1. Start Cbox with dev mode:**
 ```bash
-./phpeek-pm serve --config dev.yaml --dev
+./cbox-init serve --config dev.yaml --dev
 ```
 
 **2. Edit configuration:**
@@ -258,12 +258,12 @@ time=2025-11-23T15:24:00.750+01:00 level=INFO msg="Config file changed, triggeri
 time=2025-11-23T15:24:00.752+01:00 level=INFO msg="Config reload triggered"
 time=2025-11-23T15:24:00.753+01:00 level=INFO msg="Initiating graceful shutdown"
 ...
-time=2025-11-23T15:24:01.500+01:00 level=INFO msg="Config reload complete - restart PHPeek PM to apply changes"
+time=2025-11-23T15:24:01.500+01:00 level=INFO msg="Config reload complete - restart Cbox Init to apply changes"
 ```
 
 **4. Restart to apply:**
 ```bash
-./phpeek-pm serve --config dev.yaml --dev
+./cbox-init serve --config dev.yaml --dev
 # New configuration active
 ```
 
@@ -272,7 +272,7 @@ time=2025-11-23T15:24:01.500+01:00 level=INFO msg="Config reload complete - rest
 # Check process list
 curl http://localhost:9180/api/v1/processes
 # OR
-./phpeek-pm tui
+./cbox-init tui
 ```
 
 **6. Iterate:**
@@ -358,14 +358,14 @@ processes:
 
 ### 1. Manual Restart Required
 
-**PHPeek exits after reload** (does not auto-restart):
+**Cbox exits after reload** (does not auto-restart):
 
 ```bash
-time=2025-11-23T15:24:00.752+01:00 level=INFO msg="Config reload complete - restart PHPeek PM to apply changes"
+time=2025-11-23T15:24:00.752+01:00 level=INFO msg="Config reload complete - restart Cbox Init to apply changes"
 # Process exits with code 0
 
 # User must restart manually:
-./phpeek-pm serve --config config.yaml --dev
+./cbox-init serve --config config.yaml --dev
 ```
 
 **Rationale:**
@@ -377,15 +377,15 @@ time=2025-11-23T15:24:00.752+01:00 level=INFO msg="Config reload complete - rest
 ```bash
 # Use systemd with Restart=always
 [Unit]
-Description=PHPeek PM
+Description=Cbox Init
 
 [Service]
-ExecStart=/usr/local/bin/phpeek-pm serve --dev
+ExecStart=/usr/local/bin/cbox-init serve --dev
 Restart=always
 
 # OR use simple loop (not recommended for production)
 while true; do
-  ./phpeek-pm serve --dev
+  ./cbox-init serve --dev
   sleep 1
 done
 ```
@@ -446,7 +446,7 @@ processes:
 
 2. **Use explicit config path:**
    ```bash
-   ./phpeek-pm serve --config /absolute/path/to/config.yaml --dev
+   ./cbox-init serve --config /absolute/path/to/config.yaml --dev
    ```
 
 3. **Check filesystem support:**
@@ -492,7 +492,7 @@ time=2025-11-23T15:24:20.500+01:00 level=DEBUG msg="Config change debounced" sin
 
 2. **Validate manually:**
    ```bash
-   ./phpeek-pm check-config --config config.yaml --strict
+   ./cbox-init check-config --config config.yaml --strict
    ```
 
 3. **Common issues:**
@@ -508,7 +508,7 @@ time=2025-11-23T15:24:20.500+01:00 level=DEBUG msg="Config change debounced" sin
 **❌ Don't do this:**
 ```bash
 # Production container
-docker run myapp /usr/local/bin/phpeek-pm serve --dev
+docker run myapp /usr/local/bin/cbox-init serve --dev
 ```
 
 **✅ Use dev mode only for:**
@@ -527,17 +527,17 @@ docker run myapp /usr/local/bin/phpeek-pm serve --dev
 
 ```bash
 # ✅ Development
-./phpeek-pm serve --dev
+./cbox-init serve --dev
 
 # ❌ Production
-./phpeek-pm serve  # No --dev flag
+./cbox-init serve  # No --dev flag
 ```
 
 ### 2. Validate Before Saving
 
 ```bash
 # Validate in another terminal before saving
-./phpeek-pm check-config --config config.yaml --strict
+./cbox-init check-config --config config.yaml --strict
 
 # If valid, save file
 # If invalid, fix errors first
@@ -558,8 +558,8 @@ docker run myapp /usr/local/bin/phpeek-pm serve --dev
 ### 4. Watch the Logs
 
 ```bash
-# Keep PHPeek PM logs visible
-./phpeek-pm serve --dev | tee phpeek.log
+# Keep Cbox Init logs visible
+./cbox-init serve --dev | tee cbox.log
 
 # Watch for:
 # - Config change detection
@@ -572,7 +572,7 @@ docker run myapp /usr/local/bin/phpeek-pm serve --dev
 
 ```bash
 # Before making risky changes
-./phpeek-pm check-config --config config.yaml
+./cbox-init check-config --config config.yaml
 
 # Intentionally make invalid change
 # Observe validation prevents reload
@@ -595,8 +595,8 @@ git checkout config.yaml
 ### Example 1: Iterating on Worker Counts
 
 ```bash
-# Terminal 1: Start PHPeek with dev mode
-./phpeek-pm serve --config dev.yaml --dev
+# Terminal 1: Start Cbox with dev mode
+./cbox-init serve --config dev.yaml --dev
 ```
 
 ```bash
@@ -607,8 +607,8 @@ vim dev.yaml
 # Change to: scale: 5
 # Save
 
-# PHPeek auto-reloads
-# Restart PHPeek to apply
+# Cbox auto-reloads
+# Restart Cbox to apply
 
 # Test with 5 workers
 
@@ -622,7 +622,7 @@ vim dev.yaml
 
 ```bash
 # Terminal 1: Running with info level
-./phpeek-pm serve --config dev.yaml --dev
+./cbox-init serve --config dev.yaml --dev
 ```
 
 ```bash
@@ -671,4 +671,4 @@ health_check:
 
 - [Configuration Validation](../configuration/validation) - Validate changes before reload
 - [Configuration Overview](../configuration/overview) - Complete configuration reference
-- [Quick Start](../getting-started/quickstart) - Get started with PHPeek PM
+- [Quick Start](../getting-started/quickstart) - Get started with Cbox Init

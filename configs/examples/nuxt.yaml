@@ -6,7 +6,7 @@
 #   - Server entrypoint: .output/server/index.mjs
 #
 # For scaled deployments, each instance gets unique env vars:
-#   - PHPEEK_PM_INSTANCE_INDEX: 0, 1, 2, ... (numeric)
+#   - CBOX_INIT_INSTANCE_INDEX: 0, 1, 2, ... (numeric)
 #   - PORT: Auto-calculated from port_base + instance index
 
 version: "1.0"

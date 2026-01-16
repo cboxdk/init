@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/config"
+	"github.com/cboxdk/init/internal/config"
 )
 
 func TestNewHealthChecker(t *testing.T) {

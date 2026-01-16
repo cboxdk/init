@@ -1,12 +1,12 @@
 ---
 title: "Installation"
-description: "Download and install PHPeek PM for your platform in minutes"
+description: "Download and install Cbox Init for your platform in minutes"
 weight: 3
 ---
 
 # Installation
 
-PHPeek PM is distributed as a single static binary with zero dependencies, making installation straightforward.
+Cbox Init is distributed as a single static binary with zero dependencies, making installation straightforward.
 
 ## Download Pre-Built Binary
 
@@ -16,31 +16,31 @@ Download the latest version from GitHub releases:
 
 ```bash
 # Linux AMD64
-wget https://github.com/gophpeek/phpeek-pm/releases/latest/download/phpeek-pm-linux-amd64
-chmod +x phpeek-pm-linux-amd64
-mv phpeek-pm-linux-amd64 /usr/local/bin/phpeek-pm
+wget https://github.com/cboxdk/init/releases/latest/download/cbox-init-linux-amd64
+chmod +x cbox-init-linux-amd64
+mv cbox-init-linux-amd64 /usr/local/bin/cbox-init
 
 # Linux ARM64
-wget https://github.com/gophpeek/phpeek-pm/releases/latest/download/phpeek-pm-linux-arm64
-chmod +x phpeek-pm-linux-arm64
-mv phpeek-pm-linux-arm64 /usr/local/bin/phpeek-pm
+wget https://github.com/cboxdk/init/releases/latest/download/cbox-init-linux-arm64
+chmod +x cbox-init-linux-arm64
+mv cbox-init-linux-arm64 /usr/local/bin/cbox-init
 
 # macOS AMD64
-wget https://github.com/gophpeek/phpeek-pm/releases/latest/download/phpeek-pm-darwin-amd64
-chmod +x phpeek-pm-darwin-amd64
-mv phpeek-pm-darwin-amd64 /usr/local/bin/phpeek-pm
+wget https://github.com/cboxdk/init/releases/latest/download/cbox-init-darwin-amd64
+chmod +x cbox-init-darwin-amd64
+mv cbox-init-darwin-amd64 /usr/local/bin/cbox-init
 
 # macOS ARM64 (Apple Silicon)
-wget https://github.com/gophpeek/phpeek-pm/releases/latest/download/phpeek-pm-darwin-arm64
-chmod +x phpeek-pm-darwin-arm64
-mv phpeek-pm-darwin-arm64 /usr/local/bin/phpeek-pm
+wget https://github.com/cboxdk/init/releases/latest/download/cbox-init-darwin-arm64
+chmod +x cbox-init-darwin-arm64
+mv cbox-init-darwin-arm64 /usr/local/bin/cbox-init
 ```
 
 ### Verify Installation
 
 ```bash
-phpeek-pm --version
-# Output: PHPeek Process Manager v1.0.0
+cbox-init --version
+# Output: Cbox Init v1.0.0
 ```
 
 ## Docker Installation
@@ -48,17 +48,17 @@ phpeek-pm --version
 ### Using Official Image (Recommended)
 
 ```dockerfile
-FROM gophpeek/phpeek-pm:latest AS phpeek
+FROM cboxdk/init:latest AS cbox
 
 FROM php:8.3-fpm-alpine
 
-# Copy phpeek-pm binary
-COPY --from=phpeek /usr/local/bin/phpeek-pm /usr/local/bin/phpeek-pm
+# Copy cbox-init binary
+COPY --from=cbox /usr/local/bin/cbox-init /usr/local/bin/cbox-init
 
 # Copy configuration
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ### Download in Dockerfile
@@ -66,15 +66,15 @@ ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
 ```dockerfile
 FROM php:8.3-fpm-alpine
 
-# Install PHPeek PM
-RUN wget -O /usr/local/bin/phpeek-pm \
-    https://github.com/gophpeek/phpeek-pm/releases/latest/download/phpeek-pm-linux-amd64 \
-    && chmod +x /usr/local/bin/phpeek-pm
+# Install Cbox Init
+RUN wget -O /usr/local/bin/cbox-init \
+    https://github.com/cboxdk/init/releases/latest/download/cbox-init-linux-amd64 \
+    && chmod +x /usr/local/bin/cbox-init
 
 # Copy configuration
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Build from Source
@@ -88,23 +88,23 @@ ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
 
 ```bash
 # Clone repository
-git clone https://github.com/gophpeek/phpeek-pm.git
-cd phpeek-pm
+git clone https://github.com/cboxdk/init.git
+cd cbox-init
 
 # Build for current platform
 make build
 
-# Binary created at: build/phpeek-pm
-./build/phpeek-pm --version
+# Binary created at: build/cbox-init
+./build/cbox-init --version
 
 # Build for all platforms
 make build-all
 
 # Binaries created in build/ directory:
-# - phpeek-pm-linux-amd64
-# - phpeek-pm-linux-arm64
-# - phpeek-pm-darwin-amd64
-# - phpeek-pm-darwin-arm64
+# - cbox-init-linux-amd64
+# - cbox-init-linux-arm64
+# - cbox-init-darwin-amd64
+# - cbox-init-darwin-arm64
 ```
 
 ### Build Options
@@ -129,10 +129,10 @@ Create a basic configuration file:
 
 ```bash
 # Create directory
-sudo mkdir -p /etc/phpeek-pm
+sudo mkdir -p /etc/cbox-init
 
 # Create minimal configuration
-cat > /etc/phpeek-pm/phpeek-pm.yaml <<EOF
+cat > /etc/cbox-init/cbox-init.yaml <<EOF
 version: "1.0"
 
 global:
@@ -153,16 +153,16 @@ Test your installation with a simple configuration:
 
 ```bash
 # Run with explicit config path
-phpeek-pm --config phpeek-pm.yaml
+cbox-init --config cbox-init.yaml
 
 # Or use environment variable
-PHPEEK_PM_CONFIG=phpeek-pm.yaml phpeek-pm
+CBOX_INIT_CONFIG=cbox-init.yaml cbox-init
 
 # Or use default location
-# PHPeek PM looks for config in order:
-# 1. PHPEEK_PM_CONFIG env var
-# 2. /etc/phpeek-pm/phpeek-pm.yaml
-# 3. ./phpeek-pm.yaml (current directory)
+# Cbox Init looks for config in order:
+# 1. CBOX_INIT_CONFIG env var
+# 2. /etc/cbox-init/cbox-init.yaml
+# 3. ./cbox-init.yaml (current directory)
 ```
 
 ## Platform Support
@@ -189,8 +189,8 @@ PHPEEK_PM_CONFIG=phpeek-pm.yaml phpeek-pm
 
 ## Next Steps
 
-Now that PHPeek PM is installed, proceed to:
+Now that Cbox Init is installed, proceed to:
 
 - [Quick Start](quickstart) - Run your first multi-process setup
-- [Docker Integration](docker-integration) - Use PHPeek PM as PID 1
+- [Docker Integration](docker-integration) - Use Cbox Init as PID 1
 - [Configuration](../configuration/overview) - Learn about configuration options

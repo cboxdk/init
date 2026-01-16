@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/testutil"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/testutil"
 )
 
 // TestManager_GracefulShutdown tests graceful shutdown with timeout
@@ -133,7 +133,7 @@ func TestManager_ShutdownTimeout(t *testing.T) {
 // TestManager_PreStopHooks tests pre-stop hook execution
 func TestManager_PreStopHooks(t *testing.T) {
 	// Create a temporary file to track hook execution
-	tmpfile := "/tmp/phpeek-pm-test-prehook"
+	tmpfile := "/tmp/cbox-init-test-prehook"
 	os.Remove(tmpfile) // Clean up from previous runs
 
 	cfg := &config.Config{
@@ -198,9 +198,9 @@ func TestManager_PreStopHooks(t *testing.T) {
 // TestManager_ShutdownOrder tests processes shutdown in reverse priority order
 func TestManager_ShutdownOrder(t *testing.T) {
 	// Track shutdown order via temporary files
-	file1 := "/tmp/phpeek-pm-test-process1"
-	file2 := "/tmp/phpeek-pm-test-process2"
-	file3 := "/tmp/phpeek-pm-test-process3"
+	file1 := "/tmp/cbox-init-test-process1"
+	file2 := "/tmp/cbox-init-test-process2"
+	file3 := "/tmp/cbox-init-test-process3"
 
 	// Cleanup
 	os.Remove(file1)

@@ -6,7 +6,7 @@ weight: 40
 
 # Observability
 
-PHPeek PM provides comprehensive observability features for monitoring, debugging, and integrating with your existing infrastructure.
+Cbox Init provides comprehensive observability features for monitoring, debugging, and integrating with your existing infrastructure.
 
 ## In This Section
 
@@ -19,7 +19,7 @@ PHPeek PM provides comprehensive observability features for monitoring, debuggin
 
 ### Metrics & Monitoring
 
-PHPeek PM exposes Prometheus-compatible metrics for:
+Cbox Init exposes Prometheus-compatible metrics for:
 - Process state and health
 - Resource usage (CPU, memory, file descriptors)
 - Restart counts and failure rates
@@ -61,7 +61,7 @@ global:
   # Management API
   api_enabled: true
   api_port: 9180
-  api_socket: /var/run/phpeek-pm.sock
+  api_socket: /var/run/cbox-init.sock
 ```
 
 See individual pages for detailed configuration options.

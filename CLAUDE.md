@@ -4,7 +4,7 @@ Guidance for Claude Code when working with this repository.
 
 ## Project Overview
 
-PHPeek Process Manager (phpeek-pm) is a production-grade PID 1 process manager for Docker containers, designed for PHP applications. Written in Go, it manages multiple processes (PHP-FPM, Nginx, queue workers, framework daemons) with proper signal handling, zombie reaping, health checks, and graceful shutdown. Works with Laravel, Symfony, WordPress, and any PHP framework.
+Cbox Init (cbox-init) is a production-grade PID 1 process manager for Docker containers, designed for PHP applications. Written in Go, it manages multiple processes (PHP-FPM, Nginx, queue workers, framework daemons) with proper signal handling, zombie reaping, health checks, and graceful shutdown. Works with Laravel, Symfony, WordPress, and any PHP framework.
 
 **Status**: Production-ready. All core features implemented.
 
@@ -12,7 +12,7 @@ PHPeek Process Manager (phpeek-pm) is a production-grade PID 1 process manager f
 
 ```bash
 # Build
-make build              # Current platform → build/phpeek-pm
+make build              # Current platform → build/cbox-init
 make build-all          # All platforms (Linux/macOS, AMD64/ARM64)
 make dev                # Build and run locally
 make clean              # Remove build artifacts
@@ -30,30 +30,30 @@ make deps               # Download and tidy
 
 ```bash
 # Basic usage
-./build/phpeek-pm                              # Auto-detects config
-./build/phpeek-pm --config configs/examples/minimal.yaml
-./build/phpeek-pm serve --watch                # Watch mode (hot-reload)
+./build/cbox-init                              # Auto-detects config
+./build/cbox-init --config configs/examples/minimal.yaml
+./build/cbox-init serve --watch                # Watch mode (hot-reload)
 
-# Config priority: --config flag > PHPEEK_PM_CONFIG env > ~/.phpeek/pm/config.yaml > /etc/phpeek/pm/config.yaml > phpeek-pm.yaml
+# Config priority: --config flag > CBOX_INIT_CONFIG env > /etc/cbox-init/cbox-init.yaml > cbox-init.yaml
 
 # Validation
-./build/phpeek-pm check-config                 # Full validation
-./build/phpeek-pm check-config --strict        # Fail on warnings (CI/CD)
-./build/phpeek-pm check-config --json          # JSON output
+./build/cbox-init check-config                 # Full validation
+./build/cbox-init check-config --strict        # Fail on warnings (CI/CD)
+./build/cbox-init check-config --json          # JSON output
 
 # TUI
-./build/phpeek-pm tui                          # Local (Unix socket)
-./build/phpeek-pm tui --url http://host:9180   # Remote (TCP)
+./build/cbox-init tui                          # Local (Unix socket)
+./build/cbox-init tui --url http://host:9180   # Remote (TCP)
 
 # Scaffolding
-./build/phpeek-pm scaffold laravel             # Generate Laravel config
-./build/phpeek-pm scaffold --interactive       # Interactive mode
+./build/cbox-init scaffold laravel             # Generate Laravel config
+./build/cbox-init scaffold --interactive       # Interactive mode
 ```
 
 ## Directory Structure
 
 ```
-cmd/phpeek-pm/          # Main entry point
+cmd/cbox-init/          # Main entry point
 internal/
   config/               # Configuration loading and validation
   logger/               # Structured logging (slog)

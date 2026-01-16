@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/gophpeek/phpeek-pm/internal/process"
+	"github.com/cboxdk/init/internal/process"
 )
 
 // TestUpdateProcessTable tests process table update logic

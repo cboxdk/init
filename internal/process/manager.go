@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
-	"github.com/gophpeek/phpeek-pm/internal/readiness"
-	"github.com/gophpeek/phpeek-pm/internal/schedule"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/metrics"
+	"github.com/cboxdk/init/internal/readiness"
+	"github.com/cboxdk/init/internal/schedule"
 )
 
 // Default timeouts and limits for process management operations.

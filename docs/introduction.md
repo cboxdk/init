@@ -4,13 +4,13 @@ description: "Production-grade PID 1 process manager for PHP applications in Doc
 weight: 1
 ---
 
-# PHPeek Process Manager
+# Cbox Init
 
-PHPeek PM is a production-grade process manager designed specifically for running PHP applications in Docker containers. Built in Go, it serves as PID 1, providing proper signal handling, zombie reaping, and graceful shutdown for multi-process orchestration.
+Cbox Init is a production-grade process manager designed specifically for running PHP applications in Docker containers. Built in Go, it serves as PID 1, providing proper signal handling, zombie reaping, and graceful shutdown for multi-process orchestration.
 
-## What is PHPeek PM?
+## What is Cbox Init?
 
-PHPeek PM manages multiple processes within a single Docker container, making it ideal for PHP applications that need to run:
+Cbox Init manages multiple processes within a single Docker container, making it ideal for PHP applications that need to run:
 
 - PHP-FPM for web requests
 - Nginx as a reverse proxy
@@ -19,7 +19,7 @@ PHPeek PM manages multiple processes within a single Docker container, making it
 - Scheduled tasks (cron jobs)
 - Framework-specific daemons (Horizon, Messenger, wp-cron, etc.)
 
-## Why PHPeek PM?
+## Why Cbox Init?
 
 **PID 1 Capability**
 - Proper signal handling (SIGTERM, SIGINT, SIGQUIT)
@@ -43,7 +43,7 @@ PHPeek PM manages multiple processes within a single Docker container, making it
 - Structured JSON logging
 - Framework detection (Laravel, Symfony, WordPress)
 
-## Who Should Use PHPeek PM?
+## Who Should Use Cbox Init?
 
 **Perfect For**
 - PHP applications needing multiple services in one container
@@ -61,7 +61,7 @@ PHPeek PM manages multiple processes within a single Docker container, making it
 
 ```
 ┌─────────────────────────────────────────────────┐
-│         PHPeek PM (PID 1)                      │
+│         Cbox Init (PID 1)                      │
 │                                                 │
 │  ┌──────────┐  ┌──────────┐  ┌─────────────┐ │
 │  │ Metrics  │  │   API    │  │  Heartbeat  │ │
@@ -179,13 +179,13 @@ processes:
 
 ## Next Steps
 
-- [Installation](getting-started/installation) - Get PHPeek PM installed
+- [Installation](getting-started/installation) - Get Cbox Init installed
 - [Quick Start](getting-started/quickstart) - 5-minute getting started guide
 - [Configuration](configuration/overview) - Complete configuration reference
 - [Examples](examples/) - Real-world configuration examples
 
 ## Community
 
-- [GitHub Repository](https://github.com/gophpeek/phpeek-pm)
-- [Issue Tracker](https://github.com/gophpeek/phpeek-pm/issues)
-- [Discussions](https://github.com/gophpeek/phpeek-pm/discussions)
+- [GitHub Repository](https://github.com/cboxdk/init)
+- [Issue Tracker](https://github.com/cboxdk/init/issues)
+- [Discussions](https://github.com/cboxdk/init/discussions)

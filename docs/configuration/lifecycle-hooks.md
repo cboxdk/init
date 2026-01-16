@@ -170,11 +170,11 @@ processes:
 ```
 
 **How it works:**
-1. PHPeek PM sends `horizon:terminate` command
+1. Cbox Init sends `horizon:terminate` command
 2. Horizon stops accepting new jobs
 3. Horizon finishes currently running jobs
 4. Horizon exits gracefully
-5. If timeout expires, PHPeek PM sends SIGTERM
+5. If timeout expires, Cbox Init sends SIGTERM
 
 ## Process Post-Stop Hooks
 

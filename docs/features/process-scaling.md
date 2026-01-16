@@ -105,22 +105,22 @@ Each instance receives unique environment variables:
 
 ```bash
 # Instance 1
-PHPEEK_PM_INSTANCE_ID=worker-1
-PHPEEK_PM_INSTANCE_NUMBER=1
+CBOX_INIT_INSTANCE_ID=worker-1
+CBOX_INIT_INSTANCE_NUMBER=1
 
 # Instance 2
-PHPEEK_PM_INSTANCE_ID=worker-2
-PHPEEK_PM_INSTANCE_NUMBER=2
+CBOX_INIT_INSTANCE_ID=worker-2
+CBOX_INIT_INSTANCE_NUMBER=2
 
 # Instance 3
-PHPEEK_PM_INSTANCE_ID=worker-3
-PHPEEK_PM_INSTANCE_NUMBER=3
+CBOX_INIT_INSTANCE_ID=worker-3
+CBOX_INIT_INSTANCE_NUMBER=3
 ```
 
 **Use in application:**
 ```php
-$instanceId = getenv('PHPEEK_PM_INSTANCE_ID');
-$instanceNum = getenv('PHPEEK_PM_INSTANCE_NUMBER');
+$instanceId = getenv('CBOX_INIT_INSTANCE_ID');
+$instanceNum = getenv('CBOX_INIT_INSTANCE_NUMBER');
 
 Log::info("Worker starting", [
     'instance_id' => $instanceId,
@@ -134,10 +134,10 @@ Log::info("Worker starting", [
 
 ```bash
 # Start with 3 workers
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=3 ./phpeek-pm
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=3 ./cbox-init
 
 # Scale to 10 workers (restart required)
-PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=10 ./phpeek-pm
+CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=10 ./cbox-init
 ```
 
 ### Via Management API
@@ -221,7 +221,7 @@ services:
   app:
     environment:
       CPU_COUNT: "4"
-      PHPEEK_PM_PROCESS_QUEUE_WORKERS_SCALE: "4"
+      CBOX_INIT_PROCESS_QUEUE_WORKERS_SCALE: "4"
     deploy:
       resources:
         limits:
@@ -243,7 +243,7 @@ MEMORY_GB=4
 MEMORY_PER_WORKER_MB=400
 WORKER_COUNT=$((MEMORY_GB * 1024 / MEMORY_PER_WORKER_MB))
 
-export PHPEEK_PM_PROCESS_QUEUE_WORKERS_SCALE=$WORKER_COUNT
+export CBOX_INIT_PROCESS_QUEUE_WORKERS_SCALE=$WORKER_COUNT
 ```
 
 ### Queue-Depth-Based Scaling
@@ -253,7 +253,7 @@ export PHPEEK_PM_PROCESS_QUEUE_WORKERS_SCALE=$WORKER_COUNT
 QUEUE_DEPTH=$(redis-cli llen queues:default)
 WORKERS=$((QUEUE_DEPTH / 100 + 1))  # 1 worker per 100 jobs, minimum 1
 
-export PHPEEK_PM_PROCESS_QUEUE_DEFAULT_SCALE=$WORKERS
+export CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=$WORKERS
 ```
 
 ### Time-Based Scaling
@@ -323,15 +323,15 @@ server {
 
 ```bash
 # Count running instances
-count(phpeek_pm_process_up{process=~"queue-default-.*"})
+count(cbox_init_process_up{process=~"queue-default-.*"})
 
 # Per-instance uptime
-phpeek_pm_process_up{process="queue-default-1"}
-phpeek_pm_process_up{process="queue-default-2"}
-phpeek_pm_process_up{process="queue-default-3"}
+cbox_init_process_up{process="queue-default-1"}
+cbox_init_process_up{process="queue-default-2"}
+cbox_init_process_up{process="queue-default-3"}
 
 # Total restarts across all instances
-sum(phpeek_pm_process_restarts_total{process=~"queue-default-.*"})
+sum(cbox_init_process_restarts_total{process=~"queue-default-.*"})
 ```
 
 ### Management API
@@ -437,7 +437,7 @@ upstream api_backend {
 ```yaml
 processes:
   worker:
-    command: ["./worker", "--id=${PHPEEK_PM_INSTANCE_NUMBER}"]
+    command: ["./worker", "--id=${CBOX_INIT_INSTANCE_NUMBER}"]
     scale: 3
 ```
 

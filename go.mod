@@ -1,4 +1,4 @@
-module github.com/gophpeek/phpeek-pm
+module github.com/cboxdk/init
 
 go 1.24.0
 

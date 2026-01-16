@@ -1,23 +1,23 @@
 ---
 title: "Minimal Setup"
-description: "Simple PHP-FPM configuration for development and testing with PHPeek PM"
+description: "Simple PHP-FPM configuration for development and testing with Cbox Init"
 weight: 30
 ---
 
 # Minimal Setup Example
 
-The simplest PHPeek PM configuration for running PHP-FPM in a container.
+The simplest Cbox Init configuration for running PHP-FPM in a container.
 
 ## Use Cases
 
 - ✅ Development and local testing
-- ✅ Learning PHPeek PM basics
+- ✅ Learning Cbox Init basics
 - ✅ Single-process PHP applications
 - ✅ Proof-of-concept deployments
 
 ## Complete Configuration
 
-**File:** `phpeek-pm.yaml`
+**File:** `cbox-init.yaml`
 
 ```yaml
 version: "1.0"
@@ -75,21 +75,21 @@ processes:
 ```dockerfile
 FROM php:8.3-fpm-alpine
 
-# Install PHPeek PM
-COPY --from=ghcr.io/gophpeek/phpeek-pm:latest /phpeek-pm /usr/local/bin/phpeek-pm
+# Install Cbox Init
+COPY --from=ghcr.io/cboxdk/init:latest /cbox-init /usr/local/bin/cbox-init
 
 # Copy application
 WORKDIR /var/www/html
 COPY . .
 
 # Copy configuration
-COPY phpeek-pm.yaml /etc/phpeek-pm/phpeek-pm.yaml
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # Expose PHP-FPM port (for Nginx in separate container)
 EXPOSE 9000
 
-# Run PHPeek PM as PID 1
-ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
+# Run Cbox Init as PID 1
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
 ## Running the Example
@@ -97,11 +97,11 @@ ENTRYPOINT ["/usr/local/bin/phpeek-pm"]
 ### Local Development
 
 ```bash
-# Build PHPeek PM
+# Build Cbox Init
 make build
 
 # Create minimal configuration
-cat > phpeek-pm.yaml <<'EOF'
+cat > cbox-init.yaml <<'EOF'
 version: "1.0"
 global:
   shutdown_timeout: 30
@@ -114,7 +114,7 @@ processes:
 EOF
 
 # Run
-./build/phpeek-pm
+./build/cbox-init
 ```
 
 ### Docker
@@ -144,8 +144,8 @@ services:
 ## Expected Output
 
 ```json
-{"time":"2024-11-21T10:00:00Z","level":"INFO","msg":"PHPeek Process Manager starting","version":"1.0.0"}
-{"time":"2024-11-21T10:00:00Z","level":"INFO","msg":"Loading configuration","path":"phpeek-pm.yaml"}
+{"time":"2024-11-21T10:00:00Z","level":"INFO","msg":"Cbox Init starting","version":"1.0.0"}
+{"time":"2024-11-21T10:00:00Z","level":"INFO","msg":"Loading configuration","path":"cbox-init.yaml"}
 {"time":"2024-11-21T10:00:00Z","level":"INFO","msg":"Starting process","process":"php-fpm","priority":10}
 {"time":"2024-11-21T10:00:01Z","level":"INFO","msg":"Process started successfully","process":"php-fpm","pid":15}
 {"time":"2024-11-21T10:00:01Z","level":"INFO","msg":"All processes started"}
@@ -166,7 +166,7 @@ Once you have the minimal setup working:
 
 ```bash
 # Via environment variable
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug ./phpeek-pm
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug ./cbox-init
 
 # Via YAML
 global:
@@ -196,7 +196,7 @@ processes:
 **Check logs:**
 ```bash
 # Run with debug logging
-PHPEEK_PM_GLOBAL_LOG_LEVEL=debug ./phpeek-pm
+CBOX_INIT_GLOBAL_LOG_LEVEL=debug ./cbox-init
 ```
 
 **Common issues:**

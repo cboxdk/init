@@ -1,12 +1,12 @@
 ---
 title: "Configuration"
-description: "Complete configuration reference for PHPeek Process Manager"
+description: "Complete configuration reference for Cbox Init"
 weight: 10
 ---
 
 # Configuration
 
-Complete reference for configuring PHPeek PM with YAML and environment variables.
+Complete reference for configuring Cbox Init with YAML and environment variables.
 
 ## In This Section
 

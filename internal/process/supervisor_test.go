@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gophpeek/phpeek-pm/internal/audit"
-	"github.com/gophpeek/phpeek-pm/internal/config"
-	"github.com/gophpeek/phpeek-pm/internal/metrics"
+	"github.com/cboxdk/init/internal/audit"
+	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/metrics"
 )
 
 func TestSupervisor_WaitForReadiness(t *testing.T) {
@@ -613,9 +613,9 @@ func TestSupervisor_EnvVars(t *testing.T) {
 			instanceIndex: 0,
 			expectEnvVars: map[string]string{
 				"NODE_ENV":                 "production",
-				"PHPEEK_PM_PROCESS_NAME":   "test-env",
-				"PHPEEK_PM_INSTANCE_ID":    "app-0",
-				"PHPEEK_PM_INSTANCE_INDEX": "0",
+				"CBOX_INIT_PROCESS_NAME":   "test-env",
+				"CBOX_INIT_INSTANCE_ID":    "app-0",
+				"CBOX_INIT_INSTANCE_INDEX": "0",
 			},
 		},
 		{
@@ -632,9 +632,9 @@ func TestSupervisor_EnvVars(t *testing.T) {
 			instanceIndex: 0,
 			expectEnvVars: map[string]string{
 				"NODE_ENV":                 "production",
-				"PHPEEK_PM_PROCESS_NAME":   "test-env",
-				"PHPEEK_PM_INSTANCE_ID":    "app-0",
-				"PHPEEK_PM_INSTANCE_INDEX": "0",
+				"CBOX_INIT_PROCESS_NAME":   "test-env",
+				"CBOX_INIT_INSTANCE_ID":    "app-0",
+				"CBOX_INIT_INSTANCE_INDEX": "0",
 				"PORT":                     "3000",
 			},
 		},
@@ -649,9 +649,9 @@ func TestSupervisor_EnvVars(t *testing.T) {
 			instanceID:    "app-2",
 			instanceIndex: 2,
 			expectEnvVars: map[string]string{
-				"PHPEEK_PM_PROCESS_NAME":   "test-env",
-				"PHPEEK_PM_INSTANCE_ID":    "app-2",
-				"PHPEEK_PM_INSTANCE_INDEX": "2",
+				"CBOX_INIT_PROCESS_NAME":   "test-env",
+				"CBOX_INIT_INSTANCE_ID":    "app-2",
+				"CBOX_INIT_INSTANCE_INDEX": "2",
 				"PORT":                     "3002",
 			},
 		},
@@ -665,7 +665,7 @@ func TestSupervisor_EnvVars(t *testing.T) {
 			instanceID:    "app-1",
 			instanceIndex: 1,
 			expectEnvVars: map[string]string{
-				"PHPEEK_PM_INSTANCE_INDEX": "1",
+				"CBOX_INIT_INSTANCE_INDEX": "1",
 				"PORT":                     "8081",
 			},
 		},
@@ -679,7 +679,7 @@ func TestSupervisor_EnvVars(t *testing.T) {
 			instanceID:    "php-fpm-0",
 			instanceIndex: 0,
 			expectEnvVars: map[string]string{
-				"PHPEEK_PM_INSTANCE_INDEX": "0",
+				"CBOX_INIT_INSTANCE_INDEX": "0",
 			},
 		},
 	}
