@@ -394,7 +394,12 @@ func (c *Config) setProcessDefaults(name string, proc *Process) {
 		proc.InitialState = "running"
 	}
 	if proc.Restart == "" {
-		proc.Restart = c.Global.RestartPolicy
+		// Oneshot processes default to "never" restart, longrun uses global default
+		if proc.Type == "oneshot" {
+			proc.Restart = "never"
+		} else {
+			proc.Restart = c.Global.RestartPolicy
+		}
 	}
 	if proc.Scale == 0 {
 		proc.Scale = 1

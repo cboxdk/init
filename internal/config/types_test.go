@@ -136,6 +136,27 @@ func TestSetDefaults(t *testing.T) {
 			},
 		},
 		{
+			name: "oneshot process defaults to never restart",
+			config: &Config{
+				Processes: map[string]*Process{
+					"migration": {
+						Command: []string{"php", "artisan", "migrate"},
+						Type:    "oneshot",
+						// Note: Restart is not set, should default to "never" for oneshot
+					},
+				},
+			},
+			validate: func(t *testing.T, c *Config) {
+				proc := c.Processes["migration"]
+				if proc.Type != "oneshot" {
+					t.Errorf("Process Type = %v, want oneshot", proc.Type)
+				}
+				if proc.Restart != "never" {
+					t.Errorf("Oneshot Process Restart = %v, want never (not inherited from global)", proc.Restart)
+				}
+			},
+		},
+		{
 			name: "health check defaults",
 			config: &Config{
 				Processes: map[string]*Process{
