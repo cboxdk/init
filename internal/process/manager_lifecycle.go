@@ -215,6 +215,7 @@ func (m *Manager) startRegularProcess(ctx context.Context, name string, procCfg 
 	sup := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
 	sup.SetDeathNotifier(m.NotifyProcessDeath)
 	sup.SetOneshotHistory(m.oneshotHistory)
+	sup.SetLogBroadcaster(m.logBroadcaster)
 	m.processes[name] = sup
 
 	// Start the process only if initial_state is "running"

@@ -16,6 +16,7 @@ import (
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/hooks"
 	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/logtail"
 	"github.com/cboxdk/init/internal/metrics"
 )
 
@@ -105,6 +106,8 @@ type Supervisor struct {
 	oneshotHistory     *OneshotHistory            // Shared oneshot history (can be nil)
 	deathNotifier      func(string)               // Callback when all instances are dead
 	credentials        *Credentials               // Resolved user/group credentials (nil = inherit)
+	logBroadcaster     *logger.LogBroadcaster     // Shared broadcaster for real-time log subscriptions
+	fileTailers        map[string]context.CancelFunc // active file tailers, keyed by config name
 	healthCheckStrict  bool                       // Fail startup if health monitor creation fails
 	ctx                context.Context
 	cancel             context.CancelFunc
@@ -235,6 +238,13 @@ func (s *Supervisor) SetOneshotHistory(history *OneshotHistory) {
 	s.oneshotHistory = history
 }
 
+// SetLogBroadcaster sets the shared log broadcaster for real-time log subscriptions
+func (s *Supervisor) SetLogBroadcaster(b *logger.LogBroadcaster) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logBroadcaster = b
+}
+
 // streamEnabled determines if stdout/stderr streaming is enabled for this process
 func (s *Supervisor) streamEnabled(stream string) bool {
 	if s.config.Logging == nil {
@@ -336,6 +346,9 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	}
 
 	s.state = StateRunning
+
+	// Start file tailers (config-bound, independent of process instances)
+	s.startFileTailers(s.ctx)
 
 	// Start health monitoring if configured
 	if s.config.HealthCheck != nil {
@@ -442,6 +455,16 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		}
 	}
 
+	// Wire log broadcaster to process writers for real-time subscriptions
+	if s.logBroadcaster != nil {
+		if stdoutWriter != nil {
+			stdoutWriter.SetBroadcaster(s.logBroadcaster)
+		}
+		if stderrWriter != nil {
+			stderrWriter.SetBroadcaster(s.logBroadcaster)
+		}
+	}
+
 	if stdoutWriter != nil {
 		cmd.Stdout = stdoutWriter
 	} else {
@@ -496,6 +519,82 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 	}()
 
 	return instance, nil
+}
+
+// startFileTailers starts file tailers for all configured log files.
+// Each tailer gets its own ProcessWriter with the file's logging config
+// plus the process-level redaction config.
+// Tailers are bound to configuration, not process state — they survive restarts.
+func (s *Supervisor) startFileTailers(ctx context.Context) {
+	if s.config.Logging == nil || len(s.config.Logging.Files) == 0 {
+		return
+	}
+
+	if s.fileTailers == nil {
+		s.fileTailers = make(map[string]context.CancelFunc)
+	}
+
+	for name, fileCfg := range s.config.Logging.Files {
+		// Build a LoggingConfig for this file, inheriting process-level redaction
+		fileLogging := &config.LoggingConfig{
+			Redaction:      s.config.Logging.Redaction, // Inherited from process
+			MinLevel:       fileCfg.MinLevel,
+			JSON:           fileCfg.JSON,
+			LevelDetection: fileCfg.LevelDetection,
+			Multiline:      fileCfg.Multiline,
+			Filters:        fileCfg.Filters,
+		}
+
+		// Create a ProcessWriter for this file
+		pw, err := logger.NewProcessWriter(s.logger, s.name, name, "file", fileLogging)
+		if err != nil {
+			s.logger.Error("Failed to create process writer for log file",
+				"file", name, "path", fileCfg.Path, "error", err)
+			continue
+		}
+
+		// Wire broadcaster for real-time subscriptions
+		if s.logBroadcaster != nil {
+			pw.SetBroadcaster(s.logBroadcaster)
+		}
+
+		// Create optional rotator
+		var rotator *logtail.FileRotator
+		if fileCfg.Rotate != nil && fileCfg.Rotate.MaxSize != "" {
+			maxBytes, err := config.ParseSize(fileCfg.Rotate.MaxSize)
+			if err != nil {
+				s.logger.Error("Invalid rotate max_size for log file",
+					"file", name, "error", err)
+				continue
+			}
+			rotator = logtail.NewFileRotator(maxBytes, fileCfg.Rotate.MaxFiles)
+		}
+
+		// Create and start tailer
+		tailer := logtail.New(fileCfg.Path, pw, rotator)
+
+		tailerCtx, tailerCancel := context.WithCancel(ctx)
+		s.fileTailers[name] = tailerCancel
+
+		s.goroutines.Add(1)
+		go func(n, p string) {
+			defer s.goroutines.Done()
+			if err := tailer.Start(tailerCtx); err != nil && tailerCtx.Err() == nil {
+				s.logger.Error("File tailer error", "file", n, "path", p, "error", err)
+			}
+		}(name, fileCfg.Path)
+
+		s.logger.Info("Started file tailer", "file", name, "path", fileCfg.Path)
+	}
+}
+
+// stopFileTailers stops all active file tailers.
+func (s *Supervisor) stopFileTailers() {
+	for name, cancel := range s.fileTailers {
+		cancel()
+		s.logger.Debug("Stopped file tailer", "file", name)
+	}
+	s.fileTailers = nil
 }
 
 // monitorInstance monitors a process instance and handles restarts
@@ -704,6 +803,9 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 	if s.cancel != nil {
 		s.cancel()
 	}
+
+	// Stop file tailers
+	s.stopFileTailers()
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(s.instances))

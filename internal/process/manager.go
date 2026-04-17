@@ -7,6 +7,7 @@ import (
 
 	"github.com/cboxdk/init/internal/audit"
 	"github.com/cboxdk/init/internal/config"
+	logpkg "github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/metrics"
 	"github.com/cboxdk/init/internal/readiness"
 	"github.com/cboxdk/init/internal/schedule"
@@ -60,7 +61,8 @@ type Manager struct {
 	allDeadCh         chan struct{}
 	allDeadOnce       sync.Once // Ensures allDeadCh is closed only once
 	processDeathCh    chan string
-	startTime         time.Time
+	startTime      time.Time
+	logBroadcaster *logpkg.LogBroadcaster
 
 	// Configurable timeouts and limits (initialized from global config or defaults)
 	dependencyTimeout  time.Duration
@@ -144,6 +146,7 @@ func NewManager(cfg *config.Config, logger *slog.Logger, auditLogger *audit.Logg
 		allDeadCh:          make(chan struct{}),
 		processDeathCh:     make(chan string, 10),
 		startTime:          startTime,
+		logBroadcaster:     logpkg.NewLogBroadcaster(),
 		dependencyTimeout:  dependencyTimeout,
 		processStopTimeout: processStopTimeout,
 		maxProcessScale:    maxProcessScale,
@@ -307,4 +310,9 @@ func (m *Manager) ListProcesses() []ProcessInfo {
 // GetResourceCollector returns the resource collector (can be nil if disabled).
 func (m *Manager) GetResourceCollector() *metrics.ResourceCollector {
 	return m.resourceCollector
+}
+
+// LogBroadcaster returns the log broadcaster for real-time log subscriptions.
+func (m *Manager) LogBroadcaster() *logpkg.LogBroadcaster {
+	return m.logBroadcaster
 }

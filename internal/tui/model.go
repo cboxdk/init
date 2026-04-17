@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/cboxdk/init/internal/apiclient"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/process"
 )
@@ -71,7 +72,7 @@ const (
 // Model is the main Bubbletea model for the TUI
 type Model struct {
 	manager      *process.Manager // For embedded mode
-	client       *APIClient       // For remote mode
+	client       *apiclient.Client // For remote mode
 	isRemote     bool             // true if using API client
 	currentView  viewMode
 	activeTab    tabType // k9s-style tab selection
@@ -163,7 +164,7 @@ func NewModel(mgr *process.Manager) Model {
 func NewRemoteModel(apiURL, auth string) Model {
 	return Model{
 		manager:       nil,
-		client:        NewAPIClient(apiURL, auth),
+		client:        apiclient.New(apiURL, auth),
 		isRemote:      true,
 		currentView:   viewProcessList,
 		processCache:  make(map[string]process.ProcessInfo),

@@ -445,6 +445,25 @@ func (c *Config) validateProcessLoggingConfig(name string, proc *Process, result
 	if !proc.Logging.Stdout && !proc.Logging.Stderr {
 		result.AddProcessWarning(name, "logging", "Both stdout and stderr disabled", "Enable at least one stream for process output visibility")
 	}
+
+	// Validate log file tailing configuration
+	if proc.Logging.Files != nil {
+		for fileName, fileCfg := range proc.Logging.Files {
+			if fileCfg.Path == "" {
+				result.AddProcessError(name, fmt.Sprintf("logging.files.%s.path", fileName), "Path is required", "Specify the file path to tail")
+			}
+			if fileCfg.Rotate != nil {
+				if fileCfg.Rotate.MaxSize != "" {
+					if _, err := ParseSize(fileCfg.Rotate.MaxSize); err != nil {
+						result.AddProcessError(name, fmt.Sprintf("logging.files.%s.rotate.max_size", fileName), fmt.Sprintf("Invalid size: %v", err), "Use format like '50MB', '1GB'")
+					}
+				}
+				if fileCfg.Rotate.MaxFiles < 0 {
+					result.AddProcessError(name, fmt.Sprintf("logging.files.%s.rotate.max_files", fileName), "max_files must be non-negative", "Set max_files >= 0")
+				}
+			}
+		}
+	}
 }
 
 // validateHealthCheck validates health check configuration

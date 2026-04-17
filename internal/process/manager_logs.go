@@ -28,6 +28,13 @@ func (m *Manager) GetLogs(processName string, limit int) ([]logger.LogEntry, err
 	return nil, fmt.Errorf("process not found: %s", processName)
 }
 
+// SubscribeLogs registers a real-time log subscriber.
+// filter is a process name — empty string receives all processes.
+// Returns a read channel and an unsubscribe function.
+func (m *Manager) SubscribeLogs(filter string) (<-chan logger.LogEntry, func()) {
+	return m.logBroadcaster.Subscribe(filter)
+}
+
 // GetStackLogs aggregates logs from all processes in the manager.
 // Returns the most recent entries across the stack capped by limit (if > 0).
 func (m *Manager) GetStackLogs(limit int) []logger.LogEntry {

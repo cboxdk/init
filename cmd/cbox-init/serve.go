@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -173,10 +174,25 @@ func runServe(cmd *cobra.Command, args []string) {
 	// Monitor process health
 	pm.MonitorProcessHealth(ctx)
 
-	// Start API server
+	// Always start Unix socket for local management (TUI, CLI commands)
+	socketPath := resolveSocketPath(cfg.Global.APISocket)
+
 	var apiServer *api.Server
 	if cfg.Global.APIEnabledValue() {
+		// Full API: TCP + socket
+		if cfg.Global.APISocket == "" {
+			cfg.Global.APISocket = socketPath
+		}
 		apiServer = startAPIServer(ctx, cfg, pm, log)
+	} else {
+		// Socket-only mode: local management without TCP
+		apiServer = api.NewServer(0, socketPath, "", nil, nil, cfg.Global.AuditEnabled, cfg.Global.APIMaxRequestBody, pm, log)
+		if err := apiServer.StartSocketOnly(ctx); err != nil {
+			slog.Warn("Failed to start Unix socket (local CLI/TUI disabled)", "error", err)
+			apiServer = nil
+		} else {
+			slog.Info("Unix socket started (local management only)", "path", socketPath)
+		}
 	}
 
 	// Start config watcher in watch mode
@@ -377,6 +393,30 @@ func startMetricsServer(ctx context.Context, cfg *config.Config, log *slog.Logge
 
 	metrics.SetBuildInfo(version, "go1.x")
 	return server
+}
+
+// resolveSocketPath determines the Unix socket path.
+// Priority: config value > /var/run/cbox-init.sock > /tmp/cbox-init.sock
+func resolveSocketPath(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	testPath := "/var/run/cbox-init.sock"
+	if dir := filepath.Dir(testPath); dirWritable(dir) {
+		return testPath
+	}
+	return "/tmp/cbox-init.sock"
+}
+
+func dirWritable(dir string) bool {
+	testFile := filepath.Join(dir, ".cbox-init-write-test")
+	f, err := os.Create(testFile)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	os.Remove(testFile)
+	return true
 }
 
 // startAPIServer starts the Management API server

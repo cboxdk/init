@@ -1,4 +1,4 @@
-package tui
+package apiclient
 
 import (
 	"context"
@@ -17,8 +17,8 @@ import (
 	"github.com/cboxdk/init/internal/process"
 )
 
-// TestNewAPIClient tests client creation
-func TestNewAPIClient(t *testing.T) {
+// TestNew tests client creation
+func TestNew(t *testing.T) {
 	tests := []struct {
 		name    string
 		baseURL string
@@ -43,7 +43,7 @@ func TestNewAPIClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := NewAPIClient(tt.baseURL, tt.auth)
+			client := New(tt.baseURL, tt.auth)
 
 			if client == nil {
 				t.Fatal("Expected non-nil client")
@@ -69,8 +69,8 @@ func TestNewAPIClient(t *testing.T) {
 	}
 }
 
-// TestAPIClient_getURL tests URL construction
-func TestAPIClient_getURL(t *testing.T) {
+// TestClient_getURL tests URL construction
+func TestClient_getURL(t *testing.T) {
 	tests := []struct {
 		name       string
 		baseURL    string
@@ -103,7 +103,7 @@ func TestAPIClient_getURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &APIClient{
+			client := &Client{
 				baseURL:    tt.baseURL,
 				socketPath: tt.socketPath,
 			}
@@ -116,8 +116,8 @@ func TestAPIClient_getURL(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ListProcesses tests fetching process list
-func TestAPIClient_ListProcesses(t *testing.T) {
+// TestClient_ListProcesses tests fetching process list
+func TestClient_ListProcesses(t *testing.T) {
 	tests := []struct {
 		name           string
 		serverResponse interface{}
@@ -197,7 +197,7 @@ func TestAPIClient_ListProcesses(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, tt.auth)
+			client := New(server.URL, tt.auth)
 			processes, err := client.ListProcesses()
 
 			if (err != nil) != tt.wantErr {
@@ -214,7 +214,7 @@ func TestAPIClient_ListProcesses(t *testing.T) {
 	}
 }
 
-func TestAPIClient_GetLogs(t *testing.T) {
+func TestClient_GetLogs(t *testing.T) {
 	expectedLogs := []logger.LogEntry{
 		{
 			ProcessName: "app",
@@ -243,7 +243,7 @@ func TestAPIClient_GetLogs(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, "token")
+	client := New(server.URL, "token")
 	logs, err := client.GetLogs("app", 50)
 	if err != nil {
 		t.Fatalf("GetLogs returned error: %v", err)
@@ -253,7 +253,7 @@ func TestAPIClient_GetLogs(t *testing.T) {
 	}
 }
 
-func TestAPIClient_GetStackLogs(t *testing.T) {
+func TestClient_GetStackLogs(t *testing.T) {
 	expectedLogs := []logger.LogEntry{
 		{
 			ProcessName: "stack",
@@ -276,7 +276,7 @@ func TestAPIClient_GetStackLogs(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, "")
+	client := New(server.URL, "")
 	logs, err := client.GetStackLogs(0)
 	if err != nil {
 		t.Fatalf("GetStackLogs returned error: %v", err)
@@ -286,7 +286,7 @@ func TestAPIClient_GetStackLogs(t *testing.T) {
 	}
 }
 
-func TestAPIClient_DeleteProcess(t *testing.T) {
+func TestClient_DeleteProcess(t *testing.T) {
 	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -300,7 +300,7 @@ func TestAPIClient_DeleteProcess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, "")
+	client := New(server.URL, "")
 	if err := client.DeleteProcess("app"); err != nil {
 		t.Fatalf("DeleteProcess returned error: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestAPIClient_DeleteProcess(t *testing.T) {
 	}
 }
 
-func TestAPIClient_UpdateProcess(t *testing.T) {
+func TestClient_UpdateProcess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			t.Fatalf("expected PUT, got %s", r.Method)
@@ -327,7 +327,7 @@ func TestAPIClient_UpdateProcess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, "")
+	client := New(server.URL, "")
 	proc := &config.Process{
 		Enabled: true,
 		Command: []string{"php"},
@@ -339,7 +339,7 @@ func TestAPIClient_UpdateProcess(t *testing.T) {
 	}
 }
 
-func TestAPIClient_GetProcessConfig(t *testing.T) {
+func TestClient_GetProcessConfig(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/processes/app" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
@@ -356,7 +356,7 @@ func TestAPIClient_GetProcessConfig(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, "")
+	client := New(server.URL, "")
 	cfg, err := client.GetProcessConfig("app")
 	if err != nil {
 		t.Fatalf("GetProcessConfig returned error: %v", err)
@@ -366,8 +366,8 @@ func TestAPIClient_GetProcessConfig(t *testing.T) {
 	}
 }
 
-// TestAPIClient_StartProcess tests starting a process
-func TestAPIClient_StartProcess(t *testing.T) {
+// TestClient_StartProcess tests starting a process
+func TestClient_StartProcess(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -419,7 +419,7 @@ func TestAPIClient_StartProcess(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.StartProcess(tt.processName)
 
 			if (err != nil) != tt.wantErr {
@@ -429,8 +429,8 @@ func TestAPIClient_StartProcess(t *testing.T) {
 	}
 }
 
-// TestAPIClient_StopProcess tests stopping a process
-func TestAPIClient_StopProcess(t *testing.T) {
+// TestClient_StopProcess tests stopping a process
+func TestClient_StopProcess(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -463,7 +463,7 @@ func TestAPIClient_StopProcess(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.StopProcess(tt.processName)
 
 			if (err != nil) != tt.wantErr {
@@ -473,8 +473,8 @@ func TestAPIClient_StopProcess(t *testing.T) {
 	}
 }
 
-// TestAPIClient_RestartProcess tests restarting a process
-func TestAPIClient_RestartProcess(t *testing.T) {
+// TestClient_RestartProcess tests restarting a process
+func TestClient_RestartProcess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/processes/test-proc/restart" {
 			t.Errorf("Expected path /api/v1/processes/test-proc/restart, got %s", r.URL.Path)
@@ -488,7 +488,7 @@ func TestAPIClient_RestartProcess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, "")
+	client := New(server.URL, "")
 	err := client.RestartProcess("test-proc")
 
 	if err != nil {
@@ -496,8 +496,8 @@ func TestAPIClient_RestartProcess(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ScaleProcess tests scaling a process
-func TestAPIClient_ScaleProcess(t *testing.T) {
+// TestClient_ScaleProcess tests scaling a process
+func TestClient_ScaleProcess(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -562,7 +562,7 @@ func TestAPIClient_ScaleProcess(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.ScaleProcess(tt.processName, tt.desired)
 
 			if (err != nil) != tt.wantErr {
@@ -572,8 +572,8 @@ func TestAPIClient_ScaleProcess(t *testing.T) {
 	}
 }
 
-// TestAPIClient_HealthCheck tests health check endpoint
-func TestAPIClient_HealthCheck(t *testing.T) {
+// TestClient_HealthCheck tests health check endpoint
+func TestClient_HealthCheck(t *testing.T) {
 	tests := []struct {
 		name         string
 		serverStatus int
@@ -609,7 +609,7 @@ func TestAPIClient_HealthCheck(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 
 			ctx, cancel := context.WithTimeout(context.Background(), tt.timeout)
 			defer cancel()
@@ -623,8 +623,8 @@ func TestAPIClient_HealthCheck(t *testing.T) {
 	}
 }
 
-// TestAPIClient_AddProcess tests adding a new process
-func TestAPIClient_AddProcess(t *testing.T) {
+// TestClient_AddProcess tests adding a new process
+func TestClient_AddProcess(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -712,7 +712,7 @@ func TestAPIClient_AddProcess(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -726,8 +726,8 @@ func TestAPIClient_AddProcess(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ListProcesses_WithAuth tests authentication header
-func TestAPIClient_ListProcesses_WithAuth(t *testing.T) {
+// TestClient_ListProcesses_WithAuth tests authentication header
+func TestClient_ListProcesses_WithAuth(t *testing.T) {
 	expectedAuth := "test-token-123"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -745,7 +745,7 @@ func TestAPIClient_ListProcesses_WithAuth(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, expectedAuth)
+	client := New(server.URL, expectedAuth)
 	_, err := client.ListProcesses()
 
 	if err != nil {
@@ -753,8 +753,8 @@ func TestAPIClient_ListProcesses_WithAuth(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ScaleProcessDelta tests delta scaling
-func TestAPIClient_ScaleProcessDelta(t *testing.T) {
+// TestClient_ScaleProcessDelta tests delta scaling
+func TestClient_ScaleProcessDelta(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -824,7 +824,7 @@ func TestAPIClient_ScaleProcessDelta(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.ScaleProcessDelta(tt.processName, tt.delta)
 
 			if (err != nil) != tt.wantErr {
@@ -834,8 +834,8 @@ func TestAPIClient_ScaleProcessDelta(t *testing.T) {
 	}
 }
 
-// TestAPIClient_trySocket tests socket detection logic
-func TestAPIClient_trySocket(t *testing.T) {
+// TestClient_trySocket tests socket detection logic
+func TestClient_trySocket(t *testing.T) {
 	tests := []struct {
 		name       string
 		socketPath string
@@ -855,7 +855,7 @@ func TestAPIClient_trySocket(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &APIClient{}
+			client := &Client{}
 			result := client.trySocket(tt.socketPath)
 
 			if result != tt.wantResult {
@@ -881,7 +881,7 @@ func TestAPIClient_trySocket(t *testing.T) {
 		defer listener.Close()
 
 		// Test that trySocket succeeds with a real socket
-		client := &APIClient{}
+		client := &Client{}
 		result := client.trySocket(socketPath)
 
 		if !result {
@@ -890,9 +890,9 @@ func TestAPIClient_trySocket(t *testing.T) {
 	})
 }
 
-// TestAPIClient_createSocketClient tests socket client creation
-func TestAPIClient_createSocketClient(t *testing.T) {
-	client := &APIClient{}
+// TestClient_createSocketClient tests socket client creation
+func TestClient_createSocketClient(t *testing.T) {
+	client := &Client{}
 	socketPath := "/tmp/test.sock"
 
 	httpClient := client.createSocketClient(socketPath)
@@ -932,7 +932,7 @@ func TestAPIClient_createSocketClient(t *testing.T) {
 		defer server.Close()
 
 		// Create client with socket
-		apiClient := &APIClient{}
+		apiClient := &Client{}
 		httpClient := apiClient.createSocketClient(socketPath)
 
 		// Make request through socket client
@@ -953,8 +953,8 @@ func TestAPIClient_createSocketClient(t *testing.T) {
 	})
 }
 
-// TestAPIClient_DeleteProcess_ErrorPaths tests error handling in DeleteProcess
-func TestAPIClient_DeleteProcess_ErrorPaths(t *testing.T) {
+// TestClient_DeleteProcess_ErrorPaths tests error handling in DeleteProcess
+func TestClient_DeleteProcess_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name           string
 		serverResponse string
@@ -993,7 +993,7 @@ func TestAPIClient_DeleteProcess_ErrorPaths(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.DeleteProcess("test-process")
 
 			if (err != nil) != tt.wantErr {
@@ -1007,9 +1007,9 @@ func TestAPIClient_DeleteProcess_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestAPIClient_DeleteProcess_NetworkError tests network failure handling
-func TestAPIClient_DeleteProcess_NetworkError(t *testing.T) {
-	client := &APIClient{
+// TestClient_DeleteProcess_NetworkError tests network failure handling
+func TestClient_DeleteProcess_NetworkError(t *testing.T) {
+	client := &Client{
 		baseURL: "http://localhost:0", // Invalid port
 		client:  &http.Client{Timeout: 100 * time.Millisecond},
 	}
@@ -1024,8 +1024,8 @@ func TestAPIClient_DeleteProcess_NetworkError(t *testing.T) {
 	}
 }
 
-// TestAPIClient_UpdateProcess_ErrorPaths tests error handling in UpdateProcess
-func TestAPIClient_UpdateProcess_ErrorPaths(t *testing.T) {
+// TestClient_UpdateProcess_ErrorPaths tests error handling in UpdateProcess
+func TestClient_UpdateProcess_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name           string
 		processConfig  *config.Process
@@ -1089,11 +1089,11 @@ func TestAPIClient_UpdateProcess_ErrorPaths(t *testing.T) {
 				defer server.Close()
 			}
 
-			var client *APIClient
+			var client *Client
 			if server != nil {
-				client = NewAPIClient(server.URL, "")
+				client = New(server.URL, "")
 			} else {
-				client = NewAPIClient("http://localhost:9999", "")
+				client = New("http://localhost:9999", "")
 			}
 
 			err := client.UpdateProcess("test-process", tt.processConfig)
@@ -1109,9 +1109,9 @@ func TestAPIClient_UpdateProcess_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestAPIClient_UpdateProcess_NetworkError tests network failure
-func TestAPIClient_UpdateProcess_NetworkError(t *testing.T) {
-	client := &APIClient{
+// TestClient_UpdateProcess_NetworkError tests network failure
+func TestClient_UpdateProcess_NetworkError(t *testing.T) {
+	client := &Client{
 		baseURL: "http://localhost:0",
 		client:  &http.Client{Timeout: 100 * time.Millisecond},
 	}
@@ -1132,11 +1132,11 @@ func TestAPIClient_UpdateProcess_NetworkError(t *testing.T) {
 	}
 }
 
-// TestAPIClient_fetchLogs_ErrorPaths tests error handling in fetchLogs
-func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
+// TestClient_fetchLogs_ErrorPaths tests error handling in fetchLogs
+func TestClient_fetchLogs_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name           string
-		clientSetup    func() *APIClient
+		clientSetup    func() *Client
 		path           string
 		serverStatus   int
 		serverResponse string
@@ -1145,8 +1145,8 @@ func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
 	}{
 		{
 			name: "nil HTTP client",
-			clientSetup: func() *APIClient {
-				return &APIClient{client: nil}
+			clientSetup: func() *Client {
+				return &Client{client: nil}
 			},
 			path:        "/api/v1/logs",
 			wantErr:     true,
@@ -1154,7 +1154,7 @@ func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "HTTP error status",
-			clientSetup: func() *APIClient {
+			clientSetup: func() *Client {
 				return nil // Will be set by test
 			},
 			path:           "/api/v1/logs",
@@ -1165,7 +1165,7 @@ func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "invalid JSON response",
-			clientSetup: func() *APIClient {
+			clientSetup: func() *Client {
 				return nil // Will be set by test
 			},
 			path:           "/api/v1/logs",
@@ -1176,7 +1176,7 @@ func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "internal server error",
-			clientSetup: func() *APIClient {
+			clientSetup: func() *Client {
 				return nil
 			},
 			path:           "/api/v1/logs",
@@ -1189,7 +1189,7 @@ func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var client *APIClient
+			var client *Client
 
 			if tt.clientSetup != nil && tt.clientSetup() != nil {
 				client = tt.clientSetup()
@@ -1199,7 +1199,7 @@ func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
 					_, _ = w.Write([]byte(tt.serverResponse))
 				}))
 				defer server.Close()
-				client = NewAPIClient(server.URL, "")
+				client = New(server.URL, "")
 			}
 
 			_, err := client.fetchLogs(tt.path)
@@ -1215,9 +1215,9 @@ func TestAPIClient_fetchLogs_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestAPIClient_fetchLogs_NetworkError tests network failure
-func TestAPIClient_fetchLogs_NetworkError(t *testing.T) {
-	client := &APIClient{
+// TestClient_fetchLogs_NetworkError tests network failure
+func TestClient_fetchLogs_NetworkError(t *testing.T) {
+	client := &Client{
 		baseURL: "http://localhost:0",
 		client:  &http.Client{Timeout: 100 * time.Millisecond},
 	}
@@ -1232,9 +1232,9 @@ func TestAPIClient_fetchLogs_NetworkError(t *testing.T) {
 	}
 }
 
-// TestAPIClient_GetLogs_EmptyProcessName tests empty process name validation
-func TestAPIClient_GetLogs_EmptyProcessName(t *testing.T) {
-	client := NewAPIClient("http://localhost:9999", "")
+// TestClient_GetLogs_EmptyProcessName tests empty process name validation
+func TestClient_GetLogs_EmptyProcessName(t *testing.T) {
+	client := New("http://localhost:9999", "")
 
 	_, err := client.GetLogs("", 10)
 	if err == nil {
@@ -1246,8 +1246,8 @@ func TestAPIClient_GetLogs_EmptyProcessName(t *testing.T) {
 	}
 }
 
-// TestAPIClient_GetProcessConfig_ErrorPaths tests error handling in GetProcessConfig
-func TestAPIClient_GetProcessConfig_ErrorPaths(t *testing.T) {
+// TestClient_GetProcessConfig_ErrorPaths tests error handling in GetProcessConfig
+func TestClient_GetProcessConfig_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name           string
 		processName    string
@@ -1307,11 +1307,11 @@ func TestAPIClient_GetProcessConfig_ErrorPaths(t *testing.T) {
 				defer server.Close()
 			}
 
-			var client *APIClient
+			var client *Client
 			if server != nil {
-				client = NewAPIClient(server.URL, "")
+				client = New(server.URL, "")
 			} else {
-				client = NewAPIClient("http://localhost:9999", "")
+				client = New("http://localhost:9999", "")
 			}
 
 			_, err := client.GetProcessConfig(tt.processName)
@@ -1327,9 +1327,9 @@ func TestAPIClient_GetProcessConfig_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestAPIClient_GetProcessConfig_NetworkError tests network failure
-func TestAPIClient_GetProcessConfig_NetworkError(t *testing.T) {
-	client := &APIClient{
+// TestClient_GetProcessConfig_NetworkError tests network failure
+func TestClient_GetProcessConfig_NetworkError(t *testing.T) {
+	client := &Client{
 		baseURL: "http://localhost:0",
 		client:  &http.Client{Timeout: 100 * time.Millisecond},
 	}
@@ -1344,15 +1344,15 @@ func TestAPIClient_GetProcessConfig_NetworkError(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ListProcesses_InvalidJSON tests invalid JSON response handling
-func TestAPIClient_ListProcesses_InvalidJSON(t *testing.T) {
+// TestClient_ListProcesses_InvalidJSON tests invalid JSON response handling
+func TestClient_ListProcesses_InvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`invalid json{`))
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, "")
+	client := New(server.URL, "")
 	_, err := client.ListProcesses()
 
 	if err == nil {
@@ -1364,8 +1364,8 @@ func TestAPIClient_ListProcesses_InvalidJSON(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ReloadConfig tests configuration reload via API
-func TestAPIClient_ReloadConfig(t *testing.T) {
+// TestClient_ReloadConfig tests configuration reload via API
+func TestClient_ReloadConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
@@ -1400,7 +1400,7 @@ func TestAPIClient_ReloadConfig(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.ReloadConfig()
 
 			if (err != nil) != tt.wantErr {
@@ -1410,8 +1410,8 @@ func TestAPIClient_ReloadConfig(t *testing.T) {
 	}
 }
 
-// TestAPIClient_SaveConfig tests configuration save via API
-func TestAPIClient_SaveConfig(t *testing.T) {
+// TestClient_SaveConfig tests configuration save via API
+func TestClient_SaveConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
@@ -1446,7 +1446,7 @@ func TestAPIClient_SaveConfig(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.SaveConfig()
 
 			if (err != nil) != tt.wantErr {
@@ -1456,8 +1456,8 @@ func TestAPIClient_SaveConfig(t *testing.T) {
 	}
 }
 
-// TestAPIClient_PauseSchedule tests pausing scheduled jobs via API
-func TestAPIClient_PauseSchedule(t *testing.T) {
+// TestClient_PauseSchedule tests pausing scheduled jobs via API
+func TestClient_PauseSchedule(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -1509,7 +1509,7 @@ func TestAPIClient_PauseSchedule(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.PauseSchedule(tt.processName)
 
 			if (err != nil) != tt.wantErr {
@@ -1519,8 +1519,8 @@ func TestAPIClient_PauseSchedule(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ResumeSchedule tests resuming paused scheduled jobs via API
-func TestAPIClient_ResumeSchedule(t *testing.T) {
+// TestClient_ResumeSchedule tests resuming paused scheduled jobs via API
+func TestClient_ResumeSchedule(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -1572,7 +1572,7 @@ func TestAPIClient_ResumeSchedule(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.ResumeSchedule(tt.processName)
 
 			if (err != nil) != tt.wantErr {
@@ -1582,8 +1582,8 @@ func TestAPIClient_ResumeSchedule(t *testing.T) {
 	}
 }
 
-// TestAPIClient_TriggerSchedule tests manually triggering scheduled jobs via API
-func TestAPIClient_TriggerSchedule(t *testing.T) {
+// TestClient_TriggerSchedule tests manually triggering scheduled jobs via API
+func TestClient_TriggerSchedule(t *testing.T) {
 	tests := []struct {
 		name         string
 		processName  string
@@ -1635,7 +1635,7 @@ func TestAPIClient_TriggerSchedule(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			err := client.TriggerSchedule(tt.processName)
 
 			if (err != nil) != tt.wantErr {
@@ -1645,9 +1645,9 @@ func TestAPIClient_TriggerSchedule(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ScheduleActions_NetworkError tests network failure handling for schedule actions
-func TestAPIClient_ScheduleActions_NetworkError(t *testing.T) {
-	client := &APIClient{
+// TestClient_ScheduleActions_NetworkError tests network failure handling for schedule actions
+func TestClient_ScheduleActions_NetworkError(t *testing.T) {
+	client := &Client{
 		baseURL: "http://localhost:0", // Invalid port
 		client:  &http.Client{Timeout: 100 * time.Millisecond},
 	}
@@ -1671,8 +1671,8 @@ func TestAPIClient_ScheduleActions_NetworkError(t *testing.T) {
 	}
 }
 
-// TestAPIClient_ScheduleActions_WithAuth tests schedule actions with authentication
-func TestAPIClient_ScheduleActions_WithAuth(t *testing.T) {
+// TestClient_ScheduleActions_WithAuth tests schedule actions with authentication
+func TestClient_ScheduleActions_WithAuth(t *testing.T) {
 	expectedAuth := "schedule-token-123"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1686,7 +1686,7 @@ func TestAPIClient_ScheduleActions_WithAuth(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewAPIClient(server.URL, expectedAuth)
+	client := New(server.URL, expectedAuth)
 
 	// Test PauseSchedule with auth
 	err := client.PauseSchedule("test-cron")
@@ -1707,8 +1707,8 @@ func TestAPIClient_ScheduleActions_WithAuth(t *testing.T) {
 	}
 }
 
-// TestAPIClient_GetOneshotHistory tests oneshot history retrieval via API
-func TestAPIClient_GetOneshotHistory(t *testing.T) {
+// TestClient_GetOneshotHistory tests oneshot history retrieval via API
+func TestClient_GetOneshotHistory(t *testing.T) {
 	tests := []struct {
 		name       string
 		limit      int
@@ -1776,7 +1776,7 @@ func TestAPIClient_GetOneshotHistory(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewAPIClient(server.URL, "")
+			client := New(server.URL, "")
 			results, err := client.GetOneshotHistory(tt.limit)
 
 			if (err != nil) != tt.wantErr {

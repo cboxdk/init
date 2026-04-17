@@ -1,4 +1,4 @@
-package tui
+package apiclient
 
 import (
 	"bytes"
@@ -18,18 +18,18 @@ import (
 	"github.com/cboxdk/init/internal/process"
 )
 
-// APIClient connects to a running Cbox Init daemon via API
-type APIClient struct {
+// Client connects to a running Cbox Init daemon via API
+type Client struct {
 	baseURL    string
 	socketPath string
 	auth       string
 	client     *http.Client
 }
 
-// NewAPIClient creates a new API client with auto-detection
+// New creates a new API client with auto-detection
 // Tries Unix socket first, falls back to TCP
-func NewAPIClient(baseURL, auth string) *APIClient {
-	client := &APIClient{
+func New(baseURL, auth string) *Client {
+	client := &Client{
 		baseURL: baseURL,
 		auth:    auth,
 	}
@@ -59,7 +59,7 @@ func NewAPIClient(baseURL, auth string) *APIClient {
 }
 
 // trySocket tests if a socket path is accessible
-func (c *APIClient) trySocket(socketPath string) bool {
+func (c *Client) trySocket(socketPath string) bool {
 	// Check if socket file exists
 	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
 		return false
@@ -76,7 +76,7 @@ func (c *APIClient) trySocket(socketPath string) bool {
 }
 
 // createSocketClient creates an HTTP client that uses Unix socket
-func (c *APIClient) createSocketClient(socketPath string) *http.Client {
+func (c *Client) createSocketClient(socketPath string) *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
@@ -88,7 +88,7 @@ func (c *APIClient) createSocketClient(socketPath string) *http.Client {
 }
 
 // getURL constructs the URL for API requests
-func (c *APIClient) getURL(path string) string {
+func (c *Client) getURL(path string) string {
 	if c.socketPath != "" {
 		// Use dummy hostname for socket connections
 		return fmt.Sprintf("http://unix%s", path)
@@ -97,7 +97,7 @@ func (c *APIClient) getURL(path string) string {
 }
 
 // ListProcesses fetches process list from API
-func (c *APIClient) ListProcesses() ([]process.ProcessInfo, error) {
+func (c *Client) ListProcesses() ([]process.ProcessInfo, error) {
 	url := c.getURL("/api/v1/processes")
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -132,22 +132,22 @@ func (c *APIClient) ListProcesses() ([]process.ProcessInfo, error) {
 }
 
 // StartProcess starts a stopped process
-func (c *APIClient) StartProcess(name string) error {
+func (c *Client) StartProcess(name string) error {
 	return c.processAction(name, "start")
 }
 
 // StopProcess stops a running process
-func (c *APIClient) StopProcess(name string) error {
+func (c *Client) StopProcess(name string) error {
 	return c.processAction(name, "stop")
 }
 
 // RestartProcess restarts a process
-func (c *APIClient) RestartProcess(name string) error {
+func (c *Client) RestartProcess(name string) error {
 	return c.processAction(name, "restart")
 }
 
 // ScaleProcess scales a process
-func (c *APIClient) ScaleProcess(name string, desired int) error {
+func (c *Client) ScaleProcess(name string, desired int) error {
 	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/scale", name))
 
 	body := fmt.Sprintf(`{"desired":%d}`, desired)
@@ -177,7 +177,7 @@ func (c *APIClient) ScaleProcess(name string, desired int) error {
 }
 
 // ScaleProcessDelta adjusts process scale by delta
-func (c *APIClient) ScaleProcessDelta(name string, delta int) error {
+func (c *Client) ScaleProcessDelta(name string, delta int) error {
 	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/scale", name))
 
 	body := fmt.Sprintf(`{"delta":%d}`, delta)
@@ -207,7 +207,7 @@ func (c *APIClient) ScaleProcessDelta(name string, delta int) error {
 }
 
 // processAction performs a process action (start/stop/restart)
-func (c *APIClient) processAction(name, action string) error {
+func (c *Client) processAction(name, action string) error {
 	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/%s", name, action))
 
 	req, err := http.NewRequest("POST", url, nil)
@@ -234,7 +234,7 @@ func (c *APIClient) processAction(name, action string) error {
 }
 
 // DeleteProcess removes a process via API
-func (c *APIClient) DeleteProcess(name string) error {
+func (c *Client) DeleteProcess(name string) error {
 	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s", name))
 
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
@@ -261,7 +261,7 @@ func (c *APIClient) DeleteProcess(name string) error {
 }
 
 // UpdateProcess updates an existing process definition
-func (c *APIClient) UpdateProcess(name string, proc *config.Process) error {
+func (c *Client) UpdateProcess(name string, proc *config.Process) error {
 	if proc == nil {
 		return fmt.Errorf("process configuration is required")
 	}
@@ -298,7 +298,7 @@ func (c *APIClient) UpdateProcess(name string, proc *config.Process) error {
 }
 
 // HealthCheck checks if API is reachable
-func (c *APIClient) HealthCheck(ctx context.Context) error {
+func (c *Client) HealthCheck(ctx context.Context) error {
 	url := c.getURL("/api/v1/health")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -320,7 +320,7 @@ func (c *APIClient) HealthCheck(ctx context.Context) error {
 }
 
 // AddProcess creates a new process via API
-func (c *APIClient) AddProcess(ctx context.Context, name string, command []string, scale int, restart string, enabled bool) error {
+func (c *Client) AddProcess(ctx context.Context, name string, command []string, scale int, restart string, enabled bool) error {
 	url := c.getURL("/api/v1/processes")
 
 	// Build request body matching API expectations
@@ -364,7 +364,7 @@ func (c *APIClient) AddProcess(ctx context.Context, name string, command []strin
 }
 
 // GetLogs retrieves logs for a specific process
-func (c *APIClient) GetLogs(processName string, limit int) ([]logger.LogEntry, error) {
+func (c *Client) GetLogs(processName string, limit int) ([]logger.LogEntry, error) {
 	if processName == "" {
 		return nil, fmt.Errorf("process name is required")
 	}
@@ -378,7 +378,7 @@ func (c *APIClient) GetLogs(processName string, limit int) ([]logger.LogEntry, e
 }
 
 // GetStackLogs retrieves aggregated logs for all processes
-func (c *APIClient) GetStackLogs(limit int) ([]logger.LogEntry, error) {
+func (c *Client) GetStackLogs(limit int) ([]logger.LogEntry, error) {
 	path := "/api/v1/logs"
 	if limit > 0 {
 		path = fmt.Sprintf("%s?limit=%d", path, limit)
@@ -386,7 +386,7 @@ func (c *APIClient) GetStackLogs(limit int) ([]logger.LogEntry, error) {
 	return c.fetchLogs(path)
 }
 
-func (c *APIClient) fetchLogs(path string) ([]logger.LogEntry, error) {
+func (c *Client) fetchLogs(path string) ([]logger.LogEntry, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("API client not initialized")
 	}
@@ -423,7 +423,7 @@ func (c *APIClient) fetchLogs(path string) ([]logger.LogEntry, error) {
 }
 
 // GetProcessConfig fetches full configuration for a process
-func (c *APIClient) GetProcessConfig(name string) (*config.Process, error) {
+func (c *Client) GetProcessConfig(name string) (*config.Process, error) {
 	if name == "" {
 		return nil, fmt.Errorf("process name is required")
 	}
@@ -463,22 +463,22 @@ func (c *APIClient) GetProcessConfig(name string) (*config.Process, error) {
 }
 
 // PauseSchedule pauses a scheduled job via API
-func (c *APIClient) PauseSchedule(name string) error {
+func (c *Client) PauseSchedule(name string) error {
 	return c.processAction(name, "schedule/pause")
 }
 
 // ResumeSchedule resumes a paused scheduled job via API
-func (c *APIClient) ResumeSchedule(name string) error {
+func (c *Client) ResumeSchedule(name string) error {
 	return c.processAction(name, "schedule/resume")
 }
 
 // TriggerSchedule manually triggers a scheduled job via API
-func (c *APIClient) TriggerSchedule(name string) error {
+func (c *Client) TriggerSchedule(name string) error {
 	return c.processAction(name, "schedule/trigger")
 }
 
 // ReloadConfig reloads configuration from disk via API
-func (c *APIClient) ReloadConfig() error {
+func (c *Client) ReloadConfig() error {
 	url := c.getURL("/api/v1/config/reload")
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
@@ -505,7 +505,7 @@ func (c *APIClient) ReloadConfig() error {
 }
 
 // SaveConfig saves running configuration to file via API
-func (c *APIClient) SaveConfig() error {
+func (c *Client) SaveConfig() error {
 	url := c.getURL("/api/v1/config/save")
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
@@ -532,7 +532,7 @@ func (c *APIClient) SaveConfig() error {
 }
 
 // GetOneshotHistory fetches oneshot execution history from API
-func (c *APIClient) GetOneshotHistory(limit int) ([]process.OneshotExecution, error) {
+func (c *Client) GetOneshotHistory(limit int) ([]process.OneshotExecution, error) {
 	path := "/api/v1/oneshot/history"
 	if limit > 0 {
 		path = fmt.Sprintf("%s?limit=%d", path, limit)

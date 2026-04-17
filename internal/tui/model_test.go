@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cboxdk/init/internal/apiclient"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/process"
 )
@@ -854,7 +855,7 @@ func TestTriggerAction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &Model{
 				isRemote: true,
-				client:   NewAPIClient("http://localhost:9999", ""),
+				client:   apiclient.New("http://localhost:9999", ""),
 			}
 
 			cmd := m.triggerAction(tt.action, tt.target)
@@ -1241,7 +1242,7 @@ func TestDispatchAction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &Model{
 				isRemote: tt.isRemote,
-				client:   NewAPIClient("http://localhost:9999", ""),
+				client:   apiclient.New("http://localhost:9999", ""),
 			}
 
 			msg, _ := m.dispatchAction(tt.action, tt.target)
@@ -1264,7 +1265,7 @@ func TestExecuteRestart(t *testing.T) {
 	// Test remote mode - returns message even if client request fails
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	msg, _ := m.executeRestart("php-fpm")
@@ -1280,7 +1281,7 @@ func TestExecuteStop(t *testing.T) {
 	// Test remote mode - returns message even if client request fails
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	msg, _ := m.executeStop("nginx")
@@ -1296,7 +1297,7 @@ func TestExecuteStart(t *testing.T) {
 	// Test remote mode - returns message even if client request fails
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	msg, _ := m.executeStart("worker")
@@ -1312,7 +1313,7 @@ func TestExecuteDelete(t *testing.T) {
 	// Test remote mode - returns message even if client request fails
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	msg, _ := m.executeDelete("old-process")
@@ -1328,7 +1329,7 @@ func TestExecuteSchedulePause(t *testing.T) {
 	// Test remote mode - returns message even if client request fails
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	msg, _ := m.executeSchedulePause("cron-job")
@@ -1344,7 +1345,7 @@ func TestExecuteScheduleResume(t *testing.T) {
 	// Test remote mode - returns message even if client request fails
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	msg, _ := m.executeScheduleResume("cron-job")
@@ -1360,7 +1361,7 @@ func TestExecuteScheduleTrigger(t *testing.T) {
 	// Test remote mode - returns message even if client request fails
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	msg, _ := m.executeScheduleTrigger("cron-job")
@@ -1392,7 +1393,7 @@ func TestInit(t *testing.T) {
 	m := &Model{
 		processCache: make(map[string]process.ProcessInfo),
 		isRemote:     true,
-		client:       NewAPIClient("http://localhost:9999", ""),
+		client:       apiclient.New("http://localhost:9999", ""),
 	}
 
 	cmd := m.Init()

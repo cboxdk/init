@@ -1003,9 +1003,9 @@ func TestServer_StartSocketListener(t *testing.T) {
 					t.Fatalf("Socket file not created: %v", statErr)
 				}
 
-				// Check permissions (should be 0600)
-				if info.Mode().Perm() != 0600 {
-					t.Errorf("Expected permissions 0600, got %o", info.Mode().Perm())
+				// Check permissions (should be 0660 for owner + group access)
+				if info.Mode().Perm() != 0660 {
+					t.Errorf("Expected permissions 0660, got %o", info.Mode().Perm())
 				}
 
 				// Clean up server

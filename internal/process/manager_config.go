@@ -47,6 +47,7 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 
 		supervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
 		supervisor.SetOneshotHistory(m.oneshotHistory)
+		supervisor.SetLogBroadcaster(m.logBroadcaster)
 		// Use background context for supervisor lifetime (independent of API request)
 		if err := supervisor.Start(context.Background()); err != nil {
 			// Remove from config on failure
@@ -148,6 +149,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 		if procCfg.Enabled {
 			newSupervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
 			newSupervisor.SetOneshotHistory(m.oneshotHistory)
+			newSupervisor.SetLogBroadcaster(m.logBroadcaster)
 			// Use background context for supervisor lifetime (independent of API request)
 			if err := newSupervisor.Start(context.Background()); err != nil {
 				// Rollback config change on error
@@ -168,6 +170,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 
 		supervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
 		supervisor.SetOneshotHistory(m.oneshotHistory)
+		supervisor.SetLogBroadcaster(m.logBroadcaster)
 		// Use background context for supervisor lifetime (independent of API request)
 		if err := supervisor.Start(context.Background()); err != nil {
 			// Rollback config change on error
@@ -322,6 +325,7 @@ func (m *Manager) startNewProcesses(cfg *config.Config, names []string) {
 			m.logger.Info("Starting new process", "name", name)
 			supervisor := NewSupervisor(name, procCfg, &cfg.Global, m.logger, m.auditLogger, m.resourceCollector)
 			supervisor.SetOneshotHistory(m.oneshotHistory)
+			supervisor.SetLogBroadcaster(m.logBroadcaster)
 			// Use background context for supervisor lifetime (independent of reload request)
 			if err := supervisor.Start(context.Background()); err != nil {
 				m.logger.Error("Failed to start new process during reload", "name", name, "error", err)
@@ -348,6 +352,7 @@ func (m *Manager) updateChangedProcesses(ctx context.Context, cfg *config.Config
 			if procCfg.Enabled {
 				newSupervisor := NewSupervisor(name, procCfg, &cfg.Global, m.logger, m.auditLogger, m.resourceCollector)
 				newSupervisor.SetOneshotHistory(m.oneshotHistory)
+				newSupervisor.SetLogBroadcaster(m.logBroadcaster)
 				// Use background context for supervisor lifetime (independent of reload request)
 				if err := newSupervisor.Start(context.Background()); err != nil {
 					m.logger.Error("Failed to start updated process", "name", name, "error", err)
@@ -361,6 +366,7 @@ func (m *Manager) updateChangedProcesses(ctx context.Context, cfg *config.Config
 			m.logger.Info("Starting previously disabled process", "name", name)
 			supervisor := NewSupervisor(name, procCfg, &cfg.Global, m.logger, m.auditLogger, m.resourceCollector)
 			supervisor.SetOneshotHistory(m.oneshotHistory)
+			supervisor.SetLogBroadcaster(m.logBroadcaster)
 			// Use background context for supervisor lifetime (independent of reload request)
 			if err := supervisor.Start(context.Background()); err != nil {
 				m.logger.Error("Failed to start process during reload", "name", name, "error", err)

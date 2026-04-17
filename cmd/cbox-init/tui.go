@@ -54,9 +54,8 @@ func runTUIRemote(apiURL string) {
 	if err := tui.RunRemote(apiURL, auth); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Remote TUI error: %v\n", err)
 		fmt.Fprintf(os.Stderr, "\n💡 Make sure daemon is running:\n")
-		fmt.Fprintf(os.Stderr, "   Terminal 1: cbox-init serve\n")
-		fmt.Fprintf(os.Stderr, "   Terminal 2: cbox-init tui\n\n")
-		fmt.Fprintf(os.Stderr, "💡 Ensure API is enabled in config:\n")
+		fmt.Fprintf(os.Stderr, "   cbox-init serve\n\n")
+		fmt.Fprintf(os.Stderr, "💡 For remote access, ensure API is enabled:\n")
 		fmt.Fprintf(os.Stderr, "   global:\n")
 		fmt.Fprintf(os.Stderr, "     api_enabled: true\n")
 		fmt.Fprintf(os.Stderr, "     api_port: 9180\n")

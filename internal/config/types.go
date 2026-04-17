@@ -1,6 +1,11 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+)
 
 // Config represents the complete cbox-init configuration
 type Config struct {
@@ -147,6 +152,7 @@ type LoggingConfig struct {
 	JSON           *JSONConfig           `yaml:"json" json:"json"`                       // JSON log parsing
 	LevelDetection *LevelDetectionConfig `yaml:"level_detection" json:"level_detection"` // Log level detection from content
 	Filters        *FilterConfig         `yaml:"filters" json:"filters"`                 // Include/exclude filtering
+	Files          map[string]*LogFileConfig `yaml:"files" json:"files"`                   // Log file tailing
 }
 
 // RedactionConfig configures sensitive data redaction for compliance
@@ -190,6 +196,60 @@ type LevelDetectionConfig struct {
 type FilterConfig struct {
 	Exclude []string `yaml:"exclude" json:"exclude"` // Exclude logs matching these patterns
 	Include []string `yaml:"include" json:"include"` // Only include logs matching these patterns (if specified)
+}
+
+// LogFileConfig configures tailing of a local log file
+type LogFileConfig struct {
+	Path           string                `yaml:"path" json:"path"`
+	Rotate         *RotateConfig         `yaml:"rotate" json:"rotate"`
+	MinLevel       string                `yaml:"min_level" json:"min_level"`
+	JSON           *JSONConfig           `yaml:"json" json:"json"`
+	LevelDetection *LevelDetectionConfig `yaml:"level_detection" json:"level_detection"`
+	Multiline      *MultilineConfig      `yaml:"multiline" json:"multiline"`
+	Filters        *FilterConfig         `yaml:"filters" json:"filters"`
+}
+
+// RotateConfig configures size-based log file rotation
+type RotateConfig struct {
+	MaxSize  string `yaml:"max_size" json:"max_size"`   // Human-readable size: "50MB", "100KB", "1GB"
+	MaxFiles int    `yaml:"max_files" json:"max_files"` // Number of rotated files to keep
+}
+
+// ParseSize parses a human-readable size string (e.g., "50MB", "100KB", "1GB") into bytes.
+func ParseSize(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty size string")
+	}
+
+	s = strings.ToUpper(s)
+
+	multipliers := []struct {
+		suffix string
+		mult   int64
+	}{
+		{"GB", 1024 * 1024 * 1024},
+		{"MB", 1024 * 1024},
+		{"KB", 1024},
+		{"B", 1},
+	}
+
+	for _, m := range multipliers {
+		if strings.HasSuffix(s, m.suffix) {
+			numStr := strings.TrimSuffix(s, m.suffix)
+			numStr = strings.TrimSpace(numStr)
+			val, err := strconv.ParseFloat(numStr, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid size number %q: %w", numStr, err)
+			}
+			if val <= 0 {
+				return 0, fmt.Errorf("size must be positive, got %s", s)
+			}
+			return int64(val * float64(m.mult)), nil
+		}
+	}
+
+	return 0, fmt.Errorf("invalid size format %q (use KB, MB, or GB suffix)", s)
 }
 
 // TLSConfig configures TLS/HTTPS for API and metrics endpoints
@@ -512,6 +572,24 @@ func (c *Config) setProcessLoggingAdvancedDefaults(proc *Process) {
 	}
 	if proc.Logging.MinLevel == "" {
 		proc.Logging.MinLevel = "info"
+	}
+
+	// Set defaults for log file tailing configs
+	for _, fileCfg := range proc.Logging.Files {
+		if fileCfg.Multiline != nil {
+			if fileCfg.Multiline.MaxLines == 0 {
+				fileCfg.Multiline.MaxLines = 100
+			}
+			if fileCfg.Multiline.Timeout == 0 {
+				fileCfg.Multiline.Timeout = 1
+			}
+		}
+		if fileCfg.LevelDetection != nil && fileCfg.LevelDetection.DefaultLevel == "" {
+			fileCfg.LevelDetection.DefaultLevel = "info"
+		}
+		if fileCfg.Rotate != nil && fileCfg.Rotate.MaxFiles == 0 {
+			fileCfg.Rotate.MaxFiles = 5
+		}
 	}
 }
 

@@ -260,6 +260,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, true))
 	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, true))
 	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, true))
+	mux.HandleFunc("/api/v1/logs/stream", s.wrapHandler(s.handleLogStream, true))
 	// Config management endpoints
 	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, true))
 	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, true))
@@ -340,6 +341,30 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
+// StartSocketOnly starts only the Unix socket listener (no TCP).
+// Used when api_enabled is false but local management is still needed.
+// The socket handler has no ACL or rate limiting — file permissions provide security.
+func (s *Server) StartSocketOnly(ctx context.Context) error {
+	if s.socketPath == "" {
+		return fmt.Errorf("no socket path configured")
+	}
+
+	mux := http.NewServeMux()
+
+	// Same routes as Start() but without rate limiting or ACL
+	mux.HandleFunc("/api/v1/health", s.wrapHandler(s.handleHealth, false))
+	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, false))
+	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, false))
+	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, false))
+	mux.HandleFunc("/api/v1/logs/stream", s.wrapHandler(s.handleLogStream, false))
+	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, false))
+	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, false))
+	mux.HandleFunc("/api/v1/metrics/history", s.wrapHandler(s.handleMetricsHistory, false))
+	mux.HandleFunc("/api/v1/oneshot/history", s.wrapHandler(s.handleOneshotHistory, false))
+
+	return s.startSocketListener(mux)
+}
+
 // startSocketListener starts the Unix socket listener
 func (s *Server) startSocketListener(handler http.Handler) error {
 	// Remove existing socket file if it exists
@@ -353,8 +378,8 @@ func (s *Server) startSocketListener(handler http.Handler) error {
 		return fmt.Errorf("failed to create socket listener: %w", err)
 	}
 
-	// Set socket permissions (0600 = owner only)
-	if err := os.Chmod(s.socketPath, 0600); err != nil {
+	// Set socket permissions (0660 = owner + group)
+	if err := os.Chmod(s.socketPath, 0660); err != nil {
 		listener.Close()
 		return fmt.Errorf("failed to set socket permissions: %w", err)
 	}
@@ -371,7 +396,7 @@ func (s *Server) startSocketListener(handler http.Handler) error {
 
 	s.logger.Info("Starting API server (Unix socket)",
 		"path", s.socketPath,
-		"permissions", "0600",
+		"permissions", "0660",
 	)
 
 	// Start socket server in background
@@ -940,6 +965,70 @@ func (s *Server) handleGetProcess(w http.ResponseWriter, _ *http.Request, proces
 		"process": processName,
 		"config":  cfg,
 	})
+}
+
+// handleLogStream provides a Server-Sent Events stream of real-time log entries.
+// Query params:
+//   - process: filter by process name (optional, empty = all)
+func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	processFilter := r.URL.Query().Get("process")
+
+	ch, unsub := s.manager.SubscribeLogs(processFilter)
+	defer unsub()
+
+	// Disable write deadline for this SSE connection
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		s.logger.Warn("Failed to disable write deadline for SSE", "error", err)
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	flusher.Flush()
+
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case entry, ok := <-ch:
+			if !ok {
+				return
+			}
+			data, err := json.Marshal(map[string]interface{}{
+				"timestamp": entry.Timestamp.Format(time.RFC3339Nano),
+				"process":   entry.ProcessName,
+				"instance":  entry.InstanceID,
+				"stream":    entry.Stream,
+				"level":     entry.Level,
+				"message":   entry.Message,
+			})
+			if err != nil {
+				s.logger.Error("Failed to marshal log entry", "error", err)
+				continue
+			}
+			fmt.Fprintf(w, "event: log\ndata: %s\n\n", data)
+			flusher.Flush()
+		case <-heartbeat.C:
+			fmt.Fprintf(w, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
 }
 
 // handleStackLogs aggregates logs across the entire stack
