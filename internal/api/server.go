@@ -340,6 +340,29 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
+// StartSocketOnly starts only the Unix socket listener (no TCP).
+// Used when api_enabled is false but local management is still needed.
+// The socket handler has no ACL or rate limiting — file permissions provide security.
+func (s *Server) StartSocketOnly(ctx context.Context) error {
+	if s.socketPath == "" {
+		return fmt.Errorf("no socket path configured")
+	}
+
+	mux := http.NewServeMux()
+
+	// Same routes as Start() but without rate limiting or ACL
+	mux.HandleFunc("/api/v1/health", s.wrapHandler(s.handleHealth, false))
+	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, false))
+	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, false))
+	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, false))
+	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, false))
+	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, false))
+	mux.HandleFunc("/api/v1/metrics/history", s.wrapHandler(s.handleMetricsHistory, false))
+	mux.HandleFunc("/api/v1/oneshot/history", s.wrapHandler(s.handleOneshotHistory, false))
+
+	return s.startSocketListener(mux)
+}
+
 // startSocketListener starts the Unix socket listener
 func (s *Server) startSocketListener(handler http.Handler) error {
 	// Remove existing socket file if it exists
@@ -353,8 +376,8 @@ func (s *Server) startSocketListener(handler http.Handler) error {
 		return fmt.Errorf("failed to create socket listener: %w", err)
 	}
 
-	// Set socket permissions (0600 = owner only)
-	if err := os.Chmod(s.socketPath, 0600); err != nil {
+	// Set socket permissions (0660 = owner + group)
+	if err := os.Chmod(s.socketPath, 0660); err != nil {
 		listener.Close()
 		return fmt.Errorf("failed to set socket permissions: %w", err)
 	}
@@ -371,7 +394,7 @@ func (s *Server) startSocketListener(handler http.Handler) error {
 
 	s.logger.Info("Starting API server (Unix socket)",
 		"path", s.socketPath,
-		"permissions", "0600",
+		"permissions", "0660",
 	)
 
 	// Start socket server in background
