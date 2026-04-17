@@ -21,7 +21,8 @@ type LogBuffer struct {
 	entries []LogEntry
 	size    int
 	index   int
-	full    bool
+	full        bool
+	broadcaster *LogBroadcaster // optional, for real-time subscribers
 }
 
 // NewLogBuffer creates a new log buffer with the specified capacity
@@ -40,14 +41,17 @@ func NewLogBuffer(size int) *LogBuffer {
 // Add adds a log entry to the buffer
 func (lb *LogBuffer) Add(entry LogEntry) {
 	lb.mu.Lock()
-	defer lb.mu.Unlock()
-
 	lb.entries[lb.index] = entry
 	lb.index++
-
 	if lb.index >= lb.size {
 		lb.index = 0
 		lb.full = true
+	}
+	b := lb.broadcaster
+	lb.mu.Unlock()
+
+	if b != nil {
+		b.Broadcast(entry)
 	}
 }
 
@@ -134,4 +138,11 @@ func (lb *LogBuffer) Size() int {
 		return lb.size
 	}
 	return lb.index
+}
+
+// SetBroadcaster sets the broadcaster for real-time log subscriptions.
+func (lb *LogBuffer) SetBroadcaster(b *LogBroadcaster) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.broadcaster = b
 }

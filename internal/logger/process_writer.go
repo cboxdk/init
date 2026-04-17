@@ -251,6 +251,13 @@ func (pw *ProcessWriter) Flush() {
 	}
 }
 
+// SetBroadcaster sets the broadcaster for real-time log subscriptions.
+func (pw *ProcessWriter) SetBroadcaster(b *LogBroadcaster) {
+	if pw.logBuffer != nil {
+		pw.logBuffer.SetBroadcaster(b)
+	}
+}
+
 // GetLogs returns all log entries from the buffer
 func (pw *ProcessWriter) GetLogs() []LogEntry {
 	if pw.logBuffer == nil {
