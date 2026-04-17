@@ -9,7 +9,7 @@ import (
 func TestFileRotator_NoRotationNeeded(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.log")
-	os.WriteFile(path, []byte("small"), 0644)
+	_ = os.WriteFile(path, []byte("small"), 0644)
 
 	r := NewFileRotator(1024, 3)
 	if err := r.CheckAndRotate(path); err != nil {
@@ -24,7 +24,7 @@ func TestFileRotator_NoRotationNeeded(t *testing.T) {
 func TestFileRotator_RotatesWhenOverSize(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.log")
-	os.WriteFile(path, make([]byte, 2048), 0644)
+	_ = os.WriteFile(path, make([]byte, 2048), 0644)
 
 	r := NewFileRotator(1024, 3)
 	if err := r.CheckAndRotate(path); err != nil {
@@ -49,9 +49,9 @@ func TestFileRotator_ShiftsExistingFiles(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.log")
 
-	os.WriteFile(path+".1", []byte("old-1"), 0644)
-	os.WriteFile(path+".2", []byte("old-2"), 0644)
-	os.WriteFile(path, make([]byte, 2048), 0644)
+	_ = os.WriteFile(path+".1", []byte("old-1"), 0644)
+	_ = os.WriteFile(path+".2", []byte("old-2"), 0644)
+	_ = os.WriteFile(path, make([]byte, 2048), 0644)
 
 	r := NewFileRotator(1024, 3)
 	if err := r.CheckAndRotate(path); err != nil {
@@ -76,9 +76,9 @@ func TestFileRotator_DeletesBeyondMaxFiles(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "app.log")
 
-	os.WriteFile(path+".1", []byte("one"), 0644)
-	os.WriteFile(path+".2", []byte("two"), 0644)
-	os.WriteFile(path, make([]byte, 2048), 0644)
+	_ = os.WriteFile(path+".1", []byte("one"), 0644)
+	_ = os.WriteFile(path+".2", []byte("two"), 0644)
+	_ = os.WriteFile(path, make([]byte, 2048), 0644)
 
 	r := NewFileRotator(1024, 2)
 	if err := r.CheckAndRotate(path); err != nil {

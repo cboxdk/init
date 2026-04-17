@@ -42,7 +42,7 @@ func (lc *lineCollector) Lines() []string {
 func TestFileTailer_FollowNewLines(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
-	os.WriteFile(path, nil, 0644)
+	_ = os.WriteFile(path, nil, 0644)
 
 	collector := &lineCollector{}
 	tailer := New(path, collector, nil)
@@ -50,7 +50,7 @@ func TestFileTailer_FollowNewLines(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go tailer.Start(ctx)
+	go func() { _ = tailer.Start(ctx) }()
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
@@ -75,7 +75,7 @@ func TestFileTailer_FollowNewLines(t *testing.T) {
 func TestFileTailer_SeeksToEnd(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
-	os.WriteFile(path, []byte("old line\n"), 0644)
+	_ = os.WriteFile(path, []byte("old line\n"), 0644)
 
 	collector := &lineCollector{}
 	tailer := New(path, collector, nil)
@@ -83,7 +83,7 @@ func TestFileTailer_SeeksToEnd(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go tailer.Start(ctx)
+	go func() { _ = tailer.Start(ctx) }()
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
@@ -106,7 +106,7 @@ func TestFileTailer_SeeksToEnd(t *testing.T) {
 func TestFileTailer_DetectsTruncation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
-	os.WriteFile(path, nil, 0644)
+	_ = os.WriteFile(path, nil, 0644)
 
 	collector := &lineCollector{}
 	tailer := New(path, collector, nil)
@@ -114,7 +114,7 @@ func TestFileTailer_DetectsTruncation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go tailer.Start(ctx)
+	go func() { _ = tailer.Start(ctx) }()
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
@@ -152,7 +152,7 @@ func TestFileTailer_WaitsForMissingFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go tailer.Start(ctx)
+	go func() { _ = tailer.Start(ctx) }()
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.Create(path)
@@ -170,7 +170,7 @@ func TestFileTailer_WaitsForMissingFile(t *testing.T) {
 func TestFileTailer_StopsOnContextCancel(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
-	os.WriteFile(path, nil, 0644)
+	_ = os.WriteFile(path, nil, 0644)
 
 	collector := &lineCollector{}
 	tailer := New(path, collector, nil)
@@ -193,7 +193,7 @@ func TestFileTailer_StopsOnContextCancel(t *testing.T) {
 func TestFileTailer_WithRotator(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.log")
-	os.WriteFile(path, nil, 0644)
+	_ = os.WriteFile(path, nil, 0644)
 
 	collector := &lineCollector{}
 	rotator := NewFileRotator(100, 2)
@@ -202,7 +202,7 @@ func TestFileTailer_WithRotator(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go tailer.Start(ctx)
+	go func() { _ = tailer.Start(ctx) }()
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)

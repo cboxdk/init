@@ -45,9 +45,9 @@ func (r *FileRotator) CheckAndRotate(path string) error {
 
 		if _, err := os.Stat(src); err == nil {
 			if i >= r.MaxFiles {
-				os.Remove(src)
+				_ = os.Remove(src)
 			} else {
-				os.Rename(src, dst)
+				_ = os.Rename(src, dst)
 			}
 		}
 	}

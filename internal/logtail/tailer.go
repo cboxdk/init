@@ -129,13 +129,13 @@ func (t *FileTailer) tailLoop(ctx context.Context, seekToEnd bool) error {
 			if err != nil {
 				if len(line) > 0 {
 					// Incomplete line — seek back so we re-read it next time
-					file.Seek(offset, io.SeekStart)
+					_, _ = file.Seek(offset, io.SeekStart)
 					reader.Reset(file)
 				}
 				break
 			}
 			offset += int64(len(line))
-			t.writer.Write([]byte(line))
+			_, _ = t.writer.Write([]byte(line))
 		}
 
 		newOffset, _ := file.Seek(0, io.SeekCurrent)
@@ -164,7 +164,7 @@ func (t *FileTailer) tailLoop(ctx context.Context, seekToEnd bool) error {
 					continue
 				}
 				if info.Size() < offset {
-					file.Seek(0, io.SeekStart)
+					_, _ = file.Seek(0, io.SeekStart)
 					offset = 0
 					reader.Reset(file)
 				}
@@ -172,13 +172,13 @@ func (t *FileTailer) tailLoop(ctx context.Context, seekToEnd bool) error {
 				readLines()
 
 				if t.rotator != nil {
-					t.rotator.CheckAndRotate(t.path)
+					_ = t.rotator.CheckAndRotate(t.path)
 				}
 			}
 
 			if event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
 				file.Close()
-				watcher.Remove(t.path)
+				_ = watcher.Remove(t.path)
 
 				if err := t.waitForFile(ctx); err != nil {
 					return err
