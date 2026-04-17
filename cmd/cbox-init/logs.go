@@ -3,120 +3,90 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
-	"time"
+	"os/signal"
 
-	"github.com/cboxdk/init/internal/audit"
-	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/logger"
-	"github.com/cboxdk/init/internal/process"
-	"github.com/cboxdk/init/internal/setup"
-	"github.com/cboxdk/init/internal/signals"
-	"github.com/cboxdk/init/internal/tui"
 	"github.com/spf13/cobra"
 )
 
 var logsCmd = &cobra.Command{
-	Use:   "logs [process...]",
-	Short: "Tail logs from processes",
-	Long: `Tail logs from one or more processes in real-time.
-
-If no process names are specified, shows logs from all processes.
+	Use:   "logs [process]",
+	Short: "Tail logs from a process or all processes",
+	Long: `Tail logs from one or all processes via the daemon API.
 
 Examples:
-  cbox-init logs                    # All processes
-  cbox-init logs nginx              # Single process
-  cbox-init logs nginx horizon      # Multiple processes
-  cbox-init logs --level=error      # Filter by level
-  cbox-init logs --tail=100         # Last 100 lines`,
-	Run: runLogs,
+  cbox-init logs                      # All processes, last 100 lines
+  cbox-init logs nginx                # Specific process
+  cbox-init logs nginx --tail 50      # Last 50 lines
+  cbox-init logs -f                   # Stream all processes
+  cbox-init logs nginx -f             # Stream specific process
+  cbox-init logs nginx --tail 20 -f   # Last 20 lines then stream`,
+	Args: cobra.MaximumNArgs(1),
+	Run:  runLogs,
 }
 
 var (
-	logsLevel  string
 	logsTail   int
 	logsFollow bool
+	logsLevel  string
+	logsURL    string
 )
 
 func init() {
-	logsCmd.Flags().StringVar(&logsLevel, "level", "all", "Filter by log level (debug|info|warn|error|all)")
 	logsCmd.Flags().IntVar(&logsTail, "tail", 100, "Number of lines to show")
-	logsCmd.Flags().BoolVarP(&logsFollow, "follow", "f", true, "Follow log output")
+	logsCmd.Flags().BoolVarP(&logsFollow, "follow", "f", false, "Stream new log entries")
+	logsCmd.Flags().StringVar(&logsLevel, "level", "all", "Filter by log level (debug|info|warn|error|all)")
+	logsCmd.Flags().StringVar(&logsURL, "url", "", "API endpoint (auto-discovers Unix socket by default)")
 }
 
 func runLogs(cmd *cobra.Command, args []string) {
-	// Get config path
-	cfgPath := getConfigPath()
-
-	// Setup environment (minimal for log viewer)
-	workdir := os.Getenv("WORKDIR")
-	if workdir == "" {
-		workdir = "/var/www/html"
-	}
-
-	// Setup permissions (silent, detects framework internally)
-	permMgr := setup.NewPermissionManager(workdir, slog.Default())
-	_ = permMgr.Setup()
-
-	// Validate system (silent)
-	validator := setup.NewConfigValidator(slog.Default())
-	_ = validator.ValidateAll()
-
-	// Load configuration
-	cfg, err := config.LoadWithEnvExpansion(cfgPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to load configuration: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Initialize logger with specified level
-	logLevel := cfg.Global.LogLevel
-	if logsLevel != "all" {
-		logLevel = logsLevel
-	}
-	log := logger.New(logLevel, "text") // Text format for readability
-
-	slog.SetDefault(log)
-
-	// Create audit logger
-	auditLogger := audit.NewLogger(log, cfg.Global.AuditEnabled)
-
-	// Create process manager
-	pm := process.NewManager(cfg, log, auditLogger)
-
-	// Start zombie reaper
-	go signals.ReapZombies(cfg.Global.ZombieReapInterval)
-
-	// Start processes
-	ctx := context.Background()
-	if err := pm.Start(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to start processes: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Monitor process health
-	pm.MonitorProcessHealth(ctx)
-
-	// Display header
-	fmt.Fprintf(os.Stderr, "📋 Tailing logs")
+	var processName string
 	if len(args) > 0 {
-		fmt.Fprintf(os.Stderr, " for: %v", args)
-	} else {
-		fmt.Fprintf(os.Stderr, " for all processes")
+		processName = args[0]
 	}
-	fmt.Fprintf(os.Stderr, " (level: %s)\n", logLevel)
-	fmt.Fprintf(os.Stderr, "Press Ctrl+C to exit\n\n")
 
-	// Launch simple log viewer
-	if err := tui.RunLogs(pm); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+	client := newClient(logsURL)
+
+	// Fetch historical logs
+	var logs []logger.LogEntry
+	var err error
+	if processName != "" {
+		logs, err = client.GetLogs(processName, logsTail)
+	} else {
+		logs, err = client.GetStackLogs(logsTail)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to fetch logs: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Shutdown when viewer exits
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Global.ShutdownTimeout)*time.Second)
+	// Print historical logs
+	for _, entry := range logs {
+		printLogEntry(entry)
+	}
+
+	// If not following, we're done
+	if !logsFollow {
+		return
+	}
+
+	// Stream new entries via SSE
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	_ = pm.Shutdown(shutdownCtx)
+	ch, err := client.StreamLogs(ctx, processName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to log stream: %v\n", err)
+		os.Exit(1)
+	}
+
+	for entry := range ch {
+		printLogEntry(entry)
+	}
+}
+
+func printLogEntry(entry logger.LogEntry) {
+	ts := entry.Timestamp.Format("15:04:05.000")
+	fmt.Printf("%s [%s] %s: %s\n", ts, entry.Level, entry.ProcessName, entry.Message)
 }
