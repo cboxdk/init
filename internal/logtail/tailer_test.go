@@ -54,8 +54,8 @@ func TestFileTailer_FollowNewLines(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
-	f.WriteString("line one\n")
-	f.WriteString("line two\n")
+	_, _ = f.WriteString("line one\n")
+	_, _ = f.WriteString("line two\n")
 	f.Close()
 
 	time.Sleep(500 * time.Millisecond)
@@ -87,7 +87,7 @@ func TestFileTailer_SeeksToEnd(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
-	f.WriteString("new line\n")
+	_, _ = f.WriteString("new line\n")
 	f.Close()
 
 	time.Sleep(500 * time.Millisecond)
@@ -118,15 +118,15 @@ func TestFileTailer_DetectsTruncation(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
-	f.WriteString("before truncate\n")
+	_, _ = f.WriteString("before truncate\n")
 	f.Close()
 	time.Sleep(300 * time.Millisecond)
 
-	os.Truncate(path, 0)
+	_ = os.Truncate(path, 0)
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
-	f.WriteString("after truncate\n")
+	_, _ = f.WriteString("after truncate\n")
 	f.Close()
 	time.Sleep(500 * time.Millisecond)
 
@@ -156,7 +156,7 @@ func TestFileTailer_WaitsForMissingFile(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	f, _ := os.Create(path)
-	f.WriteString("appeared\n")
+	_, _ = f.WriteString("appeared\n")
 	f.Close()
 
 	time.Sleep(500 * time.Millisecond)
@@ -207,7 +207,7 @@ func TestFileTailer_WithRotator(t *testing.T) {
 
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
 	for i := 0; i < 20; i++ {
-		f.WriteString("this is a log line that is fairly long to fill up space\n")
+		_, _ = f.WriteString("this is a log line that is fairly long to fill up space\n")
 	}
 	f.Close()
 

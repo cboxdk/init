@@ -104,10 +104,8 @@ func TestStreamLogs_ContextCancellation(t *testing.T) {
 	cancel()
 
 	select {
-	case _, ok := <-ch:
-		if ok {
-			// Might get a zero value, that's fine
-		}
+	case <-ch:
+		// Channel delivered or closed — both are acceptable after cancel
 	case <-time.After(2 * time.Second):
 		t.Fatal("channel not closed after context cancel")
 	}
