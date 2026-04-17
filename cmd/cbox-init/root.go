@@ -31,9 +31,11 @@ A modern process supervisor designed for Laravel and PHP applications with:
 Examples:
   cbox-init serve                    # Start daemon
   cbox-init tui                      # Interactive dashboard
-  cbox-init logs nginx               # Tail nginx logs
+  cbox-init list                     # List all processes
+  cbox-init status nginx             # Show process details
   cbox-init restart horizon          # Restart horizon
-  cbox-init scale queue-default 10   # Scale to 10 workers`,
+  cbox-init scale queue-default 10   # Scale to 10 workers
+  cbox-init logs nginx -f            # Stream nginx logs`,
 	Version: version,
 	// Default to serve command if no subcommand specified
 	Run: func(cmd *cobra.Command, args []string) {
@@ -61,10 +63,12 @@ func init() {
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(scaffoldCmd)
-	// Process control commands (future):
-	// rootCmd.AddCommand(restartCmd)
-	// rootCmd.AddCommand(stopCmd)
-	// rootCmd.AddCommand(startCmd)
-	// rootCmd.AddCommand(scaleCmd)
-	// rootCmd.AddCommand(statusCmd)
+	// Process control commands
+	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(startProcessCmd)
+	rootCmd.AddCommand(stopProcessCmd)
+	rootCmd.AddCommand(restartCmd)
+	rootCmd.AddCommand(scaleCmd)
+	rootCmd.AddCommand(reloadConfigCmd)
 }
