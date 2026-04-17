@@ -1405,7 +1405,7 @@ func TestLogsCommandFlagDefaults(t *testing.T) {
 	}{
 		{"level", "all"},
 		{"tail", "100"},
-		{"follow", "true"},
+		{"follow", "false"},
 	}
 
 	for _, tt := range tests {
