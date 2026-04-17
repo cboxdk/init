@@ -260,6 +260,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, true))
 	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, true))
 	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, true))
+	mux.HandleFunc("/api/v1/logs/stream", s.wrapHandler(s.handleLogStream, true))
 	// Config management endpoints
 	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, true))
 	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, true))
@@ -355,6 +356,7 @@ func (s *Server) StartSocketOnly(ctx context.Context) error {
 	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, false))
 	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, false))
 	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, false))
+	mux.HandleFunc("/api/v1/logs/stream", s.wrapHandler(s.handleLogStream, false))
 	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, false))
 	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, false))
 	mux.HandleFunc("/api/v1/metrics/history", s.wrapHandler(s.handleMetricsHistory, false))
@@ -963,6 +965,70 @@ func (s *Server) handleGetProcess(w http.ResponseWriter, _ *http.Request, proces
 		"process": processName,
 		"config":  cfg,
 	})
+}
+
+// handleLogStream provides a Server-Sent Events stream of real-time log entries.
+// Query params:
+//   - process: filter by process name (optional, empty = all)
+func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	processFilter := r.URL.Query().Get("process")
+
+	ch, unsub := s.manager.SubscribeLogs(processFilter)
+	defer unsub()
+
+	// Disable write deadline for this SSE connection
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		s.logger.Warn("Failed to disable write deadline for SSE", "error", err)
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	flusher.Flush()
+
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case entry, ok := <-ch:
+			if !ok {
+				return
+			}
+			data, err := json.Marshal(map[string]interface{}{
+				"timestamp": entry.Timestamp.Format(time.RFC3339Nano),
+				"process":   entry.ProcessName,
+				"instance":  entry.InstanceID,
+				"stream":    entry.Stream,
+				"level":     entry.Level,
+				"message":   entry.Message,
+			})
+			if err != nil {
+				s.logger.Error("Failed to marshal log entry", "error", err)
+				continue
+			}
+			fmt.Fprintf(w, "event: log\ndata: %s\n\n", data)
+			flusher.Flush()
+		case <-heartbeat.C:
+			fmt.Fprintf(w, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
 }
 
 // handleStackLogs aggregates logs across the entire stack
