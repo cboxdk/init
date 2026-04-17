@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/cboxdk/init/internal/apiclient"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/process"
@@ -1814,7 +1815,7 @@ func TestExecuteSystemAction(t *testing.T) {
 			m := &Model{
 				systemMenuIndex: tt.menuIndex,
 				isRemote:        tt.isRemote,
-				client:          NewAPIClient("http://localhost:9999", ""),
+				client:          apiclient.New("http://localhost:9999", ""),
 			}
 
 			cmd := m.executeSystemAction()
@@ -2425,7 +2426,7 @@ func TestHandleProcessActionKeys(t *testing.T) {
 				currentView:  viewProcessList,
 				processCache: make(map[string]process.ProcessInfo),
 				isRemote:     true,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 			}
 
 			if tt.hasData {
@@ -2552,7 +2553,7 @@ func TestHandleSystemTabKeys(t *testing.T) {
 			m := Model{
 				activeTab: tt.activeTab,
 				isRemote:  true,
-				client:    NewAPIClient("http://localhost:9999", ""),
+				client:    apiclient.New("http://localhost:9999", ""),
 			}
 
 			handled, _, cmd := m.handleSystemTabKeys(tt.key)
@@ -2752,7 +2753,7 @@ func TestExecuteScale(t *testing.T) {
 				scaleInput:      tt.scaleInput,
 				pendingTarget:   tt.target,
 				isRemote:        true,
-				client:          NewAPIClient("http://localhost:9999", ""),
+				client:          apiclient.New("http://localhost:9999", ""),
 			}
 
 			cmd := m.executeScale()
@@ -2920,7 +2921,7 @@ func TestUpdate(t *testing.T) {
 				currentView:  viewProcessList,
 				processCache: make(map[string]process.ProcessInfo),
 				isRemote:     true,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 			}
 			m.setupProcessTable()
 
@@ -2973,7 +2974,7 @@ func TestHandleQuickScale(t *testing.T) {
 				currentView:  viewProcessList,
 				processCache: make(map[string]process.ProcessInfo),
 				isRemote:     true,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 			}
 
 			if tt.hasSelection {
@@ -3032,7 +3033,7 @@ func TestOpenLogView(t *testing.T) {
 			m := &Model{
 				currentView:  viewProcessList,
 				isRemote:     true,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 				processCache: make(map[string]process.ProcessInfo),
 			}
 
@@ -3264,7 +3265,7 @@ func TestFetchProcessConfigCmd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &Model{
 				isRemote: tt.isRemote,
-				client:   NewAPIClient("http://localhost:9999", ""),
+				client:   apiclient.New("http://localhost:9999", ""),
 			}
 
 			cmd := m.fetchProcessConfigCmd(tt.procName)
@@ -3284,7 +3285,7 @@ func TestFetchProcessConfigCmd(t *testing.T) {
 func TestScaleProcess(t *testing.T) {
 	m := &Model{
 		isRemote: true,
-		client:   NewAPIClient("http://localhost:9999", ""),
+		client:   apiclient.New("http://localhost:9999", ""),
 	}
 
 	cmd := m.scaleProcess("php-fpm", 3)
@@ -3562,7 +3563,7 @@ func TestHandleProcessActionKeysWithData(t *testing.T) {
 				processCache: make(map[string]process.ProcessInfo),
 				tableData:    tt.processData,
 				isRemote:     true,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 			}
 			m.setupProcessTable()
 
@@ -3771,7 +3772,7 @@ func TestHandleQuickScaleAdditional(t *testing.T) {
 				currentView:  viewProcessList,
 				processCache: make(map[string]process.ProcessInfo),
 				isRemote:     tt.isRemote,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 			}
 
 			if tt.hasProcess {
@@ -3848,7 +3849,7 @@ func TestHandleProcessDetailKeysAdditional(t *testing.T) {
 				detailProc:   tt.detailProc,
 				processCache: make(map[string]process.ProcessInfo),
 				isRemote:     true,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 			}
 			m.setupProcessTable()
 			m.setupInstanceTable()
@@ -3910,7 +3911,7 @@ func TestHandleScheduleKeysAdditional(t *testing.T) {
 				currentView:  viewProcessList,
 				processCache: make(map[string]process.ProcessInfo),
 				isRemote:     true,
-				client:       NewAPIClient("http://localhost:9999", ""),
+				client:       apiclient.New("http://localhost:9999", ""),
 			}
 
 			if tt.hasData {
@@ -3964,7 +3965,7 @@ func TestExecuteActions(t *testing.T) {
 				pendingAction: tt.action,
 				pendingTarget: "php-fpm",
 				isRemote:      tt.isRemote,
-				client:        NewAPIClient("http://localhost:9999", ""),
+				client:        apiclient.New("http://localhost:9999", ""),
 			}
 
 			cmd := m.executeAction()
@@ -3982,7 +3983,7 @@ func TestUpdateAdditionalMessages(t *testing.T) {
 			currentView:  viewProcessList,
 			processCache: make(map[string]process.ProcessInfo),
 			isRemote:     true,
-			client:       NewAPIClient("http://localhost:9999", ""),
+			client:       apiclient.New("http://localhost:9999", ""),
 		}
 		m.setupProcessTable()
 
@@ -4002,7 +4003,7 @@ func TestUpdateAdditionalMessages(t *testing.T) {
 			currentView:  viewLogs,
 			processCache: make(map[string]process.ProcessInfo),
 			isRemote:     true,
-			client:       NewAPIClient("http://localhost:9999", ""),
+			client:       apiclient.New("http://localhost:9999", ""),
 		}
 		m.setupProcessTable()
 
@@ -4145,7 +4146,7 @@ func TestExecuteScheduleActions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &Model{
 				isRemote: true,
-				client:   NewAPIClient("http://localhost:9999", ""),
+				client:   apiclient.New("http://localhost:9999", ""),
 			}
 
 			// These functions will fail because they try to call a remote API
