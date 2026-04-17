@@ -105,6 +105,7 @@ type Supervisor struct {
 	oneshotHistory     *OneshotHistory            // Shared oneshot history (can be nil)
 	deathNotifier      func(string)               // Callback when all instances are dead
 	credentials        *Credentials               // Resolved user/group credentials (nil = inherit)
+	logBroadcaster     *logger.LogBroadcaster     // Shared broadcaster for real-time log subscriptions
 	healthCheckStrict  bool                       // Fail startup if health monitor creation fails
 	ctx                context.Context
 	cancel             context.CancelFunc
@@ -233,6 +234,13 @@ func (s *Supervisor) SetOneshotHistory(history *OneshotHistory) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.oneshotHistory = history
+}
+
+// SetLogBroadcaster sets the shared log broadcaster for real-time log subscriptions
+func (s *Supervisor) SetLogBroadcaster(b *logger.LogBroadcaster) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logBroadcaster = b
 }
 
 // streamEnabled determines if stdout/stderr streaming is enabled for this process
@@ -439,6 +447,16 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		stderrWriter, err = logger.NewProcessWriter(s.logger, s.name, instanceID, "stderr", s.config.Logging)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create stderr writer: %w", err)
+		}
+	}
+
+	// Wire log broadcaster to process writers for real-time subscriptions
+	if s.logBroadcaster != nil {
+		if stdoutWriter != nil {
+			stdoutWriter.SetBroadcaster(s.logBroadcaster)
+		}
+		if stderrWriter != nil {
+			stderrWriter.SetBroadcaster(s.logBroadcaster)
 		}
 	}
 
