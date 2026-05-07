@@ -77,6 +77,47 @@ PHP_FPM_AUTOTUNE_PROFILE=heavy
 
 See [PHP-FPM Auto-Tuning](../php-fpm-autotune) for complete guide.
 
+## Permission / Ownership
+
+These environment variables control which uid/gid cbox-init uses when chowning framework directories (Laravel `storage/`, Symfony `var/`, WordPress `wp-content/`).
+
+**Note:** These are standalone variables — they do **not** follow the `CBOX_INIT_` prefix convention because they are a widely adopted container convention (used by linuxserver.io images, s6-overlay, etc.).
+
+| Variable | Description | Default behaviour |
+|----------|-------------|-------------------|
+| `PUID` | User ID for framework directory ownership | Auto-detected from `/etc/passwd` |
+| `PGID` | Group ID for framework directory ownership | Auto-detected from `/etc/passwd` |
+
+### Resolution order
+
+cbox-init resolves the app user in this order:
+
+1. **`PUID` + `PGID` environment variables** — explicit operator override. Both must be set to valid non-negative integers; if either is missing or invalid, the override is skipped entirely.
+2. **`/etc/passwd` lookup of `www-data`** — works on both Debian (uid 33) and Alpine (uid 82) without hardcoding either.
+3. **Fallback to uid 82 / gid 82** (Alpine convention) — only used when the lookup also fails.
+
+The resolved source is logged at startup so you can verify which path was taken:
+
+```
+INFO App user from PUID/PGID env uid=33 gid=33
+# or
+INFO App user from /etc/passwd lookup user=www-data uid=33 gid=33
+```
+
+### Examples
+
+```bash
+# Explicit override (e.g., match your host user for bind-mount permissions)
+docker run -e PUID=1000 -e PGID=1000 myapp
+
+# Kubernetes — set via env in the pod spec
+env:
+  - name: PUID
+    value: "33"
+  - name: PGID
+    value: "33"
+```
+
 ## Global Settings Reference
 
 ### Shutdown Configuration

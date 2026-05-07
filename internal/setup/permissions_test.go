@@ -515,6 +515,7 @@ func TestReadPuidPgidEnv(t *testing.T) {
 		{name: "PUID non-numeric", puid: "abc", pgid: "33", wantOk: false},
 		{name: "PGID non-numeric", puid: "33", pgid: "xyz", wantOk: false},
 		{name: "negative PUID rejected", puid: "-1", pgid: "33", wantOk: false},
+		{name: "negative PGID rejected", puid: "33", pgid: "-1", wantOk: false},
 		{name: "uid 0 (root) is valid", puid: "0", pgid: "0", wantUID: 0, wantGID: 0, wantOk: true},
 	}
 

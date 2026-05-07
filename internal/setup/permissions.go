@@ -85,6 +85,13 @@ func (pm *PermissionManager) resolveAppUser() (uid, gid int) {
 		return envUID, envGID
 	}
 
+	// Warn when only one of the pair is set — likely operator mistake.
+	puidStr, pgidStr := os.Getenv("PUID"), os.Getenv("PGID")
+	if (puidStr != "" && pgidStr == "") || (puidStr == "" && pgidStr != "") {
+		pm.logger.Warn("Only one of PUID/PGID is set — ignoring env override, both must be provided",
+			"PUID", puidStr, "PGID", pgidStr)
+	}
+
 	if u, err := user.Lookup("www-data"); err == nil {
 		uidI, errU := strconv.Atoi(u.Uid)
 		gidI, errG := strconv.Atoi(u.Gid)
@@ -130,18 +137,21 @@ func (pm *PermissionManager) Setup() error {
 
 	switch fw {
 	case FrameworkLaravel:
-		return pm.setupLaravel()
+		uid, gid := pm.resolveAppUser()
+		return pm.setupLaravel(uid, gid)
 	case FrameworkSymfony:
-		return pm.setupSymfony()
+		uid, gid := pm.resolveAppUser()
+		return pm.setupSymfony(uid, gid)
 	case FrameworkWordPress:
-		return pm.setupWordPress()
+		uid, gid := pm.resolveAppUser()
+		return pm.setupWordPress(uid, gid)
 	default:
 		pm.logger.Debug("Generic framework, skipping permission setup")
 		return nil
 	}
 }
 
-func (pm *PermissionManager) setupLaravel() error {
+func (pm *PermissionManager) setupLaravel(uid, gid int) error {
 	dirs := []string{
 		filepath.Join(pm.workdir, "storage", "framework", "sessions"),
 		filepath.Join(pm.workdir, "storage", "framework", "views"),
@@ -156,14 +166,13 @@ func (pm *PermissionManager) setupLaravel() error {
 		}
 	}
 
-	uid, gid := pm.resolveAppUser()
 	pm.chownRecursive(filepath.Join(pm.workdir, "storage"), uid, gid)
 	pm.chownRecursive(filepath.Join(pm.workdir, "bootstrap", "cache"), uid, gid)
 
 	return nil
 }
 
-func (pm *PermissionManager) setupSymfony() error {
+func (pm *PermissionManager) setupSymfony(uid, gid int) error {
 	dirs := []string{
 		filepath.Join(pm.workdir, "var", "cache"),
 		filepath.Join(pm.workdir, "var", "log"),
@@ -175,18 +184,16 @@ func (pm *PermissionManager) setupSymfony() error {
 		}
 	}
 
-	uid, gid := pm.resolveAppUser()
 	pm.chownRecursive(filepath.Join(pm.workdir, "var"), uid, gid)
 	return nil
 }
 
-func (pm *PermissionManager) setupWordPress() error {
+func (pm *PermissionManager) setupWordPress(uid, gid int) error {
 	dir := filepath.Join(pm.workdir, "wp-content", "uploads")
 	if err := pm.createDir(dir, 0775); err != nil {
 		pm.logger.Warn("Failed to create uploads directory", "error", err)
 	}
 
-	uid, gid := pm.resolveAppUser()
 	pm.chownRecursive(filepath.Join(pm.workdir, "wp-content"), uid, gid)
 	return nil
 }
