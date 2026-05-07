@@ -3,7 +3,9 @@ package setup
 import (
 	"log/slog"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 )
 
 // Framework represents a detected PHP framework
@@ -14,6 +16,14 @@ const (
 	FrameworkSymfony   Framework = "symfony"
 	FrameworkWordPress Framework = "wordpress"
 	FrameworkGeneric   Framework = "generic"
+)
+
+// Fallback uid/gid when neither env override nor /etc/passwd lookup
+// resolves an app user. 82 is www-data on Alpine, but on Debian-based
+// images this constant is wrong — preferred path is the lookup below.
+const (
+	fallbackUID = 82
+	fallbackGID = 82
 )
 
 // PermissionManager handles directory creation and permission setup
@@ -58,6 +68,65 @@ func dirExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// resolveAppUser returns the uid/gid the framework directories should be
+// chowned to. Resolution order:
+//
+//  1. `PUID` / `PGID` environment variables — explicit operator override.
+//     Either both must be valid integers or both are ignored.
+//  2. `/etc/passwd` lookup of `www-data` — handles Debian (uid 33) and
+//     Alpine (uid 82) without hardcoding either, so the same binary
+//     produces correct ownership in both baseimages.
+//  3. Fallback to `fallbackUID/fallbackGID` (Alpine convention).
+//
+// The chosen source is logged so the operator can see which path won.
+func (pm *PermissionManager) resolveAppUser() (uid, gid int) {
+	if envUID, envGID, ok := readPuidPgidEnv(); ok {
+		pm.logger.Info("App user from PUID/PGID env", "uid", envUID, "gid", envGID)
+		return envUID, envGID
+	}
+
+	// Warn when the env vars are set but rejected so the operator knows
+	// their override didn't take effect.
+	puidStr, pgidStr := os.Getenv("PUID"), os.Getenv("PGID")
+	if (puidStr != "" && pgidStr == "") || (puidStr == "" && pgidStr != "") {
+		pm.logger.Warn("Only one of PUID/PGID is set — ignoring env override, both must be provided",
+			"PUID", puidStr, "PGID", pgidStr)
+	} else if puidStr != "" && pgidStr != "" {
+		pm.logger.Warn("PUID/PGID values are not valid non-negative integers — ignoring env override",
+			"PUID", puidStr, "PGID", pgidStr)
+	}
+
+	if u, err := user.Lookup("www-data"); err == nil {
+		uidI, errU := strconv.Atoi(u.Uid)
+		gidI, errG := strconv.Atoi(u.Gid)
+		if errU == nil && errG == nil {
+			pm.logger.Info("App user from /etc/passwd lookup", "user", "www-data", "uid", uidI, "gid", gidI)
+			return uidI, gidI
+		}
+	}
+
+	pm.logger.Warn("Could not resolve app user — falling back to Alpine convention",
+		"uid", fallbackUID, "gid", fallbackGID,
+		"hint", "Set PUID/PGID env vars or ensure /etc/passwd has a www-data entry",
+	)
+	return fallbackUID, fallbackGID
+}
+
+// readPuidPgidEnv reads PUID and PGID. Both must be present and parse
+// as non-negative integers; otherwise the override is ignored.
+func readPuidPgidEnv() (uid, gid int, ok bool) {
+	puidStr, pgidStr := os.Getenv("PUID"), os.Getenv("PGID")
+	if puidStr == "" || pgidStr == "" {
+		return 0, 0, false
+	}
+	puid, errU := strconv.Atoi(puidStr)
+	pgid, errG := strconv.Atoi(pgidStr)
+	if errU != nil || errG != nil || puid < 0 || pgid < 0 {
+		return 0, 0, false
+	}
+	return puid, pgid, true
+}
+
 // Setup creates necessary directories and sets permissions
 func (pm *PermissionManager) Setup() error {
 	fw := pm.detectFramework()
@@ -72,18 +141,21 @@ func (pm *PermissionManager) Setup() error {
 
 	switch fw {
 	case FrameworkLaravel:
-		return pm.setupLaravel()
+		uid, gid := pm.resolveAppUser()
+		return pm.setupLaravel(uid, gid)
 	case FrameworkSymfony:
-		return pm.setupSymfony()
+		uid, gid := pm.resolveAppUser()
+		return pm.setupSymfony(uid, gid)
 	case FrameworkWordPress:
-		return pm.setupWordPress()
+		uid, gid := pm.resolveAppUser()
+		return pm.setupWordPress(uid, gid)
 	default:
 		pm.logger.Debug("Generic framework, skipping permission setup")
 		return nil
 	}
 }
 
-func (pm *PermissionManager) setupLaravel() error {
+func (pm *PermissionManager) setupLaravel(uid, gid int) error {
 	dirs := []string{
 		filepath.Join(pm.workdir, "storage", "framework", "sessions"),
 		filepath.Join(pm.workdir, "storage", "framework", "views"),
@@ -98,15 +170,13 @@ func (pm *PermissionManager) setupLaravel() error {
 		}
 	}
 
-	// Set ownership (www-data UID/GID typically 82 on Alpine, 33 on Debian)
-	// Note: This will fail silently if not running as root
-	pm.chownRecursive(filepath.Join(pm.workdir, "storage"), 82, 82)
-	pm.chownRecursive(filepath.Join(pm.workdir, "bootstrap", "cache"), 82, 82)
+	pm.chownRecursive(filepath.Join(pm.workdir, "storage"), uid, gid)
+	pm.chownRecursive(filepath.Join(pm.workdir, "bootstrap", "cache"), uid, gid)
 
 	return nil
 }
 
-func (pm *PermissionManager) setupSymfony() error {
+func (pm *PermissionManager) setupSymfony(uid, gid int) error {
 	dirs := []string{
 		filepath.Join(pm.workdir, "var", "cache"),
 		filepath.Join(pm.workdir, "var", "log"),
@@ -118,17 +188,17 @@ func (pm *PermissionManager) setupSymfony() error {
 		}
 	}
 
-	pm.chownRecursive(filepath.Join(pm.workdir, "var"), 82, 82)
+	pm.chownRecursive(filepath.Join(pm.workdir, "var"), uid, gid)
 	return nil
 }
 
-func (pm *PermissionManager) setupWordPress() error {
+func (pm *PermissionManager) setupWordPress(uid, gid int) error {
 	dir := filepath.Join(pm.workdir, "wp-content", "uploads")
 	if err := pm.createDir(dir, 0775); err != nil {
 		pm.logger.Warn("Failed to create uploads directory", "error", err)
 	}
 
-	pm.chownRecursive(filepath.Join(pm.workdir, "wp-content"), 82, 82)
+	pm.chownRecursive(filepath.Join(pm.workdir, "wp-content"), uid, gid)
 	return nil
 }
 

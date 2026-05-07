@@ -3,6 +3,7 @@ package setup
 import (
 	"log/slog"
 	"os"
+	"os/user"
 	"path/filepath"
 	"testing"
 )
@@ -495,4 +496,81 @@ func TestPermissionManager_ChownRecursive_WithError(t *testing.T) {
 	pm.chownRecursive("/nonexistent/path", 82, 82)
 
 	// Test completes successfully if no panic
+}
+
+func TestReadPuidPgidEnv(t *testing.T) {
+	tests := []struct {
+		name     string
+		puid     string
+		pgid     string
+		wantUID  int
+		wantGID  int
+		wantOk   bool
+	}{
+		{name: "both unset", puid: "", pgid: "", wantOk: false},
+		{name: "only PUID set", puid: "33", pgid: "", wantOk: false},
+		{name: "only PGID set", puid: "", pgid: "33", wantOk: false},
+		{name: "valid debian uids", puid: "33", pgid: "33", wantUID: 33, wantGID: 33, wantOk: true},
+		{name: "valid alpine uids", puid: "82", pgid: "82", wantUID: 82, wantGID: 82, wantOk: true},
+		{name: "PUID non-numeric", puid: "abc", pgid: "33", wantOk: false},
+		{name: "PGID non-numeric", puid: "33", pgid: "xyz", wantOk: false},
+		{name: "negative PUID rejected", puid: "-1", pgid: "33", wantOk: false},
+		{name: "negative PGID rejected", puid: "33", pgid: "-1", wantOk: false},
+		{name: "uid 0 (root) is valid", puid: "0", pgid: "0", wantUID: 0, wantGID: 0, wantOk: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("PUID", tt.puid)
+			t.Setenv("PGID", tt.pgid)
+
+			uid, gid, ok := readPuidPgidEnv()
+			if ok != tt.wantOk {
+				t.Errorf("ok = %v, want %v", ok, tt.wantOk)
+			}
+			if ok && (uid != tt.wantUID || gid != tt.wantGID) {
+				t.Errorf("uid,gid = %d,%d, want %d,%d", uid, gid, tt.wantUID, tt.wantGID)
+			}
+		})
+	}
+}
+
+func TestResolveAppUser_PUIDOverridesPasswdLookup(t *testing.T) {
+	logger := slog.Default()
+	pm := NewPermissionManager("/tmp", logger)
+
+	// PUID/PGID set: even on a system where www-data resolves to a
+	// different uid, the env override wins.
+	t.Setenv("PUID", "1234")
+	t.Setenv("PGID", "5678")
+
+	uid, gid := pm.resolveAppUser()
+	if uid != 1234 || gid != 5678 {
+		t.Errorf("uid,gid = %d,%d, want 1234,5678 (env override should win)", uid, gid)
+	}
+}
+
+func TestResolveAppUser_FallsBackWhenLookupFails(t *testing.T) {
+	logger := slog.Default()
+	pm := NewPermissionManager("/tmp", logger)
+
+	// Clear env so we don't take the override path.
+	t.Setenv("PUID", "")
+	t.Setenv("PGID", "")
+
+	uid, gid := pm.resolveAppUser()
+
+	// Either www-data was on the test host and resolved to a real uid,
+	// or it wasn't and we fell back to the Alpine convention. Both are
+	// acceptable; the function never returns invalid values.
+	if uid < 0 || gid < 0 {
+		t.Errorf("got negative uid/gid: %d,%d", uid, gid)
+	}
+
+	// If www-data does not resolve on the test host, the fallback must hit.
+	if _, err := user.Lookup("www-data"); err != nil {
+		if uid != fallbackUID || gid != fallbackGID {
+			t.Errorf("expected fallback %d/%d, got %d/%d", fallbackUID, fallbackGID, uid, gid)
+		}
+	}
 }

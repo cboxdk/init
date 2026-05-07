@@ -1391,9 +1391,9 @@ func TestTUIRemoteFlag(t *testing.T) {
 		return
 	}
 
-	// Default should be localhost:9180
-	if flag.DefValue != "http://localhost:9180" {
-		t.Errorf("expected default remote URL to be http://localhost:9180, got %s", flag.DefValue)
+	// Default should be empty (auto-discovers Unix socket)
+	if flag.DefValue != "" {
+		t.Errorf("expected default remote URL to be empty (auto-discover), got %s", flag.DefValue)
 	}
 }
 

@@ -36,7 +36,7 @@ var (
 )
 
 func init() {
-	tuiCmd.Flags().StringVar(&tuiRemote, "remote", "http://localhost:9180", "API endpoint to connect to")
+	tuiCmd.Flags().StringVar(&tuiRemote, "remote", "", "API endpoint to connect to (auto-discovers Unix socket by default)")
 }
 
 func runTUI(cmd *cobra.Command, args []string) {
@@ -45,7 +45,11 @@ func runTUI(cmd *cobra.Command, args []string) {
 }
 
 func runTUIRemote(apiURL string) {
-	fmt.Fprintf(os.Stderr, "🔗 Connecting to remote API: %s\n", apiURL)
+	if apiURL == "" {
+		fmt.Fprintln(os.Stderr, "🔗 Connecting to local API (auto-discovering Unix socket)")
+	} else {
+		fmt.Fprintf(os.Stderr, "🔗 Connecting to remote API: %s\n", apiURL)
+	}
 
 	// Get auth token if set
 	auth := os.Getenv("CBOX_INIT_API_AUTH")

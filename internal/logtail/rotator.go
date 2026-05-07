@@ -8,7 +8,8 @@ import (
 // FileRotator performs size-based log file rotation.
 // When a file exceeds MaxSize, it is renamed with a numeric suffix
 // (app.log -> app.log.1, app.log.1 -> app.log.2, etc.) and the
-// original is truncated. Files beyond MaxFiles are deleted.
+// original path is recreated as an empty file. Files beyond MaxFiles
+// are deleted.
 type FileRotator struct {
 	MaxSize  int64
 	MaxFiles int
@@ -51,7 +52,6 @@ func (r *FileRotator) CheckAndRotate(path string) error {
 			}
 		}
 	}
-
 	// Rename current file to .1
 	if err := os.Rename(path, fmt.Sprintf("%s.1", path)); err != nil {
 		return fmt.Errorf("rename %s: %w", path, err)

@@ -26,13 +26,29 @@ type Client struct {
 	client     *http.Client
 }
 
-// New creates a new API client with auto-detection
-// Tries Unix socket first, falls back to TCP
+// BaseURL returns the API base URL this client is configured to use.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
+// New creates a client for an explicit API endpoint.
+// When baseURL is non-empty, no socket auto-discovery is attempted.
 func New(baseURL, auth string) *Client {
 	client := &Client{
 		baseURL: baseURL,
 		auth:    auth,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
+
+	return client
+}
+
+// NewWithAutoDiscover creates a client that prefers known local Unix sockets
+// and falls back to the provided TCP baseURL when none are reachable.
+func NewWithAutoDiscover(baseURL, auth string) *Client {
+	client := New(baseURL, auth)
 
 	// Auto-detect socket paths (priority order)
 	socketPaths := []string{
@@ -48,11 +64,6 @@ func New(baseURL, auth string) *Client {
 			client.client = client.createSocketClient(socketPath)
 			return client
 		}
-	}
-
-	// Fall back to TCP
-	client.client = &http.Client{
-		Timeout: 10 * time.Second,
 	}
 
 	return client

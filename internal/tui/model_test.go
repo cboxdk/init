@@ -784,6 +784,9 @@ func TestNewRemoteModel(t *testing.T) {
 	if m.client == nil {
 		t.Error("Expected client to be non-nil for remote mode")
 	}
+	if m.client.BaseURL() != apiURL {
+		t.Errorf("Expected explicit baseURL %q, got %q", apiURL, m.client.BaseURL())
+	}
 
 	if m.manager != nil {
 		t.Error("Expected manager to be nil for remote mode")
@@ -820,6 +823,9 @@ func TestNewRemoteModel_EmptyURL(t *testing.T) {
 
 	if m.client == nil {
 		t.Error("Expected client to be non-nil even with empty URL")
+	}
+	if m.client.BaseURL() != "http://localhost:9180" {
+		t.Errorf("Expected fallback baseURL %q, got %q", "http://localhost:9180", m.client.BaseURL())
 	}
 }
 

@@ -126,8 +126,10 @@ RUN php artisan config:cache && \
 COPY docker/cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Cbox Init automatically chowns framework directories (storage/, bootstrap/cache)
+# at startup using the www-data user from /etc/passwd.
+# Override with PUID/PGID if needed (e.g., -e PUID=1000 -e PGID=1000).
+# See: docs/configuration/environment-variables.md
 
 ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```

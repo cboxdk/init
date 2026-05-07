@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/cboxdk/init/internal/logger"
 	"github.com/spf13/cobra"
@@ -47,10 +48,14 @@ func runLogs(cmd *cobra.Command, args []string) {
 	}
 
 	client := newClient(logsURL)
+	levelFilter, err := parseLogLevelFilter(logsLevel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid log level %q: %v\n", logsLevel, err)
+		os.Exit(1)
+	}
 
 	// Fetch historical logs
 	var logs []logger.LogEntry
-	var err error
 	if processName != "" {
 		logs, err = client.GetLogs(processName, logsTail)
 	} else {
@@ -63,7 +68,9 @@ func runLogs(cmd *cobra.Command, args []string) {
 
 	// Print historical logs
 	for _, entry := range logs {
-		printLogEntry(entry)
+		if shouldPrintLogEntry(entry, levelFilter) {
+			printLogEntry(entry)
+		}
 	}
 
 	// If not following, we're done
@@ -82,11 +89,43 @@ func runLogs(cmd *cobra.Command, args []string) {
 	}
 
 	for entry := range ch {
-		printLogEntry(entry)
+		if shouldPrintLogEntry(entry, levelFilter) {
+			printLogEntry(entry)
+		}
 	}
 }
 
 func printLogEntry(entry logger.LogEntry) {
 	ts := entry.Timestamp.Format("15:04:05.000")
 	fmt.Printf("%s [%s] %s: %s\n", ts, entry.Level, entry.ProcessName, entry.Message)
+}
+
+func parseLogLevelFilter(level string) (int, error) {
+	switch strings.ToLower(level) {
+	case "", "all":
+		return -1, nil
+	case "debug":
+		return 0, nil
+	case "info":
+		return 1, nil
+	case "warn", "warning":
+		return 2, nil
+	case "error":
+		return 3, nil
+	default:
+		return 0, fmt.Errorf("must be one of debug, info, warn, error, all")
+	}
+}
+
+func shouldPrintLogEntry(entry logger.LogEntry, minLevel int) bool {
+	if minLevel < 0 {
+		return true
+	}
+
+	entryLevel, err := parseLogLevelFilter(entry.Level)
+	if err != nil {
+		entryLevel = 1
+	}
+
+	return entryLevel >= minLevel
 }
