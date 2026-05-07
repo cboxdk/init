@@ -78,7 +78,7 @@ func newClient(urlFlag string) *apiclient.Client {
 	if urlFlag != "" {
 		return apiclient.New(urlFlag, auth)
 	}
-	return apiclient.New("http://localhost:9180", auth)
+	return apiclient.NewWithAutoDiscover("http://localhost:9180", auth)
 }
 
 // formatDuration formats a duration as human-readable

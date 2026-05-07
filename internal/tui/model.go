@@ -162,9 +162,14 @@ func NewModel(mgr *process.Manager) Model {
 
 // NewRemoteModel creates a new TUI model for remote mode
 func NewRemoteModel(apiURL, auth string) Model {
+	client := apiclient.New(apiURL, auth)
+	if apiURL == "" {
+		client = apiclient.NewWithAutoDiscover("http://localhost:9180", auth)
+	}
+
 	return Model{
 		manager:       nil,
-		client:        apiclient.New(apiURL, auth),
+		client:        client,
 		isRemote:      true,
 		currentView:   viewProcessList,
 		processCache:  make(map[string]process.ProcessInfo),

@@ -85,10 +85,14 @@ func (pm *PermissionManager) resolveAppUser() (uid, gid int) {
 		return envUID, envGID
 	}
 
-	// Warn when only one of the pair is set — likely operator mistake.
+	// Warn when the env vars are set but rejected so the operator knows
+	// their override didn't take effect.
 	puidStr, pgidStr := os.Getenv("PUID"), os.Getenv("PGID")
 	if (puidStr != "" && pgidStr == "") || (puidStr == "" && pgidStr != "") {
 		pm.logger.Warn("Only one of PUID/PGID is set — ignoring env override, both must be provided",
+			"PUID", puidStr, "PGID", pgidStr)
+	} else if puidStr != "" && pgidStr != "" {
+		pm.logger.Warn("PUID/PGID values are not valid non-negative integers — ignoring env override",
 			"PUID", puidStr, "PGID", pgidStr)
 	}
 
