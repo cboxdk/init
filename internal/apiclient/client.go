@@ -26,6 +26,11 @@ type Client struct {
 	client     *http.Client
 }
 
+// BaseURL returns the API base URL this client is configured to use.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 // New creates a client for an explicit API endpoint.
 // When baseURL is non-empty, no socket auto-discovery is attempted.
 func New(baseURL, auth string) *Client {
