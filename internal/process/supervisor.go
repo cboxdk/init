@@ -926,9 +926,8 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 			"timeout", timeout,
 		)
 
-		// Force kill
-		if err := instance.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill process: %w", err)
+		if err := s.signalProcessGroup(instance, syscall.SIGKILL, "force kill"); err != nil {
+			return fmt.Errorf("failed to force kill process group: %w", err)
 		}
 
 		// Wait for monitorInstance to detect the exit and close doneCh
@@ -967,12 +966,21 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 		sig = parseSignal(s.config.Shutdown.Signal)
 	}
 
-	// Since we use Setpgid, we need to send signal to the process group
+	return s.signalProcessGroup(instance, sig, "shutdown")
+}
+
+// signalProcessGroup sends a signal to the instance's process group, falling
+// back to the parent process if the process group cannot be addressed.
+func (s *Supervisor) signalProcessGroup(instance *Instance, sig syscall.Signal, reason string) error {
+	if instance == nil || instance.cmd == nil || instance.cmd.Process == nil {
+		return fmt.Errorf("process is not available for signal")
+	}
+
 	pgid, err := syscall.Getpgid(instance.pid)
 	if err != nil {
-		// Fallback to single process signal if we can't get pgid
 		s.logger.Warn("Failed to get process group, sending signal to process only",
 			"instance_id", instance.id,
+			"reason", reason,
 			"error", err,
 		)
 		if err := instance.cmd.Process.Signal(sig); err != nil {
@@ -981,12 +989,11 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 		return nil
 	}
 
-	// Send signal to entire process group (negative PID)
 	if err := syscall.Kill(-pgid, sig); err != nil {
-		// Fallback to single process signal if process group signal fails
 		s.logger.Warn("Failed to send signal to process group, falling back to direct signal",
 			"instance_id", instance.id,
 			"pgid", pgid,
+			"reason", reason,
 			"error", err,
 		)
 		if err := instance.cmd.Process.Signal(sig); err != nil {
@@ -1215,9 +1222,11 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 							"pid", instance.pid,
 						)
 
-						// Kill the unhealthy instance
-						if instance.cmd.Process != nil {
-							_ = instance.cmd.Process.Kill()
+						if err := s.signalProcessGroup(instance, syscall.SIGKILL, "health check restart"); err != nil {
+							s.logger.Warn("Failed to kill unhealthy process group",
+								"instance_id", instance.id,
+								"error", err,
+							)
 						}
 
 						// The monitorInstance goroutine will handle the restart
@@ -1396,12 +1405,16 @@ func (s *Supervisor) collectInstanceMetrics() {
 					"memory_mb", memoryMB,
 					"max_memory_mb", maxMemoryMB,
 				)
-				// Kill the process - monitorInstance will handle restart based on policy
+
 				inst.mu.Lock()
 				if inst.state == StateRunning && inst.cmd != nil && inst.cmd.Process != nil {
-					// Record memory restart metric
 					metrics.RecordProcessRestart(s.name, "memory_limit")
-					_ = inst.cmd.Process.Kill()
+					if err := s.signalProcessGroup(inst, syscall.SIGKILL, "memory limit restart"); err != nil {
+						s.logger.Warn("Failed to kill memory-limited process group",
+							"instance_id", instanceID,
+							"error", err,
+						)
+					}
 				}
 				inst.mu.Unlock()
 			}

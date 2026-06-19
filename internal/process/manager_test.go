@@ -12,6 +12,23 @@ import (
 	"github.com/cboxdk/init/internal/testutil"
 )
 
+func TestNewManager_UsesConfiguredProcessStartTimeout(t *testing.T) {
+	cfg := &config.Config{
+		Global: config.GlobalConfig{
+			ProcessStartTimeout: 2 * time.Second,
+		},
+		Processes: map[string]*config.Process{},
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	auditLogger := audit.NewLogger(logger, false)
+	manager := NewManager(cfg, logger, auditLogger)
+
+	if manager.processStartTimeout != 2*time.Second {
+		t.Fatalf("processStartTimeout = %v, want 2s", manager.processStartTimeout)
+	}
+}
+
 // TestManager_GracefulShutdown tests graceful shutdown with timeout
 func TestManager_GracefulShutdown(t *testing.T) {
 	cfg := &config.Config{
