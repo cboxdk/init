@@ -245,6 +245,36 @@ func TestExecHealthChecker(t *testing.T) {
 func TestHealthMonitor(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
+	t.Run("first check runs immediately after initial delay", func(t *testing.T) {
+		cfg := &config.HealthCheck{
+			Type:             "exec",
+			Command:          []string{"echo", "healthy"},
+			InitialDelay:     0,
+			Period:           30,
+			Timeout:          1,
+			FailureThreshold: 1,
+		}
+
+		monitor, err := NewHealthMonitor("test-process", cfg, logger)
+		if err != nil {
+			t.Fatalf("NewHealthMonitor() unexpected error: %v", err)
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		statusCh := monitor.Start(ctx)
+
+		select {
+		case status := <-statusCh:
+			if !status.LastCheckSucceeded {
+				t.Fatalf("Expected first health check to succeed, got error: %v", status.Error)
+			}
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("Expected first health check before first period elapsed")
+		}
+	})
+
 	t.Run("successful monitoring", func(t *testing.T) {
 		cfg := &config.HealthCheck{
 			Type:             "tcp",

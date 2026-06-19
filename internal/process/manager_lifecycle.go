@@ -271,6 +271,10 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		close(m.shutdownCh)
 	})
 
+	if err := m.StopReadinessManager(); err != nil {
+		m.logger.Warn("Failed to stop readiness manager", "error", err)
+	}
+
 	// Stop the scheduler first (prevents new job executions)
 	if m.scheduler.IsStarted() {
 		m.logger.Info("Stopping scheduler")
