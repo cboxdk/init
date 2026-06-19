@@ -77,6 +77,26 @@ PHP_FPM_AUTOTUNE_PROFILE=heavy
 
 See [PHP-FPM Auto-Tuning](../php-fpm-autotune) for complete guide.
 
+## Startup Performance Controls
+
+These variables are useful for production images where framework directories and php-fpm/nginx configuration have already been prepared during image build.
+
+| Variable | CLI flag | Description |
+|----------|----------|-------------|
+| `CBOX_INIT_SKIP_PERMISSION_SETUP=true` | `--skip-permission-setup` | Skip framework directory creation and recursive ownership fixes at startup. |
+| `CBOX_INIT_SKIP_RUNTIME_VALIDATION=true` | `--skip-runtime-validation` | Skip `php-fpm -t` and `nginx -t` validation before process startup. |
+| `CBOX_INIT_STARTUP_TIMING=true` | N/A | Log duration for startup phases such as permission setup, runtime validation, config load, and process start. |
+
+Use the skip options only when the image build or deployment pipeline already validates the same assumptions:
+
+```bash
+docker run \
+  -e CBOX_INIT_SKIP_PERMISSION_SETUP=true \
+  -e CBOX_INIT_SKIP_RUNTIME_VALIDATION=true \
+  -e CBOX_INIT_STARTUP_TIMING=true \
+  myapp
+```
+
 ## Permission / Ownership
 
 These environment variables control which uid/gid cbox-init uses when chowning framework directories (Laravel `storage/`, Symfony `var/`, WordPress `wp-content/`).

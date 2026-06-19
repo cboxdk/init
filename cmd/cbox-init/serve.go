@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -36,10 +37,12 @@ processes, handles graceful shutdown, and provides observability endpoints.`,
 }
 
 var (
-	dryRun          bool
-	phpFPMProfile   string
-	memoryThreshold float64
-	watchMode       bool
+	dryRun                bool
+	phpFPMProfile         string
+	memoryThreshold       float64
+	watchMode             bool
+	skipPermissionSetup   bool
+	skipRuntimeValidation bool
 )
 
 func init() {
@@ -47,6 +50,8 @@ func init() {
 	serveCmd.Flags().StringVar(&phpFPMProfile, "php-fpm-profile", "", "Auto-tune PHP-FPM workers (dev|light|medium|heavy|bursty)")
 	serveCmd.Flags().Float64Var(&memoryThreshold, "autotune-memory-threshold", 0, "Override memory threshold (0.5=50%, 1.0=100%, 1.3=130%)")
 	serveCmd.Flags().BoolVar(&watchMode, "watch", false, "Enable watch mode: automatically reload changed services when config file changes")
+	serveCmd.Flags().BoolVar(&skipPermissionSetup, "skip-permission-setup", false, "Skip framework directory creation and ownership fixes")
+	serveCmd.Flags().BoolVar(&skipRuntimeValidation, "skip-runtime-validation", false, "Skip php-fpm -t and nginx -t startup validation")
 }
 
 func runServe(cmd *cobra.Command, args []string) {
@@ -63,21 +68,44 @@ func runServe(cmd *cobra.Command, args []string) {
 		workdir = "/var/www/html"
 	}
 
+	startupTiming := truthyEnv("CBOX_INIT_STARTUP_TIMING")
+	permissionSetupSkipped := skipPermissionSetup || truthyEnv("CBOX_INIT_SKIP_PERMISSION_SETUP")
+	runtimeValidationSkipped := skipRuntimeValidation || truthyEnv("CBOX_INIT_SKIP_RUNTIME_VALIDATION")
+
 	// Setup permissions (detects framework internally)
-	permMgr := setup.NewPermissionManager(workdir, slog.Default())
-	if err := permMgr.Setup(); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Permission setup completed with warnings: %v\n", err)
+	if permissionSetupSkipped {
+		slog.Default().Info("Skipping permission setup")
+	} else {
+		err := runStartupPhase("permission_setup", startupTiming, func() error {
+			permMgr := setup.NewPermissionManager(workdir, slog.Default())
+			return permMgr.Setup()
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  Permission setup completed with warnings: %v\n", err)
+		}
 	}
 
 	// Validate system configurations
-	validator := setup.NewConfigValidator(slog.Default())
-	if err := validator.ValidateAll(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Configuration validation failed: %v\n", err)
-		os.Exit(1)
+	if runtimeValidationSkipped {
+		slog.Default().Info("Skipping runtime configuration validation")
+	} else {
+		err := runStartupPhase("runtime_config_validation", startupTiming, func() error {
+			validator := setup.NewConfigValidator(slog.Default())
+			return validator.ValidateAll()
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Configuration validation failed: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// Load configuration
-	cfg, err := config.LoadWithEnvExpansion(cfgPath)
+	var cfg *config.Config
+	err := runStartupPhase("config_load", startupTiming, func() error {
+		var loadErr error
+		cfg, loadErr = config.LoadWithEnvExpansion(cfgPath)
+		return loadErr
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to load configuration: %v\n", err)
 		os.Exit(1)
@@ -98,7 +126,7 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	// Handle dry-run mode
 	if dryRun {
-		runDryRun(cfg, cfgPath, workdir, autotuneProfile)
+		runDryRun(cfg, cfgPath, workdir, permissionSetupSkipped, runtimeValidationSkipped)
 		return
 	}
 
@@ -161,7 +189,10 @@ func runServe(cmd *cobra.Command, args []string) {
 	}
 
 	// Start all processes
-	if err := pm.Start(ctx); err != nil {
+	err = runStartupPhase("process_start", startupTiming, func() error {
+		return pm.Start(ctx)
+	})
+	if err != nil {
 		slog.Error("Failed to start processes", "error", err)
 		os.Exit(1)
 	}
@@ -267,6 +298,30 @@ func runServe(cmd *cobra.Command, args []string) {
 	}
 }
 
+func truthyEnv(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "t", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func runStartupPhase(name string, enabled bool, fn func() error) error {
+	if !enabled {
+		return fn()
+	}
+
+	start := time.Now()
+	err := fn()
+	slog.Default().Info("Startup phase completed",
+		"phase", name,
+		"duration", time.Since(start),
+		"success", err == nil,
+	)
+	return err
+}
+
 // runAutoTuning performs PHP-FPM auto-tuning calculations
 func runAutoTuning(profileName string, threshold float64, cfg *config.Config) error {
 	autotuneLog := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -347,15 +402,23 @@ func runAutoTuning(profileName string, threshold float64, cfg *config.Config) er
 }
 
 // runDryRun performs dry-run validation
-func runDryRun(cfg *config.Config, cfgPath string, workdir string, _ string) {
+func runDryRun(cfg *config.Config, cfgPath string, workdir string, permissionSetupSkipped bool, runtimeValidationSkipped bool) {
 	log := logger.New(cfg.Global.LogLevel, cfg.Global.LogFormat)
 	slog.SetDefault(log)
 
 	fmt.Fprintf(os.Stderr, "🔍 DRY RUN MODE - Validating configuration without starting processes\n\n")
 	fmt.Fprintf(os.Stderr, "✅ Configuration loaded: %s\n", cfgPath)
 	fmt.Fprintf(os.Stderr, "✅ Workdir: %s\n", workdir)
-	fmt.Fprintf(os.Stderr, "✅ Permissions validated\n")
-	fmt.Fprintf(os.Stderr, "✅ System configurations validated\n")
+	if permissionSetupSkipped {
+		fmt.Fprintf(os.Stderr, "⏭️  Permission setup skipped\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "✅ Permissions validated\n")
+	}
+	if runtimeValidationSkipped {
+		fmt.Fprintf(os.Stderr, "⏭️  Runtime configuration validation skipped\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "✅ System configurations validated\n")
+	}
 
 	// Create audit logger for validation
 	auditLogger := audit.NewLogger(log, cfg.Global.AuditEnabled)

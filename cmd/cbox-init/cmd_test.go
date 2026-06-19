@@ -66,6 +66,55 @@ func captureOutput(f func()) (string, string) {
 	return stdout, stderr
 }
 
+func TestTruthyEnv(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "true", value: "true", want: true},
+		{name: "one", value: "1", want: true},
+		{name: "yes uppercase", value: "YES", want: true},
+		{name: "on with whitespace", value: " on ", want: true},
+		{name: "false", value: "false", want: false},
+		{name: "empty", value: "", want: false},
+		{name: "unexpected", value: "sometimes", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CBOX_INIT_TEST_BOOL", tt.value)
+			if got := truthyEnv("CBOX_INIT_TEST_BOOL"); got != tt.want {
+				t.Fatalf("truthyEnv() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunStartupPhase(t *testing.T) {
+	called := false
+	if err := runStartupPhase("test_phase", false, func() error {
+		called = true
+		return nil
+	}); err != nil {
+		t.Fatalf("runStartupPhase() error = %v", err)
+	}
+	if !called {
+		t.Fatal("runStartupPhase() did not call function")
+	}
+
+	called = false
+	if err := runStartupPhase("test_phase", true, func() error {
+		called = true
+		return nil
+	}); err != nil {
+		t.Fatalf("runStartupPhase() with timing error = %v", err)
+	}
+	if !called {
+		t.Fatal("runStartupPhase() with timing did not call function")
+	}
+}
+
 // TestVersionCommand tests the version command outputs
 func TestVersionCommand(t *testing.T) {
 	tests := []struct {
@@ -7908,7 +7957,7 @@ func TestRunDryRunDirect(t *testing.T) {
 	}()
 
 	// This will call os.Exit(0) on success
-	runDryRun(cfg, configPath, "/var/www/html", "")
+	runDryRun(cfg, configPath, "/var/www/html", false, false)
 
 	if !exitCalled {
 		t.Log("runDryRun completed without exit")
