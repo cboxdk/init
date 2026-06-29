@@ -78,6 +78,9 @@ func LoadWithEnvExpansion(path string) (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
+	if _, err := cfg.ValidateComprehensive(); err != nil {
+		return nil, fmt.Errorf("comprehensive config validation failed: %w", err)
+	}
 
 	return &cfg, nil
 }
