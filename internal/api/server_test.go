@@ -1937,6 +1937,9 @@ func TestSecurityStack_RateLimitWithACL(t *testing.T) {
 	}
 
 	server := createTestServer(t, "test-token", aclConfig)
+	server.rateLimiter.stop()
+	server.rateLimiter = newRateLimiter(0, 2)
+	t.Cleanup(server.rateLimiter.stop)
 
 	// Make allowed IP request handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1947,7 +1950,7 @@ func TestSecurityStack_RateLimitWithACL(t *testing.T) {
 
 	// Exhaust rate limit for one IP
 	allowedIP := "192.168.1.100:12345"
-	for i := 0; i < 250; i++ { // Burst is 200
+	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = allowedIP
 		req.Header.Set("Authorization", "Bearer test-token")
