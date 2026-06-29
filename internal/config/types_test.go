@@ -56,8 +56,8 @@ func TestSetDefaults(t *testing.T) {
 				if !c.Global.LogTimestamps {
 					t.Error("LogTimestamps should be true")
 				}
-				if !c.Global.MetricsEnabledValue() {
-					t.Error("MetricsEnabled should be true by default")
+				if c.Global.MetricsEnabledValue() {
+					t.Error("MetricsEnabled should be false by default")
 				}
 				if c.Global.MetricsPort != 9090 {
 					t.Errorf("MetricsPort = %v, want 9090", c.Global.MetricsPort)
@@ -65,14 +65,14 @@ func TestSetDefaults(t *testing.T) {
 				if c.Global.MetricsPath != "/metrics" {
 					t.Errorf("MetricsPath = %v, want /metrics", c.Global.MetricsPath)
 				}
-				if !c.Global.APIEnabledValue() {
-					t.Error("APIEnabled should be true by default")
+				if c.Global.APIEnabledValue() {
+					t.Error("APIEnabled should be false by default")
 				}
 				if c.Global.APIPort != 9180 {
 					t.Errorf("APIPort = %v, want 9180", c.Global.APIPort)
 				}
-				if !c.Global.ResourceMetricsEnabledValue() {
-					t.Error("ResourceMetricsEnabled should be true by default")
+				if c.Global.ResourceMetricsEnabledValue() {
+					t.Error("ResourceMetricsEnabled should be false by default")
 				}
 				if c.Global.ResourceMetricsInterval != 5 {
 					t.Errorf("ResourceMetricsInterval = %v, want 5", c.Global.ResourceMetricsInterval)
@@ -455,12 +455,12 @@ func TestGlobalConfig_MetricsEnabledValue(t *testing.T) {
 		{
 			name:   "nil config",
 			config: nil,
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "nil pointer",
 			config: &GlobalConfig{MetricsEnabled: nil},
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "explicitly true",
@@ -493,12 +493,12 @@ func TestGlobalConfig_ResourceMetricsEnabledValue(t *testing.T) {
 		{
 			name:   "nil config",
 			config: nil,
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "nil pointer",
 			config: &GlobalConfig{ResourceMetricsEnabled: nil},
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "explicitly true",
@@ -531,12 +531,12 @@ func TestGlobalConfig_APIEnabledValue(t *testing.T) {
 		{
 			name:   "nil config",
 			config: nil,
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "nil pointer",
 			config: &GlobalConfig{APIEnabled: nil},
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "explicitly true",

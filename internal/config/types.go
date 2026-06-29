@@ -341,7 +341,7 @@ func (c *Config) setGlobalBasicDefaults() {
 // setGlobalAPIMetricsDefaults sets API and metrics defaults
 func (c *Config) setGlobalAPIMetricsDefaults() {
 	if c.Global.MetricsEnabled == nil {
-		c.Global.SetMetricsEnabled(true)
+		c.Global.SetMetricsEnabled(false)
 	}
 	if c.Global.MetricsPort == 0 {
 		c.Global.MetricsPort = 9090
@@ -350,13 +350,13 @@ func (c *Config) setGlobalAPIMetricsDefaults() {
 		c.Global.MetricsPath = "/metrics"
 	}
 	if c.Global.APIEnabled == nil {
-		c.Global.SetAPIEnabled(true)
+		c.Global.SetAPIEnabled(false)
 	}
 	if c.Global.APIPort == 0 {
 		c.Global.APIPort = 9180
 	}
 	if c.Global.ResourceMetricsEnabled == nil {
-		c.Global.SetResourceMetricsEnabled(true)
+		c.Global.SetResourceMetricsEnabled(false)
 	}
 	if c.Global.ResourceMetricsInterval == 0 {
 		c.Global.ResourceMetricsInterval = 5
@@ -608,10 +608,10 @@ func (c *Config) SetDefaults() {
 	}
 }
 
-// MetricsEnabledValue returns true if metrics are enabled (default true)
+// MetricsEnabledValue returns true if metrics are enabled (default false)
 func (g *GlobalConfig) MetricsEnabledValue() bool {
 	if g == nil || g.MetricsEnabled == nil {
-		return true
+		return false
 	}
 	return *g.MetricsEnabled
 }
@@ -621,10 +621,10 @@ func (g *GlobalConfig) SetMetricsEnabled(v bool) {
 	g.MetricsEnabled = boolPtr(v)
 }
 
-// ResourceMetricsEnabledValue returns true if resource metrics enabled (default true)
+// ResourceMetricsEnabledValue returns true if resource metrics enabled (default false)
 func (g *GlobalConfig) ResourceMetricsEnabledValue() bool {
 	if g == nil || g.ResourceMetricsEnabled == nil {
-		return true
+		return false
 	}
 	return *g.ResourceMetricsEnabled
 }
@@ -634,10 +634,10 @@ func (g *GlobalConfig) SetResourceMetricsEnabled(v bool) {
 	g.ResourceMetricsEnabled = boolPtr(v)
 }
 
-// APIEnabledValue returns true if API enabled (default true)
+// APIEnabledValue returns true if API enabled (default false)
 func (g *GlobalConfig) APIEnabledValue() bool {
 	if g == nil || g.APIEnabled == nil {
-		return true
+		return false
 	}
 	return *g.APIEnabled
 }

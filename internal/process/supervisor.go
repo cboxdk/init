@@ -114,6 +114,9 @@ type Supervisor struct {
 	readinessCh        chan struct{}  // Closed when service becomes ready
 	readinessOnce      sync.Once      // CRITICAL: Ensures readinessCh closed exactly once
 	isReady            bool           // Track readiness state
+	healthKnown        bool           // Whether at least one health check result has been observed
+	healthHealthy      bool           // Liveness health after thresholds/hysteresis
+	lastCheckSucceeded bool           // Raw result from the most recent health check
 	goroutines         sync.WaitGroup // CRITICAL: Track all goroutines for clean shutdown
 	mu                 sync.RWMutex
 	operationMu        sync.Mutex // Serializes lifecycle/scale operations so reads can proceed
@@ -926,9 +929,8 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 			"timeout", timeout,
 		)
 
-		// Force kill
-		if err := instance.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill process: %w", err)
+		if err := s.signalProcessGroup(instance, syscall.SIGKILL, "force kill"); err != nil {
+			return fmt.Errorf("failed to force kill process group: %w", err)
 		}
 
 		// Wait for monitorInstance to detect the exit and close doneCh
@@ -967,12 +969,21 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 		sig = parseSignal(s.config.Shutdown.Signal)
 	}
 
-	// Since we use Setpgid, we need to send signal to the process group
+	return s.signalProcessGroup(instance, sig, "shutdown")
+}
+
+// signalProcessGroup sends a signal to the instance's process group, falling
+// back to the parent process if the process group cannot be addressed.
+func (s *Supervisor) signalProcessGroup(instance *Instance, sig syscall.Signal, reason string) error {
+	if instance == nil || instance.cmd == nil || instance.cmd.Process == nil {
+		return fmt.Errorf("process is not available for signal")
+	}
+
 	pgid, err := syscall.Getpgid(instance.pid)
 	if err != nil {
-		// Fallback to single process signal if we can't get pgid
 		s.logger.Warn("Failed to get process group, sending signal to process only",
 			"instance_id", instance.id,
+			"reason", reason,
 			"error", err,
 		)
 		if err := instance.cmd.Process.Signal(sig); err != nil {
@@ -981,12 +992,11 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 		return nil
 	}
 
-	// Send signal to entire process group (negative PID)
 	if err := syscall.Kill(-pgid, sig); err != nil {
-		// Fallback to single process signal if process group signal fails
 		s.logger.Warn("Failed to send signal to process group, falling back to direct signal",
 			"instance_id", instance.id,
 			"pgid", pgid,
+			"reason", reason,
 			"error", err,
 		)
 		if err := instance.cmd.Process.Signal(sig); err != nil {
@@ -1189,8 +1199,16 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 				return
 			}
 
-			if status.Healthy {
-				// Signal readiness on first successful health check
+			s.mu.Lock()
+			s.healthKnown = true
+			s.healthHealthy = status.Healthy
+			s.lastCheckSucceeded = status.LastCheckSucceeded
+			s.mu.Unlock()
+
+			if status.LastCheckSucceeded {
+				// Signal readiness on first successful health check.
+				// Liveness can stay optimistic across transient failures, but
+				// readiness must only pass after a real probe success.
 				s.markReady("health check passed")
 			} else if !status.Healthy {
 				s.logger.Error("Process unhealthy, triggering restart",
@@ -1215,9 +1233,11 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 							"pid", instance.pid,
 						)
 
-						// Kill the unhealthy instance
-						if instance.cmd.Process != nil {
-							_ = instance.cmd.Process.Kill()
+						if err := s.signalProcessGroup(instance, syscall.SIGKILL, "health check restart"); err != nil {
+							s.logger.Warn("Failed to kill unhealthy process group",
+								"instance_id", instance.id,
+								"error", err,
+							)
 						}
 
 						// The monitorInstance goroutine will handle the restart
@@ -1253,6 +1273,25 @@ func (s *Supervisor) GetState() ProcessState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.state
+}
+
+// HealthSnapshot returns the latest health check state for readiness reporting.
+// Health is "healthy", "unhealthy", or "unknown". For processes without a
+// health check, running is treated as healthy by callers that need a value.
+func (s *Supervisor) HealthSnapshot() (health string, lastCheckSucceeded bool, hasHealthCheck bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.config.HealthCheck == nil {
+		return "healthy", true, false
+	}
+	if !s.healthKnown {
+		return "unknown", false, true
+	}
+	if s.lastCheckSucceeded {
+		return "healthy", true, true
+	}
+	return "unhealthy", false, true
 }
 
 // InstanceInfo represents exported instance information
@@ -1396,12 +1435,16 @@ func (s *Supervisor) collectInstanceMetrics() {
 					"memory_mb", memoryMB,
 					"max_memory_mb", maxMemoryMB,
 				)
-				// Kill the process - monitorInstance will handle restart based on policy
+
 				inst.mu.Lock()
 				if inst.state == StateRunning && inst.cmd != nil && inst.cmd.Process != nil {
-					// Record memory restart metric
 					metrics.RecordProcessRestart(s.name, "memory_limit")
-					_ = inst.cmd.Process.Kill()
+					if err := s.signalProcessGroup(inst, syscall.SIGKILL, "memory limit restart"); err != nil {
+						s.logger.Warn("Failed to kill memory-limited process group",
+							"instance_id", instanceID,
+							"error", err,
+						)
+					}
 				}
 				inst.mu.Unlock()
 			}

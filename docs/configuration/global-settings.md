@@ -167,7 +167,7 @@ global:
 ```
 
 **Settings:**
-- `api_enabled` - Enable/disable REST API (default: `true`)
+- `api_enabled` - Enable/disable TCP REST API (default: `false`)
 - `api_port` - HTTP port for API endpoints (default: `9180`)
 - `api_auth` - Optional Bearer token for authentication
 
@@ -178,7 +178,7 @@ global:
 
 See [Management API](../observability/api) for complete API documentation.
 
-> **Note:** The API is enabled by default to support the TUI and remote management. Set `api_enabled: false` (or `CBOX_INIT_GLOBAL_API_ENABLED=false`) to disable it entirely.
+> **Note:** Local management still uses the Unix socket listener. Set `api_enabled: true` only when you need the TCP REST API, and pair it with `api_auth`, ACLs, or TLS for production.
 
 ### Container Readiness Configuration
 

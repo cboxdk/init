@@ -66,6 +66,7 @@ type Manager struct {
 
 	// Configurable timeouts and limits (initialized from global config or defaults)
 	dependencyTimeout  time.Duration
+	processStartTimeout time.Duration
 	processStopTimeout time.Duration
 	maxProcessScale    int
 }
@@ -122,6 +123,11 @@ func NewManager(cfg *config.Config, logger *slog.Logger, auditLogger *audit.Logg
 		dependencyTimeout = cfg.Global.DependencyTimeout
 	}
 
+	processStartTimeout := DefaultProcessStartTimeout
+	if cfg.Global.ProcessStartTimeout > 0 {
+		processStartTimeout = cfg.Global.ProcessStartTimeout
+	}
+
 	processStopTimeout := DefaultProcessStopTimeout
 	if cfg.Global.ProcessStopTimeout > 0 {
 		processStopTimeout = cfg.Global.ProcessStopTimeout
@@ -148,6 +154,7 @@ func NewManager(cfg *config.Config, logger *slog.Logger, auditLogger *audit.Logg
 		startTime:          startTime,
 		logBroadcaster:     logpkg.NewLogBroadcaster(),
 		dependencyTimeout:  dependencyTimeout,
+		processStartTimeout: processStartTimeout,
 		processStopTimeout: processStopTimeout,
 		maxProcessScale:    maxProcessScale,
 	}

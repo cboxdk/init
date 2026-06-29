@@ -49,7 +49,7 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 		supervisor.SetOneshotHistory(m.oneshotHistory)
 		supervisor.SetLogBroadcaster(m.logBroadcaster)
 		// Use background context for supervisor lifetime (independent of API request)
-		if err := supervisor.Start(context.Background()); err != nil {
+		if err := m.startSupervisor(ctx, supervisor); err != nil {
 			// Remove from config on failure
 			delete(m.config.Processes, name)
 			return fmt.Errorf("failed to start process: %w", err)
@@ -151,7 +151,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 			newSupervisor.SetOneshotHistory(m.oneshotHistory)
 			newSupervisor.SetLogBroadcaster(m.logBroadcaster)
 			// Use background context for supervisor lifetime (independent of API request)
-			if err := newSupervisor.Start(context.Background()); err != nil {
+			if err := m.startSupervisor(ctx, newSupervisor); err != nil {
 				// Rollback config change on error
 				m.config.Processes[name] = oldCfg
 				return fmt.Errorf("failed to start process with new config: %w", err)
@@ -172,7 +172,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 		supervisor.SetOneshotHistory(m.oneshotHistory)
 		supervisor.SetLogBroadcaster(m.logBroadcaster)
 		// Use background context for supervisor lifetime (independent of API request)
-		if err := supervisor.Start(context.Background()); err != nil {
+		if err := m.startSupervisor(ctx, supervisor); err != nil {
 			// Rollback config change on error
 			m.config.Processes[name] = oldCfg
 			return fmt.Errorf("failed to start process: %w", err)

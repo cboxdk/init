@@ -77,19 +77,26 @@ func (m *Manager) updateReadinessStates() {
 	defer m.mu.RUnlock()
 
 	for name, sup := range m.processes {
-		// Use the supervisor's overall state (includes health check status)
 		supState := sup.GetState()
 		instances := sup.GetInstances()
+		healthStatus, lastCheckSucceeded, hasHealthCheck := sup.HealthSnapshot()
 
 		var processState readiness.ProcessState
 		var health string
 
 		switch supState {
 		case StateRunning:
-			// Process is running - consider it healthy for readiness purposes
-			// (health checks are evaluated separately by the readiness manager modes)
-			processState = readiness.StateHealthy
-			health = "healthy"
+			if hasHealthCheck {
+				health = healthStatus
+				if lastCheckSucceeded {
+					processState = readiness.StateHealthy
+				} else {
+					processState = readiness.StateRunning
+				}
+			} else {
+				processState = readiness.StateHealthy
+				health = "healthy"
+			}
 		case StateStopped:
 			processState = readiness.StateStopped
 			health = "unknown"
