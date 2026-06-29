@@ -173,6 +173,9 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 			}
 		}
 
+		status := hm.performCheck(ctx)
+		statusCh <- status
+
 		ticker := time.NewTicker(time.Duration(hm.config.Period) * time.Second)
 		defer ticker.Stop()
 
