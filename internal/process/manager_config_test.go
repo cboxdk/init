@@ -139,7 +139,8 @@ func TestManager_StartReloadProcesses_UsesDependencyOrder(t *testing.T) {
 			"nginx": {
 				Enabled:      true,
 				InitialState: "running",
-				Command:      []string{"sh", "-c", "echo nginx >> " + orderPath + "; sleep 300"},
+				Type:         "oneshot",
+				Command:      []string{"sh", "-c", "echo nginx >> " + orderPath},
 				Restart:      "never",
 				Scale:        1,
 				DependsOn:    []string{"php-fpm"},
@@ -147,7 +148,8 @@ func TestManager_StartReloadProcesses_UsesDependencyOrder(t *testing.T) {
 			"php-fpm": {
 				Enabled:      true,
 				InitialState: "running",
-				Command:      []string{"sh", "-c", "echo php-fpm >> " + orderPath + "; touch " + readyPath + "; sleep 300"},
+				Type:         "oneshot",
+				Command:      []string{"sh", "-c", "echo php-fpm >> " + orderPath + "; touch " + readyPath},
 				Restart:      "never",
 				Scale:        1,
 				HealthCheck: &config.HealthCheck{
