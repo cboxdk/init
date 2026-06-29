@@ -123,6 +123,74 @@ func TestManager_ReloadConfig_AddNewProcess(t *testing.T) {
 	}
 }
 
+func TestManager_StartReloadProcesses_UsesDependencyOrder(t *testing.T) {
+	tmpDir := t.TempDir()
+	orderPath := filepath.Join(tmpDir, "startup-order.txt")
+	readyPath := filepath.Join(tmpDir, "php-fpm-ready")
+
+	cfg := &config.Config{
+		Global: config.GlobalConfig{
+			ShutdownTimeout:    10,
+			LogLevel:           "error",
+			MaxRestartAttempts: 3,
+			RestartBackoff:     1,
+		},
+		Processes: map[string]*config.Process{
+			"nginx": {
+				Enabled:      true,
+				InitialState: "running",
+				Type:         "oneshot",
+				Command:      []string{"sh", "-c", "echo nginx >> " + orderPath},
+				Restart:      "never",
+				Scale:        1,
+				DependsOn:    []string{"php-fpm"},
+			},
+			"php-fpm": {
+				Enabled:      true,
+				InitialState: "running",
+				Type:         "oneshot",
+				Command:      []string{"sh", "-c", "echo php-fpm >> " + orderPath + "; touch " + readyPath},
+				Restart:      "never",
+				Scale:        1,
+				HealthCheck: &config.HealthCheck{
+					Type:             "exec",
+					Command:          []string{"test", "-f", readyPath},
+					Period:           1,
+					Timeout:          1,
+					InitialDelay:     1,
+					FailureThreshold: 3,
+					Mode:             "readiness",
+				},
+			},
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	auditLogger := audit.NewLogger(logger, false)
+	manager := NewManager(cfg, logger, auditLogger)
+
+	ctx := context.Background()
+	if err := manager.startReloadProcesses(ctx, cfg, map[string]bool{
+		"nginx":   true,
+		"php-fpm": true,
+	}); err != nil {
+		t.Fatalf("startReloadProcesses() error = %v", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = manager.Shutdown(shutdownCtx)
+	}()
+
+	testutil.Eventually(t, func() bool {
+		data, err := os.ReadFile(orderPath)
+		if err != nil {
+			return false
+		}
+		return strings.TrimSpace(string(data)) == "php-fpm\nnginx"
+	}, "reload processes to start in dependency order")
+}
+
 // TestManager_ReloadConfig_RemoveProcess tests removing a process during reload
 func TestManager_ReloadConfig_RemoveProcess(t *testing.T) {
 	tmpDir := t.TempDir()

@@ -204,6 +204,7 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	// Monitor process health
 	pm.MonitorProcessHealth(ctx)
+	pm.StartReadinessMonitor(ctx)
 
 	// Always start Unix socket for local management (TUI, CLI commands)
 	socketPath := resolveSocketPath(cfg.Global.APISocket)

@@ -225,7 +225,7 @@ func (m *Manager) startRegularProcess(ctx context.Context, name string, procCfg 
 			attribute.String("process_name", name),
 			attribute.Int("scale", procCfg.Scale))
 
-		if err := sup.Start(processCtx); err != nil {
+		if err := m.startSupervisor(processCtx, sup); err != nil {
 			tracing.RecordError(processSpan, err, "Failed to start process")
 			processSpan.End()
 			return fmt.Errorf("failed to start process %s: %w", name, err)
@@ -270,6 +270,10 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	m.shutdownOnce.Do(func() {
 		close(m.shutdownCh)
 	})
+
+	if err := m.StopReadinessManager(); err != nil {
+		m.logger.Warn("Failed to stop readiness manager", "error", err)
+	}
 
 	// Stop the scheduler first (prevents new job executions)
 	if m.scheduler.IsStarted() {
@@ -412,7 +416,7 @@ func (m *Manager) StartProcess(ctx context.Context, name string) error {
 
 	// Use background context for supervisor lifetime (not the request context)
 	// The supervisor should live independently of the API request that started it
-	if err := sup.Start(context.Background()); err != nil {
+	if err := m.startSupervisor(ctx, sup); err != nil {
 		m.logger.Error("Failed to start process",
 			"name", name,
 			"error", err,
@@ -512,7 +516,7 @@ func (m *Manager) RestartProcess(ctx context.Context, name string) error {
 	stopCancel()
 
 	// Start process with fresh background context so it isn't tied to API request lifetime
-	if err := sup.Start(context.Background()); err != nil {
+	if err := m.startSupervisor(ctx, sup); err != nil {
 		m.logger.Error("Failed to start process after restart",
 			"name", name,
 			"error", err,

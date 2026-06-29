@@ -123,6 +123,51 @@ func TestSupervisor_WaitForReadiness(t *testing.T) {
 	}
 }
 
+func TestSupervisor_ReadinessRequiresSuccessfulProbe(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	auditLogger := audit.NewLogger(logger, false)
+
+	cfg := &config.Process{
+		Enabled:     true,
+		Command:     []string{"sleep", "60"},
+		Restart:     "never",
+		Scale:       1,
+		HealthCheck: &config.HealthCheck{
+			Type:    "tcp",
+			Address: "127.0.0.1:65535",
+			Mode:    "readiness",
+		},
+	}
+
+	globalCfg := &config.GlobalConfig{
+		LogLevel:           "error",
+		MaxRestartAttempts: 3,
+		RestartBackoff:     5,
+	}
+
+	sup := NewSupervisor("test-proc", cfg, globalCfg, logger, auditLogger, nil)
+	statusCh := make(chan HealthStatus, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sup.healthStatus = statusCh
+
+	go sup.handleHealthStatus(ctx)
+
+	statusCh <- HealthStatus{Healthy: true, LastCheckSucceeded: false}
+
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), time.Second)
+	defer waitCancel()
+	if err := sup.WaitForReadiness(waitCtx, 50*time.Millisecond); err == nil {
+		t.Fatal("Expected readiness wait to time out after failed probe")
+	}
+
+	statusCh <- HealthStatus{Healthy: true, LastCheckSucceeded: true}
+
+	if err := sup.WaitForReadiness(waitCtx, time.Second); err != nil {
+		t.Fatalf("Expected successful probe to mark ready: %v", err)
+	}
+}
+
 func TestSupervisor_StreamEnabled(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	auditLogger := audit.NewLogger(logger, false)

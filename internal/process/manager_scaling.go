@@ -122,7 +122,7 @@ func (m *Manager) scaleFromZero(ctx context.Context, name string, sup *Superviso
 	if cfg := m.config.Processes[name]; cfg != nil {
 		cfg.Scale = desiredScale
 	}
-	if err := sup.Start(context.Background()); err != nil {
+	if err := m.startSupervisor(ctx, sup); err != nil {
 		return fmt.Errorf("failed to start process %s for scale %d: %w", name, desiredScale, err)
 	}
 	metrics.SetDesiredScale(name, desiredScale)
