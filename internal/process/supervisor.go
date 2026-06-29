@@ -114,6 +114,9 @@ type Supervisor struct {
 	readinessCh        chan struct{}  // Closed when service becomes ready
 	readinessOnce      sync.Once      // CRITICAL: Ensures readinessCh closed exactly once
 	isReady            bool           // Track readiness state
+	healthKnown        bool           // Whether at least one health check result has been observed
+	healthHealthy      bool           // Liveness health after thresholds/hysteresis
+	lastCheckSucceeded bool           // Raw result from the most recent health check
 	goroutines         sync.WaitGroup // CRITICAL: Track all goroutines for clean shutdown
 	mu                 sync.RWMutex
 	operationMu        sync.Mutex // Serializes lifecycle/scale operations so reads can proceed
@@ -1196,8 +1199,16 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 				return
 			}
 
-			if status.Healthy {
-				// Signal readiness on first successful health check
+			s.mu.Lock()
+			s.healthKnown = true
+			s.healthHealthy = status.Healthy
+			s.lastCheckSucceeded = status.LastCheckSucceeded
+			s.mu.Unlock()
+
+			if status.LastCheckSucceeded {
+				// Signal readiness on first successful health check.
+				// Liveness can stay optimistic across transient failures, but
+				// readiness must only pass after a real probe success.
 				s.markReady("health check passed")
 			} else if !status.Healthy {
 				s.logger.Error("Process unhealthy, triggering restart",
@@ -1262,6 +1273,25 @@ func (s *Supervisor) GetState() ProcessState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.state
+}
+
+// HealthSnapshot returns the latest health check state for readiness reporting.
+// Health is "healthy", "unhealthy", or "unknown". For processes without a
+// health check, running is treated as healthy by callers that need a value.
+func (s *Supervisor) HealthSnapshot() (health string, lastCheckSucceeded bool, hasHealthCheck bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.config.HealthCheck == nil {
+		return "healthy", true, false
+	}
+	if !s.healthKnown {
+		return "unknown", false, true
+	}
+	if s.lastCheckSucceeded {
+		return "healthy", true, true
+	}
+	return "unhealthy", false, true
 }
 
 // InstanceInfo represents exported instance information

@@ -27,12 +27,14 @@ import (
 
 // createTestManager creates a real manager with minimal config for testing
 func createTestManager(t *testing.T) *process.Manager {
+	resourceMetricsEnabled := true
 	cfg := &config.Config{
 		Global: config.GlobalConfig{
-			ShutdownTimeout:    30,
-			LogLevel:           "error",
-			MaxRestartAttempts: 3,
-			RestartBackoff:     5,
+			ShutdownTimeout:        30,
+			LogLevel:               "error",
+			MaxRestartAttempts:     3,
+			RestartBackoff:         5,
+			ResourceMetricsEnabled: &resourceMetricsEnabled,
 		},
 		Processes: map[string]*config.Process{
 			"test-process": {
