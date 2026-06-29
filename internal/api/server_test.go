@@ -1937,6 +1937,9 @@ func TestSecurityStack_RateLimitWithACL(t *testing.T) {
 	}
 
 	server := createTestServer(t, "test-token", aclConfig)
+	server.rateLimiter.stop()
+	server.rateLimiter = newRateLimiter(0, 2)
+	t.Cleanup(server.rateLimiter.stop)
 
 	// Make allowed IP request handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1946,10 +1949,10 @@ func TestSecurityStack_RateLimitWithACL(t *testing.T) {
 	handler := server.aclMiddleware(server.wrapHandler(testHandler, true))
 
 	// Exhaust rate limit for one IP
-	allowedIP := "192.168.1.100:12345"
-	for i := 0; i < 250; i++ { // Burst is 200
+	allowedIP := "192.168.1.100"
+	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.RemoteAddr = allowedIP
+		req.Header.Set("X-Forwarded-For", allowedIP)
 		req.Header.Set("Authorization", "Bearer test-token")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -1957,7 +1960,7 @@ func TestSecurityStack_RateLimitWithACL(t *testing.T) {
 
 	// This request should be rate limited
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.RemoteAddr = allowedIP
+	req.Header.Set("X-Forwarded-For", allowedIP)
 	req.Header.Set("Authorization", "Bearer test-token")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -1967,9 +1970,9 @@ func TestSecurityStack_RateLimitWithACL(t *testing.T) {
 	}
 
 	// Different IP should not be rate limited
-	differentIP := "192.168.1.101:12345"
+	differentIP := "192.168.1.101"
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req2.RemoteAddr = differentIP
+	req2.Header.Set("X-Forwarded-For", differentIP)
 	req2.Header.Set("Authorization", "Bearer test-token")
 	w2 := httptest.NewRecorder()
 	handler.ServeHTTP(w2, req2)
