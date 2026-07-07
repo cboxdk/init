@@ -46,6 +46,20 @@ func (m *Manager) StartReadinessMonitor(ctx context.Context) {
 	m.readinessManager.SetTrackedProcesses(trackedProcesses)
 	m.logger.Info("Readiness monitoring started", "tracked_processes", trackedProcesses)
 
+	// Expose the aggregate readiness/liveness over HTTP for httpGet probes.
+	// This is an ACTIVE signal (served by cbox-init) — unlike the readiness
+	// file it cannot go stale if the supervisor wedges.
+	if cfg.HTTPPort > 0 {
+		hs := readiness.NewHTTPServer(m.readinessManager, cfg.HTTPHost, cfg.HTTPPort, m.logger)
+		hs.Start()
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_ = hs.Stop(shutdownCtx)
+		}()
+	}
+
 	// Start a goroutine to periodically update process states
 	go m.monitorReadinessStates(ctx)
 }

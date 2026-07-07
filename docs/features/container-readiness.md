@@ -54,6 +54,40 @@ processes:
 | `mode` | `string` | `all_healthy` | Readiness evaluation mode |
 | `content` | `string` | `ready\ntimestamp=...` | Custom file content when ready |
 | `processes` | `[]string` | `[]` | Specific processes to track (empty = all) |
+| `http_port` | `int` | `0` | Serve `/readyz` + `/livez` on this port (`0` = disabled) |
+| `http_host` | `string` | `0.0.0.0` | Bind host for the HTTP endpoints |
+
+## HTTP probes (active readiness)
+
+The readiness **file** is passive: if cbox-init hangs while still alive, a stale file keeps
+reporting "ready". Set `http_port` to also expose an **active** signal served by cbox-init itself —
+if the supervisor wedges, the endpoint stops answering and the probe fails.
+
+```yaml
+global:
+  readiness:
+    enabled: true
+    http_port: 9091      # exposes /readyz + /livez
+```
+
+- `GET /readyz` → `200` when all tracked processes are ready, `503` otherwise (JSON body lists each
+  process's state). Use for the **readinessProbe** (traffic gating).
+- `GET /livez` → `200` whenever cbox-init can answer. Use for the **livenessProbe** (restart the pod
+  only when the supervisor itself is unresponsive, not merely when the app is unready).
+
+```yaml
+readinessProbe:
+  httpGet: { path: /readyz, port: 9091 }
+  periodSeconds: 5
+livenessProbe:
+  httpGet: { path: /livez, port: 9091 }
+  periodSeconds: 10
+  failureThreshold: 3
+```
+
+Prefer HTTP probes on Kubernetes: they detect a wedged supervisor and avoid host-networking / CNI
+source-IP quirks that can defeat localhost ACLs on nginx-served health paths. The `exec` file-probe
+remains fully supported and complementary.
 
 ### Readiness Modes
 

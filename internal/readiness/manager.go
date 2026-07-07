@@ -76,13 +76,13 @@ const (
 // ProcessStatus provides process state information for readiness evaluation.
 type ProcessStatus struct {
 	// Name is the process name as defined in configuration.
-	Name string
+	Name string `json:"name"`
 
 	// State is the current process state (running, healthy, unhealthy, stopped, failed).
-	State ProcessState
+	State ProcessState `json:"state"`
 
 	// Health is the health check result: "healthy", "unhealthy", or "unknown".
-	Health string
+	Health string `json:"health"`
 }
 
 // Manager manages the container readiness file lifecycle.
@@ -280,6 +280,19 @@ func (m *Manager) IsReady() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.isReady
+}
+
+// Snapshot returns the aggregate readiness together with a copy of every
+// tracked process's status. It is the data source for the HTTP /readyz
+// endpoint. Thread-safe.
+func (m *Manager) Snapshot() (ready bool, processes []ProcessStatus) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	processes = make([]ProcessStatus, 0, len(m.processes))
+	for _, p := range m.processes {
+		processes = append(processes, p)
+	}
+	return m.isReady, processes
 }
 
 // evaluateReadiness checks if all tracked processes meet readiness criteria.

@@ -274,13 +274,21 @@ type ACLConfig struct {
 	TrustProxy bool     `yaml:"trust_proxy" json:"trust_proxy"` // Trust X-Forwarded-For header (default: false)
 }
 
-// ReadinessConfig configures container readiness file for Kubernetes integration
+// ReadinessConfig configures container readiness for Kubernetes integration.
+//
+// Two complementary signals are supported:
+//   - A readiness FILE (Path) for exec probes (test -f). Passive.
+//   - An HTTP endpoint (HTTPPort) exposing /readyz + /livez for httpGet probes.
+//     ACTIVE: because cbox-init itself serves it, a wedged/hung supervisor stops
+//     answering and the probe fails — a stale file cannot express that.
 type ReadinessConfig struct {
-	Enabled   bool     `yaml:"enabled" json:"enabled"`     // Enable readiness file creation
-	Path      string   `yaml:"path" json:"path"`           // Path to readiness file (default: /tmp/cbox-ready)
+	Enabled   bool     `yaml:"enabled" json:"enabled"`     // Enable readiness tracking
+	Path      string   `yaml:"path" json:"path"`           // Path to readiness file (default: /tmp/cbox-ready); empty disables the file
 	Mode      string   `yaml:"mode" json:"mode"`           // Readiness mode: "all_healthy" | "all_running" (default: all_healthy)
 	Content   string   `yaml:"content" json:"content"`     // Optional content to write to the file
 	Processes []string `yaml:"processes" json:"processes"` // Specific processes to check (empty = all enabled longrun)
+	HTTPPort  int      `yaml:"http_port" json:"http_port"` // Serve /readyz + /livez on this port (0 = disabled)
+	HTTPHost  string   `yaml:"http_host" json:"http_host"` // Bind host for the HTTP endpoint (default: 0.0.0.0 so kubelet can reach it)
 }
 
 // setGlobalDefaults sets default values for global configuration

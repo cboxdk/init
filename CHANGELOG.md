@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-07-07
+
+### Added
+
+- **Active HTTP readiness/liveness endpoints** — set `global.readiness.http_port` to expose:
+  - `GET /readyz` → `200` when all tracked processes are ready, `503` otherwise (JSON body lists
+    each tracked process's state). Drives the Kubernetes `readinessProbe`.
+  - `GET /livez` → `200` whenever cbox-init can answer. Drives the `livenessProbe`.
+
+  Unlike the readiness **file** (passive, can go stale if the supervisor wedges), these are served
+  by cbox-init itself: a hung supervisor stops answering and the probe fails. The file remains for
+  `exec` probes — the two are complementary. Bound to `0.0.0.0` by default so the kubelet can reach it.
+
 ## [2.2.0] - 2026-07-07
 
 ### Added
