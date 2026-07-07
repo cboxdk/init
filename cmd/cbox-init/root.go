@@ -7,7 +7,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "1.0.0"
+// version is overridden at build time via -ldflags "-X main.version=...".
+// It must be a var (not a const) for the linker flag to take effect.
+var version = "dev"
 
 var (
 	cfgFile string

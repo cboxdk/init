@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.0] - 2026-07-07
+
+### Added
+
+- **Startup performance controls** — new options to tune process manager startup behavior.
+
+### Changed
+
+- **Dependency-aware reload** — configuration reloads now respect process dependency ordering.
+- **Secure runtime observability defaults** — metrics/observability endpoints now ship with safer, locked-down defaults.
+
+### Fixed
+
+- **`version` reported the wrong number on every release** — the version was a `const`, which the `-ldflags "-X main.version=..."` linker flag cannot override, so all builds reported `1.0.0`. It is now a `var` (default `dev`); release builds report the injected semver.
+- **Health readiness semantics** — a process is now only reported ready when it is genuinely ready (fixes false-healthy reporting).
+- **Hardened process lifecycle handling** — more robust start/stop/restart and supervisor edge-case handling.
+
+## [2.1.1] - 2026-05-07
 
 ### Fixed
 

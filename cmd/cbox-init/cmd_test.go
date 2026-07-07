@@ -836,9 +836,10 @@ func TestVersionConstant(t *testing.T) {
 		t.Error("version constant should not be empty")
 	}
 
-	// Version should follow semver pattern
-	if !strings.Contains(version, ".") {
-		t.Errorf("version should contain dot separator, got: %s", version)
+	// Default is the "dev" sentinel; release builds inject a semver via
+	// -ldflags "-X main.version=...". Only enforce semver when injected.
+	if version != "dev" && !strings.Contains(version, ".") {
+		t.Errorf("injected version should contain dot separator, got: %s", version)
 	}
 }
 
@@ -2381,6 +2382,10 @@ processes:
 
 // TestVersionConstantValue tests version constant format
 func TestVersionConstantValue(t *testing.T) {
+	// Default is the "dev" sentinel; release builds inject semver via -ldflags.
+	if version == "dev" {
+		t.Skip("dev build; release injects semver via -ldflags")
+	}
 	// Version should be semver format
 	parts := strings.Split(version, ".")
 	if len(parts) < 2 {
