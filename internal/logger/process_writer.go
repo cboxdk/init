@@ -205,7 +205,7 @@ func (pw *ProcessWriter) processEntry(entry string) {
 		pw.Logger.Debug(message, baseAttrs...)
 		levelStr = "debug"
 	case slog.LevelInfo:
-		pw.Logger.Debug(message, baseAttrs...)
+		pw.Logger.Info(message, baseAttrs...)
 		levelStr = "info"
 	case slog.LevelWarn:
 		pw.Logger.Warn(message, baseAttrs...)
@@ -214,7 +214,7 @@ func (pw *ProcessWriter) processEntry(entry string) {
 		pw.Logger.Error(message, baseAttrs...)
 		levelStr = "error"
 	default:
-		pw.Logger.Debug(message, baseAttrs...)
+		pw.Logger.Info(message, baseAttrs...)
 		levelStr = "info"
 	}
 

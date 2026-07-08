@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-07-08
+
+### Fixed
+
+- **Supervised-process stdout/stderr now actually reaches container stdout.** Info-level output
+  from tracked processes (php-fpm, nginx, queue workers, and JSON- or file-tailed lines detected
+  as info) was routed through `slog.Debug()` in the process-log pipeline and therefore silently
+  dropped by the default `log_level: info` handler — only `warn`/`error` survived. The result: a
+  container's normal application logs never appeared in `kubectl logs` / `docker logs`, and a
+  Laravel error logged via `LOG_CHANNEL=stderr` was invisible. Info-level process entries are now
+  emitted at info, restoring the documented default that `logging.stdout` / `logging.stderr`
+  forward process output. (The `default` switch arm was likewise corrected from debug to info.)
+
 ## [2.3.0] - 2026-07-07
 
 ### Added

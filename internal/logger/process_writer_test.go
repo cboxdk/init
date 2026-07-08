@@ -795,6 +795,28 @@ func TestProcessWriter_Write_JSONWithLevel(t *testing.T) {
 	}
 }
 
+// TestProcessWriter_InfoLevelReachesHandler is a regression test for the bug
+// where info-level process output was routed through slog.Debug() and therefore
+// dropped by a handler at the default Info level — silencing all normal
+// php-fpm/nginx output on container stdout (only warn/error survived).
+func TestProcessWriter_InfoLevelReachesHandler(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	pw, err := NewProcessWriter(logger, "php-fpm", "php-fpm-0", "stderr", nil)
+	if err != nil {
+		t.Fatalf("NewProcessWriter() error = %v", err)
+	}
+
+	// A plain (non-JSON, no explicit level) line defaults to info.
+	_, _ = pw.Write([]byte("fpm is running, ready to handle connections\n"))
+	pw.Flush()
+
+	if !strings.Contains(buf.String(), "fpm is running") {
+		t.Errorf("info-level process output must reach the slog handler (container stdout); got: %q", buf.String())
+	}
+}
+
 func TestProcessWriter_Write_JSONWithEmptyMessage(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
