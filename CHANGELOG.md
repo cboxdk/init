@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **PID-1 zombie reaper no longer races with the supervisor's own `Wait()`.** The wildcard
+  reaper (`Wait4(-1)`) could reap a supervised child before its `cmd.Wait()` ran, leaving a nil
+  `ProcessState` that panicked `monitorInstance` and left the process permanently in `failed`
+  (never restarted, `/readyz` stale). Supervisors now register their PIDs; a racing reaper stashes
+  the exit status for the supervisor to recover, so exit codes are preserved and restarts always run.
+- **Restart budget is now a sliding window, not a lifetime total.** `restartCount` accumulated for
+  the life of the container, so a service that crashed more than `max_restart_attempts` times — even
+  with days of healthy uptime between crashes — was abandoned forever. A new
+  `global.restart_stability_window` (default `60s`) resets the budget once an instance stays up long
+  enough to be considered recovered (systemd `StartLimitIntervalSec` semantics; negative disables).
+- **Log tailer no longer leaks a file descriptor on every rotation.** A `defer file.Close()` inside
+  the reopen path accumulated one open FD per rotation, eventually exhausting `RLIMIT_NOFILE` on
+  high-rotation logs.
+- **Shutdown no longer skips processes when the dependency graph is invalid.** If a reload swapped in
+  a config whose dependencies no longer resolve, `getShutdownOrder` returned an empty list and left
+  children to be SIGKILLed by the runtime; it now falls back to stopping all known processes.
+
+### Security
+
+- **Rate limiter can no longer be bypassed via `X-Forwarded-For` spoofing.** It now keys on the
+  real client IP (RemoteAddr), only honoring `X-Forwarded-For` when `trust_proxy` is enabled —
+  previously a client could send a unique header per request to mint a fresh token bucket and defeat
+  rate limiting (and brute-force the API token).
+- Config files are now written `0600` (was `0644`). A saved config can contain the management-API
+  bearer token (`api_auth`), so it must not be world-readable by other UIDs in the container.
+- Recursive ownership fixes use `Lchown` instead of `Chown`, so a symlink planted in a user-writable
+  mounted volume (storage/, wp-content/) can't redirect the chown at an arbitrary target file.
+
+### Added
+
+- **`api_host` / `metrics_host`** settings to restrict the API and metrics listeners to a specific
+  interface (e.g. `127.0.0.1`). Default is unchanged (all interfaces), so this is opt-in hardening.
+
+### Fixed (reload)
+
+- **Config reload now validates the new config before stopping anything.** An invalid config (bad
+  settings or a dependency cycle) previously stopped the removed/changed services first and only then
+  failed, leaving them down. A failed reload is now a no-op — the running configuration is untouched.
+
+### Changed
+
+- Local `make build` now derives the version from `git describe` instead of a hardcoded `1.0.0`, so
+  locally built binaries report the real version. `make dev` runs against `configs/examples/minimal.yaml`.
+- Added `.golangci.yml` (v2), pinned `golangci-lint` in CI, `SECURITY.md`, `CONTRIBUTING.md`, and
+  Dependabot for Go modules, GitHub Actions, and Docker.
+
 ## [2.3.1] - 2026-07-08
 
 ### Fixed

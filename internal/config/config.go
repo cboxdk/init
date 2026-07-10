@@ -238,14 +238,16 @@ func (c *Config) hasCycle(name string, visited, recStack map[string]bool) bool {
 }
 
 // Save writes the configuration to a YAML file at the specified path.
-// The file is created with 0644 permissions. Existing files are overwritten.
+// The file is created with 0600 permissions because it can contain secrets
+// (e.g. the management-API bearer token, api_auth). Existing files are
+// overwritten.
 func Save(path string, cfg *Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

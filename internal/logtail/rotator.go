@@ -41,7 +41,7 @@ func (r *FileRotator) CheckAndRotate(path string) error {
 		dst := fmt.Sprintf("%s.%d", path, i+1)
 
 		if i == r.MaxFiles {
-			os.Remove(dst)
+			_ = os.Remove(dst) // best-effort: drop the oldest rotated file
 		}
 
 		if _, err := os.Stat(src); err == nil {

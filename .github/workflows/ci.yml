@@ -63,10 +63,12 @@ jobs:
           go-version: '1.24'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
-          args: --timeout=5m
+          # Pinned for reproducible linting; matches the version documented in
+          # CONTRIBUTING.md and the local `make lint` target. Config lives in
+          # .golangci.yml (v2 format).
+          version: v2.12.2
 
   build:
     name: Build

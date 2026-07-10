@@ -31,12 +31,17 @@ A modern process supervisor designed for Laravel and PHP applications with:
 - Cron-like scheduler for periodic tasks
 
 Examples:
+  cbox-init scaffold laravel         # Generate a starter config
+  cbox-init check-config -c cbox-init.yaml  # Validate a config
   cbox-init serve                    # Start daemon
   cbox-init tui                      # Interactive dashboard
   cbox-init list                     # List all processes
   cbox-init status nginx             # Show process details
+  cbox-init start horizon            # Start a stopped process
+  cbox-init stop horizon             # Stop a running process
   cbox-init restart horizon          # Restart horizon
   cbox-init scale queue-default 10   # Scale to 10 workers
+  cbox-init reload-config            # Reload config without downtime
   cbox-init logs nginx -f            # Stream nginx logs`,
 	Version: version,
 	// Default to serve command if no subcommand specified

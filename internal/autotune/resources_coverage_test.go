@@ -233,9 +233,10 @@ func TestDetectContainerResources_VersionValidation(t *testing.T) {
 
 	if resources.IsContainerized {
 		// Should prefer v2 if both exist
-		if resources.CgroupVersion == 2 {
+		switch resources.CgroupVersion {
+		case 2:
 			t.Logf("Detected cgroup v2 (preferred)")
-		} else if resources.CgroupVersion == 1 {
+		case 1:
 			t.Logf("Detected cgroup v1 (v2 not available)")
 		}
 	} else {

@@ -5,6 +5,28 @@ import (
 	"time"
 )
 
+func TestResetRestartBudget(t *testing.T) {
+	tests := []struct {
+		name   string
+		window time.Duration
+		uptime time.Duration
+		want   bool
+	}{
+		{"stable past window resets", 60 * time.Second, 90 * time.Second, true},
+		{"exactly at window resets", 60 * time.Second, 60 * time.Second, true},
+		{"crashed before window keeps budget", 60 * time.Second, 5 * time.Second, false},
+		{"zero window disables reset", 0, 10 * time.Minute, false},
+		{"negative window disables reset", -1, 10 * time.Minute, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resetRestartBudget(tt.window, tt.uptime); got != tt.want {
+				t.Errorf("resetRestartBudget(%v, %v) = %v, want %v", tt.window, tt.uptime, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAlwaysRestartPolicy(t *testing.T) {
 	tests := []struct {
 		name         string

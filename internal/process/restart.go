@@ -126,6 +126,15 @@ func NewRestartPolicy(policyType string, maxAttempts int, initial, max time.Dura
 	}
 }
 
+// resetRestartBudget reports whether an instance that has been up for uptime
+// should have its restart counter reset to zero. An instance that stays up
+// past the stability window is treated as recovered, giving it a fresh restart
+// budget so occasional crashes over a long lifetime don't permanently exhaust
+// MaxRestartAttempts. A window of zero (or negative) disables the reset.
+func resetRestartBudget(stabilityWindow, uptime time.Duration) bool {
+	return stabilityWindow > 0 && uptime >= stabilityWindow
+}
+
 func calculateBackoff(initial, max time.Duration, restartCount int) time.Duration {
 	if initial <= 0 {
 		initial = 1 * time.Second

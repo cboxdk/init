@@ -253,6 +253,15 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	// Validate BEFORE touching any running process. Without this an invalid
+	// config (bad settings, or a dependency cycle that would make the startup
+	// order unresolvable) would stop the removed/changed services first and
+	// only then fail — leaving them down. Validating up front makes a failed
+	// reload a no-op: the running configuration is left exactly as it was.
+	if err := newCfg.Validate(); err != nil {
+		return fmt.Errorf("refusing to reload invalid config (running config unchanged): %w", err)
+	}
+
 	// Determine what changed
 	toStop := []string{}
 	toStart := []string{}

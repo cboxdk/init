@@ -24,6 +24,7 @@ type GlobalConfig struct {
 	RestartBackoff            int              `yaml:"restart_backoff" json:"restart_backoff"`                           // seconds (legacy, prefer restart_backoff_initial/max)
 	RestartBackoffInitial     time.Duration    `yaml:"restart_backoff_initial" json:"restart_backoff_initial"`           // initial duration (supports "5s" style)
 	RestartBackoffMax         time.Duration    `yaml:"restart_backoff_max" json:"restart_backoff_max"`                   // max duration
+	RestartStabilityWindow    time.Duration    `yaml:"restart_stability_window" json:"restart_stability_window"`         // uptime after which the restart budget resets (default 60s; negative disables)
 	AutotuneMemoryThreshold   float64          `yaml:"autotune_memory_threshold" json:"autotune_memory_threshold"`       // 0.0-2.0, overrides profile MaxMemoryUsage
 	LogFormat                 string           `yaml:"log_format" json:"log_format"`                                     // json | text
 	LogLevel                  string           `yaml:"log_level" json:"log_level"`                                       // debug | info | warn | error
@@ -31,8 +32,10 @@ type GlobalConfig struct {
 	MetricsEnabled            *bool            `yaml:"metrics_enabled" json:"metrics_enabled"`                           //
 	MetricsPort               int              `yaml:"metrics_port" json:"metrics_port"`                                 //
 	MetricsPath               string           `yaml:"metrics_path" json:"metrics_path"`                                 //
+	MetricsHost               string           `yaml:"metrics_host" json:"metrics_host"`                                 // Bind host for metrics (default: all interfaces)
 	APIEnabled                *bool            `yaml:"api_enabled" json:"api_enabled"`                                   //
 	APIPort                   int              `yaml:"api_port" json:"api_port"`                                         //
+	APIHost                   string           `yaml:"api_host" json:"api_host"`                                         // Bind host for the management API (default: all interfaces; set 127.0.0.1 for local-only)
 	APISocket                 string           `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/cbox-init.sock)
 	APIAuth                   string           `yaml:"api_auth" json:"api_auth"`                                         // Bearer token
 	APITLS                    *TLSConfig       `yaml:"api_tls" json:"api_tls"`                                           // TLS configuration for API
@@ -143,16 +146,16 @@ type ShutdownConfig struct {
 
 // LoggingConfig configures per-process logging
 type LoggingConfig struct {
-	Stdout         bool                  `yaml:"stdout" json:"stdout"`
-	Stderr         bool                  `yaml:"stderr" json:"stderr"`
-	Labels         map[string]string     `yaml:"labels" json:"labels"`                   // Additional log labels
-	MinLevel       string                `yaml:"min_level" json:"min_level"`             // Minimum log level to output (debug|info|warn|error)
-	Redaction      *RedactionConfig      `yaml:"redaction" json:"redaction"`             // Sensitive data redaction
-	Multiline      *MultilineConfig      `yaml:"multiline" json:"multiline"`             // Multiline log handling
-	JSON           *JSONConfig           `yaml:"json" json:"json"`                       // JSON log parsing
-	LevelDetection *LevelDetectionConfig `yaml:"level_detection" json:"level_detection"` // Log level detection from content
-	Filters        *FilterConfig         `yaml:"filters" json:"filters"`                 // Include/exclude filtering
-	Files          map[string]*LogFileConfig `yaml:"files" json:"files"`                   // Log file tailing
+	Stdout         bool                      `yaml:"stdout" json:"stdout"`
+	Stderr         bool                      `yaml:"stderr" json:"stderr"`
+	Labels         map[string]string         `yaml:"labels" json:"labels"`                   // Additional log labels
+	MinLevel       string                    `yaml:"min_level" json:"min_level"`             // Minimum log level to output (debug|info|warn|error)
+	Redaction      *RedactionConfig          `yaml:"redaction" json:"redaction"`             // Sensitive data redaction
+	Multiline      *MultilineConfig          `yaml:"multiline" json:"multiline"`             // Multiline log handling
+	JSON           *JSONConfig               `yaml:"json" json:"json"`                       // JSON log parsing
+	LevelDetection *LevelDetectionConfig     `yaml:"level_detection" json:"level_detection"` // Log level detection from content
+	Filters        *FilterConfig             `yaml:"filters" json:"filters"`                 // Include/exclude filtering
+	Files          map[string]*LogFileConfig `yaml:"files" json:"files"`                     // Log file tailing
 }
 
 // RedactionConfig configures sensitive data redaction for compliance
