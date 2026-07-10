@@ -368,7 +368,20 @@ func (m *Manager) getStartupOrder() ([]string, error) {
 
 // getShutdownOrder returns processes in shutdown order (reverse of startup).
 func (m *Manager) getShutdownOrder() []string {
-	startupOrder, _ := m.getStartupOrder()
+	startupOrder, err := m.getStartupOrder()
+	if err != nil {
+		// The dependency graph is invalid (e.g. a reload swapped in a config
+		// whose deps no longer resolve). Rather than returning an empty order
+		// and leaving every process to be SIGKILLed by the runtime, fall back
+		// to stopping all known processes in an arbitrary but complete order.
+		m.logger.Warn("Cannot compute dependency-ordered shutdown; stopping all processes unordered",
+			"error", err)
+		names := make([]string, 0, len(m.config.Processes))
+		for name := range m.config.Processes {
+			names = append(names, name)
+		}
+		return names
+	}
 
 	// Reverse the order
 	shutdownOrder := make([]string, len(startupOrder))

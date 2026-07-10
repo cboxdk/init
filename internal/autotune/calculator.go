@@ -166,8 +166,9 @@ func (c *Calculator) Calculate() (*PHPFPMConfig, error) {
 	cfg.MaxRequests = c.profile.MaxRequestsPerChild
 	cfg.MemoryAllocated = maxChildren * c.profile.AvgMemoryPerWorker
 
-	// Calculate dynamic PM settings
-	if cfg.ProcessManager == "dynamic" {
+	// Calculate PM settings per process-manager mode
+	switch cfg.ProcessManager {
+	case "dynamic":
 		cfg.StartServers = int(math.Ceil(float64(maxChildren) * c.profile.StartServersRatio))
 		cfg.MinSpare = int(math.Ceil(float64(maxChildren) * c.profile.SpareMinRatio))
 		cfg.MaxSpare = int(math.Ceil(float64(maxChildren) * c.profile.SpareMaxRatio))
@@ -185,7 +186,7 @@ func (c *Calculator) Calculate() (*PHPFPMConfig, error) {
 		if cfg.MaxSpare > cfg.MaxChildren {
 			cfg.MaxSpare = cfg.MaxChildren
 		}
-	} else if cfg.ProcessManager == "static" {
+	case "static":
 		// Static mode: always maintain max_children workers
 		cfg.StartServers = cfg.MaxChildren
 	}

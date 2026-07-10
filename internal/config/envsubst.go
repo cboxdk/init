@@ -92,7 +92,7 @@ type fieldNode struct {
 }
 
 func buildFieldNode(t reflect.Type) *fieldNode {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	node := &fieldNode{

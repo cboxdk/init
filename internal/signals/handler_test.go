@@ -143,7 +143,7 @@ func TestReapZombies_NegativeIntervalFallback(t *testing.T) {
 
 func TestIsPID1_ReturnType(t *testing.T) {
 	// Verify IsPID1 returns a boolean
-	var result bool = IsPID1()
+	result := IsPID1()
 	if result && os.Getpid() != 1 {
 		t.Error("IsPID1 returned true but os.Getpid() != 1")
 	}
@@ -154,6 +154,84 @@ func TestIsPID1_ReturnType(t *testing.T) {
 
 // Mock-based tests for CI environment
 // These tests use the mockable waitFunc to test zombie reaping logic
+
+func TestReaper_CapturesSupervisedStatus(t *testing.T) {
+	originalWait := getWaitFunc()
+	defer func() { setWaitFunc(originalWait) }()
+
+	const supervisedPID = 4242
+	const orphanPID = 9999
+
+	// Clean state.
+	UnregisterSupervised(supervisedPID)
+	UnregisterSupervised(orphanPID)
+
+	// The supervisor registers its child before waiting on it.
+	RegisterSupervised(supervisedPID)
+
+	// Reaper wins the race and reaps both the supervised child (exit 7) and an
+	// unrelated orphan.
+	var status syscall.WaitStatus = 7 << 8 // WaitStatus encodes exit code in bits 8-15
+	call := 0
+	setWaitFunc(func(pid int, wstatus *syscall.WaitStatus, options int, rusage *syscall.Rusage) (int, error) {
+		call++
+		switch call {
+		case 1:
+			*wstatus = status
+			return supervisedPID, nil
+		case 2:
+			*wstatus = 0
+			return orphanPID, nil
+		default:
+			return -1, syscall.ECHILD
+		}
+	})
+
+	reapAll()
+
+	// The supervised child's status must be recoverable...
+	ws, ok := TakeReapedStatus(supervisedPID)
+	if !ok {
+		t.Fatalf("expected captured status for supervised pid %d", supervisedPID)
+	}
+	if !ws.Exited() || ws.ExitStatus() != 7 {
+		t.Errorf("recovered wrong status: exited=%v code=%d", ws.Exited(), ws.ExitStatus())
+	}
+
+	// ...and taking it clears the entry (idempotent, no leak).
+	if _, ok := TakeReapedStatus(supervisedPID); ok {
+		t.Error("status should be cleared after first take")
+	}
+
+	// The orphan was reaped but never stashed.
+	if _, ok := TakeReapedStatus(orphanPID); ok {
+		t.Error("orphan pid should not have a captured status")
+	}
+}
+
+func TestReaper_UnregisterDropsStatus(t *testing.T) {
+	originalWait := getWaitFunc()
+	defer func() { setWaitFunc(originalWait) }()
+
+	const pid = 5555
+	RegisterSupervised(pid)
+	call := 0
+	setWaitFunc(func(p int, ws *syscall.WaitStatus, o int, r *syscall.Rusage) (int, error) {
+		call++
+		if call == 1 {
+			*ws = 0
+			return pid, nil // reaper captures the supervised child's status
+		}
+		return -1, syscall.ECHILD
+	})
+	reapAll()
+
+	// Supervisor won its own Wait() (ProcessState set) and unregisters.
+	UnregisterSupervised(pid)
+	if _, ok := TakeReapedStatus(pid); ok {
+		t.Error("UnregisterSupervised should drop any captured status")
+	}
+}
 
 func TestReapAll_MockedSingleZombie(t *testing.T) {
 	// Save original and restore after test

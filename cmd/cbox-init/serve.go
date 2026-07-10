@@ -366,7 +366,9 @@ func runAutoTuning(profileName string, threshold float64, cfg *config.Config) er
 
 	// Set environment variables
 	for key, value := range phpfpmCfg.ToEnvVars() {
-		os.Setenv(key, value)
+		if err := os.Setenv(key, value); err != nil {
+			slog.Warn("Failed to set PHP-FPM env var", "key", key, "error", err)
+		}
 	}
 
 	// Display results
@@ -479,7 +481,7 @@ func dirWritable(dir string) bool {
 		return false
 	}
 	f.Close()
-	os.Remove(testFile)
+	_ = os.Remove(testFile) // best-effort cleanup of the writability probe
 	return true
 }
 

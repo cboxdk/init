@@ -777,7 +777,7 @@ func (m *Model) updateScheduledTable(processes []process.ProcessInfo) {
 
 		// Exit code from last run (from execution history)
 		exitCodeText := "-"
-		var exitCodeStyle lipgloss.Style = dimStyle
+		exitCodeStyle := dimStyle
 		if proc.LastExitCode != nil {
 			exitCodeText = fmt.Sprintf("%d", *proc.LastExitCode)
 			if *proc.LastExitCode == 0 {

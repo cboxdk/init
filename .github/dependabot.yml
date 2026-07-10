@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # Go module dependencies
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      # Keep the noisy, co-versioned ecosystems together.
+      otel:
+        patterns:
+          - "go.opentelemetry.io/*"
+      grpc-protobuf:
+        patterns:
+          - "google.golang.org/grpc"
+          - "google.golang.org/protobuf"
+    commit-message:
+      prefix: "deps"
+
+  # GitHub Actions used by CI and release workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+
+  # Base image in the release Dockerfile
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "docker"

@@ -24,7 +24,7 @@ func IsReadOnlyRoot() bool {
 
 	// Successfully created file - filesystem is writable
 	f.Close()
-	os.Remove(testFile)
+	_ = os.Remove(testFile) // best-effort cleanup of the writability probe
 
 	// Additional check: try writing to root if we're running as root
 	if os.Getuid() == 0 {
@@ -34,7 +34,7 @@ func IsReadOnlyRoot() bool {
 			return true
 		} else {
 			f.Close()
-			os.Remove(rootTestFile)
+			_ = os.Remove(rootTestFile) // best-effort cleanup of the writability probe
 		}
 	}
 

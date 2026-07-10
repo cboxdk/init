@@ -18,6 +18,7 @@ import (
 	"github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/logtail"
 	"github.com/cboxdk/init/internal/metrics"
+	"github.com/cboxdk/init/internal/signals"
 )
 
 // ProcessState represents the lifecycle state of a process instance.
@@ -58,6 +59,12 @@ const (
 	// DefaultRestartBackoffMax is the maximum delay between restart attempts.
 	DefaultRestartBackoffMax = 1 * time.Minute
 
+	// DefaultRestartStabilityWindow is how long an instance must stay up before
+	// its restart budget resets. A process that runs longer than this is
+	// treated as recovered, so occasional crashes over a long lifetime don't
+	// exhaust MaxRestartAttempts and permanently abandon the service.
+	DefaultRestartStabilityWindow = 60 * time.Second
+
 	// DefaultGoroutineStopTimeout is the timeout for supervisor goroutines to stop during shutdown.
 	DefaultGoroutineStopTimeout = 5 * time.Second
 
@@ -93,33 +100,34 @@ const (
 //	}
 //	defer supervisor.Stop(ctx)
 type Supervisor struct {
-	name               string
-	config             *config.Process
-	logger             *slog.Logger
-	auditLogger        *audit.Logger
-	instances          []*Instance
-	state              ProcessState
-	healthMonitor      *HealthMonitor
-	healthStatus       <-chan HealthStatus
-	restartPolicy      RestartPolicy
-	resourceCollector  *metrics.ResourceCollector // Shared resource collector (can be nil)
-	oneshotHistory     *OneshotHistory            // Shared oneshot history (can be nil)
-	deathNotifier      func(string)               // Callback when all instances are dead
-	credentials        *Credentials               // Resolved user/group credentials (nil = inherit)
-	logBroadcaster     *logger.LogBroadcaster     // Shared broadcaster for real-time log subscriptions
-	fileTailers        map[string]context.CancelFunc // active file tailers, keyed by config name
-	healthCheckStrict  bool                       // Fail startup if health monitor creation fails
-	ctx                context.Context
-	cancel             context.CancelFunc
-	readinessCh        chan struct{}  // Closed when service becomes ready
-	readinessOnce      sync.Once      // CRITICAL: Ensures readinessCh closed exactly once
-	isReady            bool           // Track readiness state
-	healthKnown        bool           // Whether at least one health check result has been observed
-	healthHealthy      bool           // Liveness health after thresholds/hysteresis
-	lastCheckSucceeded bool           // Raw result from the most recent health check
-	goroutines         sync.WaitGroup // CRITICAL: Track all goroutines for clean shutdown
-	mu                 sync.RWMutex
-	operationMu        sync.Mutex // Serializes lifecycle/scale operations so reads can proceed
+	name                   string
+	config                 *config.Process
+	logger                 *slog.Logger
+	auditLogger            *audit.Logger
+	instances              []*Instance
+	state                  ProcessState
+	healthMonitor          *HealthMonitor
+	healthStatus           <-chan HealthStatus
+	restartPolicy          RestartPolicy
+	restartStabilityWindow time.Duration                 // uptime after which an instance's restart budget resets (0 = never reset)
+	resourceCollector      *metrics.ResourceCollector    // Shared resource collector (can be nil)
+	oneshotHistory         *OneshotHistory               // Shared oneshot history (can be nil)
+	deathNotifier          func(string)                  // Callback when all instances are dead
+	credentials            *Credentials                  // Resolved user/group credentials (nil = inherit)
+	logBroadcaster         *logger.LogBroadcaster        // Shared broadcaster for real-time log subscriptions
+	fileTailers            map[string]context.CancelFunc // active file tailers, keyed by config name
+	healthCheckStrict      bool                          // Fail startup if health monitor creation fails
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	readinessCh            chan struct{}  // Closed when service becomes ready
+	readinessOnce          sync.Once      // CRITICAL: Ensures readinessCh closed exactly once
+	isReady                bool           // Track readiness state
+	healthKnown            bool           // Whether at least one health check result has been observed
+	healthHealthy          bool           // Liveness health after thresholds/hysteresis
+	lastCheckSucceeded     bool           // Raw result from the most recent health check
+	goroutines             sync.WaitGroup // CRITICAL: Track all goroutines for clean shutdown
+	mu                     sync.RWMutex
+	operationMu            sync.Mutex // Serializes lifecycle/scale operations so reads can proceed
 }
 
 // Instance represents a single running process instance within a Supervisor.
@@ -189,6 +197,15 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 	// Get max attempts from global config (default: 3)
 	maxAttempts := globalCfg.MaxRestartAttempts
 
+	// Uptime after which a healthy instance's restart budget resets.
+	// Negative disables the reset; zero falls back to the default.
+	stabilityWindow := globalCfg.RestartStabilityWindow
+	if stabilityWindow == 0 {
+		stabilityWindow = DefaultRestartStabilityWindow
+	} else if stabilityWindow < 0 {
+		stabilityWindow = 0
+	}
+
 	// Resolve user/group credentials at initialization
 	var creds *Credentials
 	if cfg.User != "" || cfg.Group != "" {
@@ -212,18 +229,19 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 	}
 
 	return &Supervisor{
-		name:              name,
-		config:            cfg,
-		logger:            logger.With("process", name),
-		auditLogger:       auditLogger,
-		instances:         make([]*Instance, 0, cfg.Scale),
-		state:             StateStopped,
-		restartPolicy:     NewRestartPolicy(cfg.Restart, maxAttempts, initialBackoff, maxBackoff),
-		resourceCollector:  resourceCollector,
-		credentials:        creds,
-		healthCheckStrict:  globalCfg.HealthCheckStrict,
-		readinessCh:        make(chan struct{}),
-		isReady:            false,
+		name:                   name,
+		config:                 cfg,
+		logger:                 logger.With("process", name),
+		auditLogger:            auditLogger,
+		instances:              make([]*Instance, 0, cfg.Scale),
+		state:                  StateStopped,
+		restartPolicy:          NewRestartPolicy(cfg.Restart, maxAttempts, initialBackoff, maxBackoff),
+		restartStabilityWindow: stabilityWindow,
+		resourceCollector:      resourceCollector,
+		credentials:            creds,
+		healthCheckStrict:      globalCfg.HealthCheckStrict,
+		readinessCh:            make(chan struct{}),
+		isReady:                false,
 	}
 }
 
@@ -484,6 +502,12 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
+	// Register the pid with the zombie reaper so that, if the wildcard reaper
+	// wins the race to reap this child, it captures the exit status for us
+	// instead of leaving cmd.Wait() with a nil ProcessState. See
+	// signals.RegisterSupervised for the full rationale.
+	signals.RegisterSupervised(cmd.Process.Pid)
+
 	startTime := time.Now()
 	instance := &Instance{
 		id:           instanceID,
@@ -621,9 +645,42 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 	err := instance.cmd.Wait()
 
 	instance.mu.Lock()
-	exitCode := instance.cmd.ProcessState.ExitCode()
+	pid := instance.pid
+	// Determine the exit code without assuming cmd.Wait() reaped the child.
+	// The zombie reaper may have won the race and reaped it first, in which
+	// case ProcessState is nil. Recover the exit code from the status the
+	// reaper captured; matching os.ProcessState.ExitCode() semantics
+	// (signalled/stopped processes report -1).
+	var exitCode int
+	switch {
+	case instance.cmd.ProcessState != nil:
+		exitCode = instance.cmd.ProcessState.ExitCode()
+		signals.UnregisterSupervised(pid)
+	default:
+		if ws, ok := signals.TakeReapedStatus(pid); ok {
+			if ws.Exited() {
+				exitCode = ws.ExitStatus()
+			} else {
+				exitCode = -1 // signalled/stopped, mirrors ProcessState.ExitCode()
+			}
+		} else {
+			// Neither our Wait() nor our reaper collected a status. Treat as
+			// an abnormal exit so the restart policy still runs.
+			exitCode = -1
+			signals.UnregisterSupervised(pid)
+		}
+	}
 	instance.state = StateStopped
 	restartCount := instance.restartCount
+	// Reset the restart budget once an instance has stayed up long enough to
+	// be considered stable. Without this, restartCount accumulates over the
+	// whole container lifetime and a service that crashes rarely (more than
+	// MaxRestartAttempts times, but with long healthy periods between crashes)
+	// would be permanently abandoned. Sliding-window semantics à la systemd's
+	// StartLimitIntervalSec.
+	if resetRestartBudget(s.restartStabilityWindow, time.Since(instance.started)) {
+		restartCount = 0
+	}
 	instance.mu.Unlock()
 
 	// Record process stop metrics

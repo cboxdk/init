@@ -1,0 +1,40 @@
+# golangci-lint configuration (v2 format).
+#
+# Pinned (see .github/workflows/ci.yml and the Makefile `lint` target) so local
+# and CI linting produce identical results. Uses the standard linter set, which
+# is stable and high-signal. Add extra linters deliberately, one at a time,
+# after fixing any findings they surface.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      # Don't flag the universally-safe patterns: writing to an already-open
+      # writer (stdout/tabwriter/buffer) and closing readers/listeners in
+      # cleanup paths, where a returned error is not actionable.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*text/tabwriter.Writer).Flush
+        - (io.Closer).Close
+        - (net.Listener).Close
+        - (net.Conn).Close
+        - (*os.File).Close
+        - (*github.com/fsnotify/fsnotify.Watcher).Close
+  exclusions:
+    rules:
+      # Test code intentionally ignores some errors (fixtures, best-effort
+      # cleanup) and mocks syscalls.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+issues:
+  # Report everything; don't silently cap findings.
+  max-issues-per-linter: 0
+  max-same-issues: 0

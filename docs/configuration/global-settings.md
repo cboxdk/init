@@ -130,11 +130,18 @@ global:
   max_restart_attempts: 5          # 0 = unlimited
   restart_backoff_initial: 5s      # Initial delay before restart
   restart_backoff_max: 60s         # Maximum delay cap
+  restart_stability_window: 60s    # Uptime after which the restart budget resets
 ```
 
 - `restart_backoff_initial` and `restart_backoff_max` accept Go duration strings (`5s`, `1m`, etc.).
 - Backoff grows exponentially (`initial * 2^n`) and is clamped by `restart_backoff_max`.
 - Legacy `restart_backoff` (integer seconds) is still accepted for backwards compatibility.
+- `restart_stability_window` (default `60s`) gives `max_restart_attempts` **sliding-window**
+  semantics instead of a lifetime total: once an instance has stayed up for this long it is
+  treated as recovered and its restart counter resets to zero. This prevents a service that
+  crashes rarely — but more than `max_restart_attempts` times over the container's whole
+  lifetime — from being permanently abandoned. Set it to a negative value to disable the reset
+  (restore the old lifetime-total behaviour).
 
 ### Metrics Configuration
 

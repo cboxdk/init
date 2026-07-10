@@ -98,7 +98,10 @@ func (t *FileTailer) tailLoop(ctx context.Context, seekToEnd bool) error {
 	if err != nil {
 		return fmt.Errorf("open %s: %w", t.path, err)
 	}
-	defer file.Close()
+	// Close whichever file `file` currently points to on return. The variable
+	// is reassigned on rotation below; a bare `defer file.Close()` would bind
+	// to the original handle and leak every reopened one.
+	defer func() { file.Close() }()
 
 	var offset int64
 	if seekToEnd {
@@ -188,7 +191,8 @@ func (t *FileTailer) tailLoop(ctx context.Context, seekToEnd bool) error {
 				if err != nil {
 					return fmt.Errorf("reopen %s: %w", t.path, err)
 				}
-				defer file.Close()
+				// No defer here: the old handle was already closed above and
+				// the top-level deferred close covers this new one.
 
 				offset = 0
 				reader = bufio.NewReader(file)
