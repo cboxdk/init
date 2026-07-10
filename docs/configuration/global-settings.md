@@ -156,6 +156,7 @@ global:
 - `metrics_enabled` - Enable/disable Prometheus metrics (default: `false`)
 - `metrics_port` - HTTP port for metrics endpoint (default: `9090`)
 - `metrics_path` - URL path for metrics (default: `/metrics`)
+- `metrics_host` - Bind host for the metrics listener (default: all interfaces). Set to `127.0.0.1` to expose metrics only to a local sidecar/agent.
 
 **Access metrics:**
 ```bash
@@ -176,6 +177,7 @@ global:
 **Settings:**
 - `api_enabled` - Enable/disable TCP REST API (default: `false`)
 - `api_port` - HTTP port for API endpoints (default: `9180`)
+- `api_host` - Bind host for the API listener (default: all interfaces). **Recommended:** set to `127.0.0.1` when you only need local access, so the management API is never reachable from the pod/host network.
 - `api_auth` - Optional Bearer token for authentication
 
 **API Endpoints:**

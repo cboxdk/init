@@ -615,6 +615,39 @@ func TestRateLimitMiddleware(t *testing.T) {
 	}
 }
 
+// TestRateLimitMiddleware_XFFSpoofingIgnored verifies that, without a trusted
+// proxy, a client cannot bypass rate limiting by sending a unique
+// X-Forwarded-For per request. All requests from the same RemoteAddr must
+// share one token bucket.
+func TestRateLimitMiddleware_XFFSpoofingIgnored(t *testing.T) {
+	server := createTestServer(t, "", nil) // no ACL, so trust_proxy is off
+
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := server.rateLimitMiddleware(testHandler)
+
+	limited := false
+	// Burst is 200; send more, each with a distinct spoofed XFF. If the limiter
+	// (wrongly) keyed on XFF, every request would get a fresh bucket and none
+	// would be limited.
+	for i := 0; i < 260; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+		req.Header.Set("X-Forwarded-For", fmt.Sprintf("10.0.0.%d", i%256))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+
+	if !limited {
+		t.Error("spoofed X-Forwarded-For bypassed rate limiting; limiter must key on RemoteAddr when trust_proxy is off")
+	}
+}
+
 // TestACLMiddleware tests IP-based ACL middleware
 func TestACLMiddleware(t *testing.T) {
 	tests := []struct {

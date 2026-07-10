@@ -179,6 +179,7 @@ func (tb *tokenBucket) allow() bool {
 // Server is safe for concurrent use; all handlers are thread-safe.
 type Server struct {
 	port               int
+	bindHost           string // Bind host for the TCP listener; empty = all interfaces
 	socketPath         string
 	auth               string
 	maxRequestBodySize int64 // Configurable request body size limit
@@ -249,6 +250,24 @@ func NewServer(port int, socketPath string, auth string, aclCfg *config.ACLConfi
 	}
 }
 
+// SetBindHost restricts the TCP listener to a specific host (e.g. "127.0.0.1"
+// for local-only access). An empty host (the default) listens on all
+// interfaces, preserving the previous behaviour. Returns the server for
+// fluent configuration.
+func (s *Server) SetBindHost(host string) *Server {
+	s.bindHost = host
+	return s
+}
+
+// listenAddr returns the address for the TCP listener, honoring an optional
+// bind host. Empty host => all interfaces (":port").
+func (s *Server) listenAddr() string {
+	if s.bindHost == "" {
+		return fmt.Sprintf(":%d", s.port)
+	}
+	return net.JoinHostPort(s.bindHost, strconv.Itoa(s.port))
+}
+
 // Start starts the API server (both TCP and Unix socket if configured)
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
@@ -289,7 +308,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start TCP listener
 	s.server = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.port),
+		Addr:         s.listenAddr(),
 		Handler:      tcpHandler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -494,13 +513,15 @@ func (s *Server) aclMiddleware(next http.Handler) http.Handler {
 // rateLimitMiddleware applies rate limiting per client IP
 func (s *Server) rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract client IP (handles X-Forwarded-For and X-Real-IP)
-		ip := r.Header.Get("X-Forwarded-For")
-		if ip == "" {
-			ip = r.Header.Get("X-Real-IP")
-		}
-		if ip == "" {
-			ip = r.RemoteAddr
+		// Key the limiter on the real client IP. ExtractIP only honors
+		// X-Forwarded-For when a trusted proxy is configured (trust_proxy),
+		// otherwise it uses RemoteAddr. Trusting a raw XFF/X-Real-IP header
+		// here would let a client send a unique value per request to mint a
+		// fresh token bucket each time and bypass the limit entirely.
+		// ExtractIP is nil-safe, so this works whether or not an ACL is set.
+		ip := r.RemoteAddr
+		if extracted, err := s.aclChecker.ExtractIP(r); err == nil {
+			ip = extracted.String()
 		}
 
 		// Check rate limit

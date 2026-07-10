@@ -446,6 +446,7 @@ func startMetricsServer(ctx context.Context, cfg *config.Config, log *slog.Logge
 	}
 
 	server := metrics.NewServer(metricsPort, metricsPath, cfg.Global.MetricsACL, cfg.Global.MetricsTLS, log)
+	server.SetBindHost(cfg.Global.MetricsHost)
 	if err := server.Start(ctx); err != nil {
 		slog.Warn("Failed to start metrics server (continuing without metrics)", "error", err)
 		return nil
@@ -493,6 +494,7 @@ func startAPIServer(ctx context.Context, cfg *config.Config, pm *process.Manager
 	}
 
 	server := api.NewServer(apiPort, cfg.Global.APISocket, cfg.Global.APIAuth, cfg.Global.APIACL, cfg.Global.APITLS, cfg.Global.AuditEnabled, cfg.Global.APIMaxRequestBody, pm, log)
+	server.SetBindHost(cfg.Global.APIHost)
 	if err := server.Start(ctx); err != nil {
 		slog.Warn("Failed to start API server (TUI/remote control disabled)", "error", err)
 		return nil

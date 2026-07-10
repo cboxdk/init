@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 // Server serves Prometheus metrics
 type Server struct {
 	port       int
+	bindHost   string // Bind host for the listener; empty = all interfaces
 	path       string
 	server     *http.Server
 	mu         sync.RWMutex // protects server field
@@ -55,6 +58,21 @@ func NewServer(port int, path string, aclCfg *config.ACLConfig, tlsCfg *config.T
 	}
 }
 
+// SetBindHost restricts the listener to a specific host (empty = all
+// interfaces, the default). Returns the server for fluent configuration.
+func (s *Server) SetBindHost(host string) *Server {
+	s.bindHost = host
+	return s
+}
+
+// listenAddr returns the listen address, honoring an optional bind host.
+func (s *Server) listenAddr() string {
+	if s.bindHost == "" {
+		return fmt.Sprintf(":%d", s.port)
+	}
+	return net.JoinHostPort(s.bindHost, strconv.Itoa(s.port))
+}
+
 // Start starts the metrics server
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
@@ -76,7 +94,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.port),
+		Addr:         s.listenAddr(),
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,

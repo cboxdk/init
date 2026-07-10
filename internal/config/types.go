@@ -32,8 +32,10 @@ type GlobalConfig struct {
 	MetricsEnabled            *bool            `yaml:"metrics_enabled" json:"metrics_enabled"`                           //
 	MetricsPort               int              `yaml:"metrics_port" json:"metrics_port"`                                 //
 	MetricsPath               string           `yaml:"metrics_path" json:"metrics_path"`                                 //
+	MetricsHost               string           `yaml:"metrics_host" json:"metrics_host"`                                 // Bind host for metrics (default: all interfaces)
 	APIEnabled                *bool            `yaml:"api_enabled" json:"api_enabled"`                                   //
 	APIPort                   int              `yaml:"api_port" json:"api_port"`                                         //
+	APIHost                   string           `yaml:"api_host" json:"api_host"`                                         // Bind host for the management API (default: all interfaces; set 127.0.0.1 for local-only)
 	APISocket                 string           `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/cbox-init.sock)
 	APIAuth                   string           `yaml:"api_auth" json:"api_auth"`                                         // Bearer token
 	APITLS                    *TLSConfig       `yaml:"api_tls" json:"api_tls"`                                           // TLS configuration for API

@@ -28,10 +28,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Rate limiter can no longer be bypassed via `X-Forwarded-For` spoofing.** It now keys on the
+  real client IP (RemoteAddr), only honoring `X-Forwarded-For` when `trust_proxy` is enabled —
+  previously a client could send a unique header per request to mint a fresh token bucket and defeat
+  rate limiting (and brute-force the API token).
 - Config files are now written `0600` (was `0644`). A saved config can contain the management-API
   bearer token (`api_auth`), so it must not be world-readable by other UIDs in the container.
 - Recursive ownership fixes use `Lchown` instead of `Chown`, so a symlink planted in a user-writable
   mounted volume (storage/, wp-content/) can't redirect the chown at an arbitrary target file.
+
+### Added
+
+- **`api_host` / `metrics_host`** settings to restrict the API and metrics listeners to a specific
+  interface (e.g. `127.0.0.1`). Default is unchanged (all interfaces), so this is opt-in hardening.
+
+### Fixed (reload)
+
+- **Config reload now validates the new config before stopping anything.** An invalid config (bad
+  settings or a dependency cycle) previously stopped the removed/changed services first and only then
+  failed, leaving them down. A failed reload is now a no-op — the running configuration is untouched.
 
 ### Changed
 
