@@ -208,10 +208,14 @@ func (pm *PermissionManager) createDir(path string, perm os.FileMode) error {
 
 func (pm *PermissionManager) chownRecursive(path string, uid, gid int) {
 	// Note: This will fail silently if not running as root
-	// That's acceptable - in dev environments permissions may not matter
+	// That's acceptable - in dev environments permissions may not matter.
+	//
+	// Use Lchown (not Chown) so a symlink planted in a user-writable mounted
+	// volume (e.g. storage/, wp-content/) can't redirect the chown at an
+	// arbitrary target file — Chown follows symlinks, Lchown does not.
 	_ = filepath.Walk(path, func(name string, info os.FileInfo, err error) error {
 		if err == nil {
-			_ = os.Chown(name, uid, gid)
+			_ = os.Lchown(name, uid, gid)
 		}
 		return nil
 	})

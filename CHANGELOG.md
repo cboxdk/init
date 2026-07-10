@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a config whose dependencies no longer resolve, `getShutdownOrder` returned an empty list and left
   children to be SIGKILLed by the runtime; it now falls back to stopping all known processes.
 
+### Security
+
+- Config files are now written `0600` (was `0644`). A saved config can contain the management-API
+  bearer token (`api_auth`), so it must not be world-readable by other UIDs in the container.
+- Recursive ownership fixes use `Lchown` instead of `Chown`, so a symlink planted in a user-writable
+  mounted volume (storage/, wp-content/) can't redirect the chown at an arbitrary target file.
+
 ### Changed
 
 - Local `make build` now derives the version from `git describe` instead of a hardcoded `1.0.0`, so
