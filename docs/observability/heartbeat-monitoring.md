@@ -1,7 +1,7 @@
 ---
 title: "Heartbeat Monitoring"
 description: "Integrate with external monitoring services for dead man's switch alerts and task completion tracking"
-weight: 26
+weight: 45
 ---
 
 # Heartbeat Monitoring
@@ -790,7 +790,7 @@ backup-files:
 
 ## See Also
 
-- [Scheduled Tasks](scheduled-tasks) - Task scheduling
+- [Scheduled Tasks](../features/scheduled-tasks) - Task scheduling
 - [Process Configuration](../configuration/processes) - Heartbeat configuration
 - [Examples](../examples/scheduled-tasks) - Practical heartbeat examples
-- [Prometheus Metrics](../observability/metrics) - Heartbeat metrics
+- [Prometheus Metrics](metrics) - Heartbeat metrics

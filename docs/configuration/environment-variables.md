@@ -75,7 +75,7 @@ PHP_FPM_AUTOTUNE_PROFILE=medium
 PHP_FPM_AUTOTUNE_PROFILE=heavy
 ```
 
-See [PHP-FPM Auto-Tuning](../php-fpm-autotune) for complete guide.
+See [PHP-FPM Auto-Tuning](php-fpm-autotune) for complete guide.
 
 ## Startup Performance Controls
 

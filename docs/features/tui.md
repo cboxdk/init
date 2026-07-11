@@ -1,7 +1,7 @@
 ---
 title: "Terminal User Interface (TUI)"
 description: "Interactive k9s-style terminal UI for monitoring and managing processes with keyboard-driven controls"
-weight: 26
+weight: 27
 ---
 
 # Terminal User Interface (TUI)

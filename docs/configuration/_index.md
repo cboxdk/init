@@ -16,7 +16,7 @@ Complete reference for configuring Cbox Init with YAML and environment variables
 - [Health Checks](health-checks) - Health check configuration
 - [Lifecycle Hooks](lifecycle-hooks) - Pre/post start/stop hooks
 - [Environment Variables](environment-variables) - ENV var reference
-- [PHP-FPM Auto-Tuning](../php-fpm-autotune) - Intelligent worker configuration
+- [PHP-FPM Auto-Tuning](php-fpm-autotune) - Intelligent worker configuration
 
 ## Quick Example
 

@@ -1,7 +1,7 @@
 ---
 title: "Restart Policies"
 description: "Configure automatic restart behavior with always, on-failure, and never policies with exponential backoff"
-weight: 24
+weight: 25
 ---
 
 # Restart Policies

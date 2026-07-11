@@ -1,7 +1,7 @@
 ---
 title: "Dependency Management"
 description: "DAG-based process startup ordering with topological sort and dependency waiting"
-weight: 20
+weight: 21
 ---
 
 # Dependency Management
@@ -551,4 +551,4 @@ app:
 
 - [Process Configuration](../configuration/processes) - Priority and depends_on settings
 - [Health Checks](health-checks) - Health check configuration
-- [Examples](../examples/) - Real-world dependency patterns
+- [Examples](../examples) - Real-world dependency patterns

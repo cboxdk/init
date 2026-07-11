@@ -1,7 +1,7 @@
 ---
 title: "Configuration Validation"
 description: "Lint and validate Cbox Init configurations with comprehensive error checking and CI/CD integration"
-weight: 17
+weight: 18
 ---
 
 # Configuration Validation

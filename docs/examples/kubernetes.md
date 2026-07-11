@@ -1,7 +1,7 @@
 ---
 title: "Kubernetes Deployment"
 description: "Deploy PHP applications with Cbox Init on Kubernetes with ConfigMaps, HPA, and resource limits"
-weight: 34
+weight: 35
 ---
 
 # Kubernetes Deployment
@@ -969,7 +969,7 @@ securityContext:
 
 ## See Also
 
-- [PHP-FPM Auto-Tuning](../php-fpm-autotune) - Worker optimization for K8s
+- [PHP-FPM Auto-Tuning](../configuration/php-fpm-autotune) - Worker optimization for K8s
 - [Docker Integration](../getting-started/docker-integration) - Container patterns
 - [Health Checks](../configuration/health-checks) - Probe configuration
 - [Prometheus Metrics](../observability/metrics) - Metrics integration

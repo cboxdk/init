@@ -1,7 +1,7 @@
 ---
 title: "Container Readiness"
 description: "Configure Kubernetes readiness probes using file-based health indicators"
-weight: 28
+weight: 29
 ---
 
 # Container Readiness

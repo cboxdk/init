@@ -1,7 +1,7 @@
 ---
 title: "Configuration Scaffolding"
 description: "Generate production-ready configurations with scaffolding presets for Laravel, Symfony, and more"
-weight: 27
+weight: 28
 ---
 
 # Configuration Scaffolding
@@ -1135,4 +1135,4 @@ version: '3.8'  # Use compatible version
 - [Configuration Validation](../configuration/validation) - Validate generated configs
 - [Quick Start](../getting-started/quickstart) - Deploy generated configuration
 - [Configuration Overview](../configuration/overview) - Customize further
-- [Examples](../examples/) - Real-world examples
+- [Examples](../examples) - Real-world examples

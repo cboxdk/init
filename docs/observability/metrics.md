@@ -1,7 +1,7 @@
 ---
 title: "Prometheus Metrics"
 description: "Monitor Cbox Init processes with comprehensive Prometheus metrics and alerting"
-weight: 40
+weight: 41
 ---
 
 # Prometheus Metrics

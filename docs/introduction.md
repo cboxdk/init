@@ -182,7 +182,7 @@ processes:
 - [Installation](getting-started/installation) - Get Cbox Init installed
 - [Quick Start](getting-started/quickstart) - 5-minute getting started guide
 - [Configuration](configuration/overview) - Complete configuration reference
-- [Examples](examples/) - Real-world configuration examples
+- [Examples](examples) - Real-world configuration examples
 
 ## Community
 

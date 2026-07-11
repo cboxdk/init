@@ -1,7 +1,7 @@
 ---
 title: "Health Checks"
 description: "Configure TCP, HTTP, and exec-based health monitoring with success thresholds and intelligent restart policies"
-weight: 21
+weight: 22
 ---
 
 # Health Checks
@@ -549,4 +549,4 @@ processes:
 - [Configuration Reference](../configuration/health-checks) - Complete configuration options
 - [Restart Policies](restart-policies) - Process restart strategies
 - [Prometheus Metrics](../observability/metrics) - Metrics and monitoring
-- [Examples](../examples/) - Real-world configurations
+- [Examples](../examples) - Real-world configurations

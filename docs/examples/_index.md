@@ -15,6 +15,7 @@ Practical, production-ready configuration examples for common use cases with PHP
 These work with any PHP framework:
 
 - [Minimal Setup](minimal) - Simple PHP-FPM configuration
+- [Node.js Applications](nodejs) - Next.js, Nuxt, Remix, Express, and other Node servers
 - [Scheduled Tasks](scheduled-tasks) - Cron scheduler for Laravel, Symfony, WordPress
 - [Kubernetes Deployment](kubernetes) - K8s deployment patterns
 - [Docker Compose](docker-compose) - Multi-container orchestration

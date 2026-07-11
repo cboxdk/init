@@ -1,7 +1,7 @@
 ---
 title: "Testing"
 description: "Comprehensive E2E testing with Playwright for Cbox Init Web UI"
-weight: 52
+weight: 51
 ---
 
 # Testing

@@ -1,7 +1,7 @@
 ---
 title: "Advanced Logging"
 description: "Automatic log level detection, multiline handling, JSON parsing, and sensitive data redaction"
-weight: 25
+weight: 26
 ---
 
 # Advanced Logging

@@ -1,7 +1,7 @@
 ---
 title: "Scheduled Tasks"
 description: "Built-in cron scheduler for periodic tasks with per-task statistics and heartbeat monitoring"
-weight: 22
+weight: 23
 ---
 
 # Scheduled Tasks
@@ -788,6 +788,6 @@ daily-report:
 ## See Also
 
 - [Process Configuration](../configuration/processes) - Schedule configuration
-- [Heartbeat Monitoring](heartbeat-monitoring) - External monitoring
+- [Heartbeat Monitoring](../observability/heartbeat-monitoring) - External monitoring
 - [Examples](../examples/scheduled-tasks) - Practical examples
 - [Prometheus Metrics](../observability/metrics) - Task metrics

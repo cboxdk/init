@@ -436,7 +436,7 @@ processes:
 - Better Uptime
 - Custom endpoints
 
-See [Heartbeat Monitoring](../features/heartbeat-monitoring) for complete guide.
+See [Heartbeat Monitoring](../observability/heartbeat-monitoring) for complete guide.
 
 ## Complete Example
 
@@ -523,4 +523,4 @@ See [Environment Variables](environment-variables) for complete reference.
 - [Health Checks](health-checks) - Configure health monitoring
 - [Lifecycle Hooks](lifecycle-hooks) - Pre/post start/stop hooks
 - [Environment Variables](environment-variables) - ENV var reference
-- [Examples](../examples/) - Real-world configurations
+- [Examples](../examples) - Real-world configurations

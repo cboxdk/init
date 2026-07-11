@@ -1,7 +1,7 @@
 ---
 title: "Laravel Complete Setup"
 description: "Complete Laravel production stack with PHP-FPM, Nginx, Horizon, queue workers, and health checks"
-weight: 31
+weight: 32
 ---
 
 # Laravel Complete Setup
@@ -577,7 +577,7 @@ php-fpm:
 PHP_FPM_AUTOTUNE_PROFILE=medium
 ```
 
-See [PHP-FPM Auto-Tuning](../php-fpm-autotune) for worker optimization.
+See [PHP-FPM Auto-Tuning](../configuration/php-fpm-autotune) for worker optimization.
 
 ### 2. Nginx (Priority 20)
 
@@ -844,7 +844,7 @@ CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=5  # High traffic
 
 ## See Also
 
-- [PHP-FPM Auto-Tuning](../php-fpm-autotune) - Worker optimization
+- [PHP-FPM Auto-Tuning](../configuration/php-fpm-autotune) - Worker optimization
 - [Health Checks](../configuration/health-checks) - Health monitoring
 - [Lifecycle Hooks](../configuration/lifecycle-hooks) - Pre/post hooks
 - [Process Scaling](../features/process-scaling) - Scale workers dynamically

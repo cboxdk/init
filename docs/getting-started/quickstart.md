@@ -290,4 +290,4 @@ Now that you have a working setup:
 - [Docker Integration](docker-integration) - Advanced Docker patterns
 - [Configuration](../configuration/overview) - Deep dive into config options
 - [Health Checks](../features/health-checks) - Master health monitoring
-- [Examples](../examples/) - Real-world configurations
+- [Examples](../examples) - Real-world configurations

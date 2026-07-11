@@ -1,7 +1,7 @@
 ---
 title: "Development Mode"
 description: "Auto-reload configuration changes with file watching and graceful restart for faster development iteration"
-weight: 28
+weight: 30
 ---
 
 # Development Mode

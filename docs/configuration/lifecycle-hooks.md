@@ -486,4 +486,4 @@ php artisan cache:clear
 
 - [Process Configuration](processes) - Process settings
 - [Health Checks](health-checks) - Health monitoring
-- [Examples](../examples/) - Real-world hook usage
+- [Examples](../examples) - Real-world hook usage

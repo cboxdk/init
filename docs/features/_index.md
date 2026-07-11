@@ -17,7 +17,6 @@ Cbox Init provides production-grade process management features designed for PHP
 - [Process Scaling](process-scaling) - Multi-instance worker management
 - [Restart Policies](restart-policies) - Always, on-failure, never strategies
 - [Advanced Logging](advanced-logging) - Multiline, redaction, JSON parsing
-- [Heartbeat Monitoring](heartbeat-monitoring) - External monitoring integration
 
 ## Quick Overview
 
@@ -49,4 +48,4 @@ processes:
 ## See Also
 
 - [Configuration Overview](../configuration/overview) - All configuration options
-- [Examples](../examples/) - Real-world configurations
+- [Examples](../examples) - Real-world configurations

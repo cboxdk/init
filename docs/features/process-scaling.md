@@ -1,7 +1,7 @@
 ---
 title: "Process Scaling"
 description: "Multi-instance process management with dynamic scaling and load distribution"
-weight: 23
+weight: 24
 ---
 
 # Process Scaling
@@ -518,5 +518,5 @@ curl -X POST -d '{"desired": 0}' "$API_URL/processes/app-stable/scale"
 
 - [Process Configuration](../configuration/processes) - Scale configuration
 - [Management API](../observability/api) - Runtime scaling API
-- [Examples](../examples/) - Queue worker scaling
+- [Examples](../examples) - Queue worker scaling
 - [Prometheus Metrics](../observability/metrics) - Scaling metrics

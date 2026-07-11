@@ -1,3 +1,9 @@
+---
+title: "Node.js Applications"
+description: "Run a Node.js app under Cbox Init with health checks, metrics, and graceful shutdown"
+weight: 37
+---
+
 # Node.js Applications
 
 Cbox Init is fully compatible with Node.js applications including Next.js, Nuxt, Remix, Express, Fastify, NestJS, and any other Node.js server.

@@ -1,7 +1,7 @@
 ---
 title: "Docker Compose"
 description: "Multi-container PHP deployment with Docker Compose, environment-specific profiles, and service orchestration"
-weight: 35
+weight: 36
 ---
 
 # Docker Compose Example

@@ -435,4 +435,4 @@ global:
 - [Configuration Overview](../configuration/overview) - Complete configuration reference
 - [Health Checks](../features/health-checks) - Configure health monitoring
 - [Prometheus Metrics](../observability/metrics) - Monitor with Prometheus
-- [Examples](../examples/) - Real-world Dockerfiles
+- [Examples](../examples) - Real-world Dockerfiles

@@ -1,7 +1,7 @@
 ---
 title: "Laravel with Monitoring"
 description: "Production Laravel setup with Prometheus metrics, Management API, and complete observability"
-weight: 32
+weight: 33
 ---
 
 # Laravel with Monitoring

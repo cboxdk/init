@@ -14,6 +14,7 @@ Cbox Init provides comprehensive observability features for monitoring, debuggin
 - [Distributed Tracing](tracing) - OpenTelemetry integration for request tracing
 - [Resource Monitoring](resource-monitoring) - CPU, memory, and process resource tracking
 - [Management API](api) - REST API for programmatic access and automation
+- [Heartbeat Monitoring](heartbeat-monitoring) - External uptime/monitoring integration (push heartbeats)
 
 ## Quick Overview
 

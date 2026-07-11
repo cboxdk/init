@@ -1,7 +1,7 @@
 ---
 title: "Scheduled Tasks"
 description: "Configure cron-like scheduled tasks with heartbeat monitoring and per-task statistics"
-weight: 33
+weight: 34
 ---
 
 # Scheduled Tasks Example
@@ -898,6 +898,6 @@ heavy-processing:
 ## See Also
 
 - [Process Configuration](../configuration/processes) - Process settings
-- [Heartbeat Monitoring](../features/heartbeat-monitoring) - External monitoring
+- [Heartbeat Monitoring](../observability/heartbeat-monitoring) - External monitoring
 - [Prometheus Metrics](../observability/metrics) - Task statistics
 - [Management API](../observability/api) - Runtime task inspection

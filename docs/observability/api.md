@@ -1,7 +1,7 @@
 ---
 title: "Management API"
 description: "Control and inspect Cbox Init processes via REST API at runtime"
-weight: 41
+weight: 42
 ---
 
 # Management API

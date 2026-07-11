@@ -1,7 +1,7 @@
 ---
 title: "Minimal Setup"
 description: "Simple PHP-FPM configuration for development and testing with Cbox Init"
-weight: 30
+weight: 31
 ---
 
 # Minimal Setup Example
@@ -157,7 +157,7 @@ Once you have the minimal setup working:
 
 1. **Add Nginx:** See [Laravel Complete](laravel-complete) for web server integration
 2. **Add Health Checks:** Monitor PHP-FPM with [Health Checks](../configuration/health-checks)
-3. **Enable Auto-Tuning:** Optimize workers with [PHP-FPM Auto-Tuning](../php-fpm-autotune)
+3. **Enable Auto-Tuning:** Optimize workers with [PHP-FPM Auto-Tuning](../configuration/php-fpm-autotune)
 4. **Add Monitoring:** Track metrics with [Prometheus](../observability/metrics)
 
 ## Customization
