@@ -77,6 +77,10 @@ const (
 // grows faster than the query time it saves.
 const warmBufferPoolCeilingMB = 512
 
+// The chunk size InnoDB allocates the pool in. Pinned rather than left to the
+// default so the rounding granularity is predictable.
+const innodbChunkSizeMB = 128
+
 // ParseEngine validates an engine name.
 func ParseEngine(name string) (Engine, error) {
 	switch Engine(strings.ToLower(strings.TrimSpace(name))) {
@@ -175,7 +179,23 @@ func (c *EngineCalculator) tunePercona(cfg *EngineConfig) {
 		}
 	}
 
+	// InnoDB does not take the pool size literally: it rounds UP to a multiple of
+	// innodb_buffer_pool_chunk_size × innodb_buffer_pool_instances. With the
+	// defaults (128MB × 8) the granularity is 1GB, so asking for 1536MB in a 2GB
+	// container silently yields 2048MB — the entire limit, and an OOM kill under
+	// load. Both operands are therefore pinned and the request is rounded DOWN,
+	// so the headroom computed above survives contact with the engine.
+	instances := clamp(pool/1024, 1, 8)
+	granularity := instances * innodbChunkSizeMB
+	pool = (pool / granularity) * granularity
+
+	if pool < granularity {
+		pool = granularity
+	}
+
 	cfg.Settings["innodb_buffer_pool_size"] = fmt.Sprintf("%dM", pool)
+	cfg.Settings["innodb_buffer_pool_chunk_size"] = fmt.Sprintf("%dM", innodbChunkSizeMB)
+	cfg.Settings["innodb_buffer_pool_instances"] = strconv.Itoa(instances)
 
 	// The redo log has to absorb the writes a large pool defers, but a huge log
 	// slows crash recovery — and on the warm path it also has to be re-read.

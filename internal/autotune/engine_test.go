@@ -208,3 +208,31 @@ func TestParsersRejectUnknownValues(t *testing.T) {
 		t.Fatalf("empty wake mode = %q, %v; want resident", mode, err)
 	}
 }
+
+func TestPerconaPoolSurvivesInnoDBRounding(t *testing.T) {
+	// InnoDB rounds the pool UP to a multiple of chunk size × instances. Left to
+	// the defaults that granularity is 1GB, so a 2GB container asking for 1536MB
+	// is silently given the whole 2048MB and gets OOM-killed under load. The
+	// computed value must already be a multiple of the granularity we pin.
+	for _, limit := range []int{1024, 2048, 4096, 8192, 16384} {
+		cfg := mustCalc(t, calcFor(EnginePercona, WakeResident, limit, 4))
+
+		pool := mb(t, cfg.Settings["innodb_buffer_pool_size"])
+		chunk := mb(t, cfg.Settings["innodb_buffer_pool_chunk_size"])
+
+		instances, err := strconv.Atoi(cfg.Settings["innodb_buffer_pool_instances"])
+		if err != nil {
+			t.Fatalf("instances unreadable: %v", err)
+		}
+
+		granularity := chunk * instances
+		if pool%granularity != 0 {
+			t.Fatalf("limit %dMB: pool %dMB is not a multiple of %dMB, so InnoDB will round it up",
+				limit, pool, granularity)
+		}
+
+		if pool >= limit {
+			t.Fatalf("limit %dMB: pool %dMB leaves no headroom", limit, pool)
+		}
+	}
+}
