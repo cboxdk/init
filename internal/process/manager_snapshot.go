@@ -61,6 +61,26 @@ func (m *Manager) AbortCheckpoint() {
 	}
 }
 
+// CompleteCheckpoint reaps the dumped tree and settles the state of every
+// instance that was checkpointed. It must be called as soon as the dump
+// returns: a dumped process is a zombie until waited on, and its zombie holds
+// the PID the restore has to recreate.
+func (m *Manager) CompleteCheckpoint() {
+	for _, sup := range m.snapshotSupervisors() {
+		sup.CompleteCheckpoint()
+	}
+}
+
+// EndCheckpoint puts restored processes back into ordinary supervision. Without
+// it the warm tier works exactly once: the restored tree is genuinely back but
+// nothing is watching it, so it can neither sleep again nor be noticed if it
+// dies.
+func (m *Manager) EndCheckpoint() {
+	for _, sup := range m.snapshotSupervisors() {
+		sup.EndCheckpoint()
+	}
+}
+
 // IsCheckpointed reports whether every eligible process is checkpointed.
 func (m *Manager) IsCheckpointed() bool {
 	sups := m.snapshotSupervisors()
@@ -93,8 +113,13 @@ func (m *Manager) ColdStart(ctx context.Context) error {
 	if len(errs) > 0 {
 		return fmt.Errorf("cold starting after a lost checkpoint: %v", errs)
 	}
+	// Nothing checkpointed is success, not failure. Several connections can
+	// arrive at a workload whose checkpoint was lost, and the second one asking
+	// for a cold start wants the same outcome the first one already produced: a
+	// running workload. Reporting an error here would fail a connection that
+	// could have been served.
 	if recovered == 0 {
-		return fmt.Errorf("cold start found nothing checkpointed to replace")
+		m.logger.Debug("cold start found nothing checkpointed; the workload is already running")
 	}
 	return nil
 }

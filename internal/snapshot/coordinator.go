@@ -24,8 +24,13 @@ type Workload interface {
 	// BeginCheckpoint marks the exits about to happen as intended rather than
 	// as crashes, and returns the PIDs to dump.
 	BeginCheckpoint() []int
-	// AbortCheckpoint undoes that when the dump failed.
+	// CompleteCheckpoint reaps the dumped tree and settles its state, once the
+	// dump has actually finished.
+	CompleteCheckpoint()
+	// AbortCheckpoint undoes the intent when the dump failed.
 	AbortCheckpoint()
+	// EndCheckpoint puts restored processes back into ordinary supervision.
+	EndCheckpoint()
 	// IsCheckpointed reports whether everything is currently checkpointed.
 	IsCheckpointed() bool
 	// ColdStart replaces checkpointed processes with fresh ones. The in-memory
@@ -49,6 +54,12 @@ type Coordinator struct {
 
 	idle time.Duration
 	poll time.Duration
+
+	// opMu makes sleeping and waking mutually exclusive. Without it a
+	// connection can arrive between "the workload is idle" and "the dump has
+	// started", be served against a process CRIU is about to freeze, and have
+	// its socket dumped mid-request.
+	opMu sync.Mutex
 
 	mu       sync.Mutex
 	failures int
@@ -129,8 +140,20 @@ func (c *Coordinator) Run(ctx context.Context) {
 // handshake would not have to wait, and every path out of here has to end
 // within the caller's deadline. A hang here is a hung request.
 func (c *Coordinator) Wake(ctx context.Context) error {
+	// Waits for an in-flight dump rather than racing it. The wait is bounded by
+	// the caller's deadline, which is the same deadline the whole wake is held
+	// to, so this cannot become a hang of its own.
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+
 	err := c.control.Restore(ctx)
 	if err == nil {
+		// The tree is back, at the PIDs CRIU recorded, re-parented onto
+		// cbox-init. Nothing is watching it until this is called, and a
+		// workload nobody watches can neither sleep again nor be noticed when
+		// it dies.
+		c.workload.EndCheckpoint()
+		c.proxy.SetAsleep(false)
 		return nil
 	}
 
@@ -155,6 +178,13 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 		return fmt.Errorf("cold starting after a lost checkpoint: %w", err)
 	}
 
+	// Marked awake here rather than only by the caller. The cold start can
+	// legitimately finish after the caller's deadline has passed — a wedged
+	// CRIU can burn the whole wake budget before anyone gives up on it — and if
+	// only the caller cleared the flag, the workload would be running with the
+	// proxy still convinced it is asleep, sending every subsequent connection
+	// into a restore that can no longer succeed.
+	c.proxy.SetAsleep(false)
 	c.disable("a checkpoint was lost")
 	c.log.Warn("workload cold started and the warm tier is off for this container; it will keep running and stop sleeping")
 	return nil
@@ -177,10 +207,31 @@ func (c *Coordinator) unrecoverable(err error) bool {
 }
 
 func (c *Coordinator) maybeSleep(ctx context.Context) {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+
 	if c.Disabled() != "" || c.proxy.Asleep() {
 		return
 	}
 	if !c.proxy.Activity().IdleFor(c.idle) {
+		return
+	}
+
+	// Asleep before anything else, and idleness confirmed again afterwards.
+	//
+	// The order is the whole race. Between deciding the workload is idle and
+	// the dump actually starting, a connection can arrive; if the proxy still
+	// believes the workload is awake it will splice that connection straight
+	// into a process CRIU is about to freeze, and the request is dumped
+	// mid-flight. Marking asleep first sends any such connection down the wake
+	// path instead, where it waits on the same lock this holds and restores the
+	// moment the dump finishes — the correct outcome for a workload that went
+	// idle and was immediately wanted again. The second check then catches
+	// anything that got in just before the flag did.
+	c.proxy.SetAsleep(true)
+
+	if open, inFlight := c.proxy.Activity().Counts(); open > 0 || inFlight > 0 {
+		c.proxy.SetAsleep(false)
 		return
 	}
 
@@ -189,18 +240,9 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 		// Nothing running to dump. Not a failure, and not worth a log line
 		// every poll: a container whose processes have all exited is already
 		// being handled by the supervisor.
+		c.proxy.SetAsleep(false)
 		return
 	}
-
-	// Asleep before the dump, not after.
-	//
-	// A connection arriving mid-dump would otherwise be proxied straight at a
-	// process CRIU is in the middle of freezing. Setting the flag first sends
-	// that connection down the wake path instead, where it queues behind this
-	// operation on the control channel and restores the moment the dump
-	// finishes — which is the correct outcome for a workload that went idle and
-	// was immediately wanted again.
-	c.proxy.SetAsleep(true)
 
 	if err := c.control.Checkpoint(ctx); err != nil {
 		// The workload was never touched. It is still running, still holding
@@ -211,6 +253,10 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 		c.penalise(err)
 		return
 	}
+
+	// Immediately, and before anything can ask for a restore: the dumped tree
+	// is a set of zombies holding exactly the PIDs the restore will need.
+	c.workload.CompleteCheckpoint()
 
 	c.mu.Lock()
 	c.failures = 0

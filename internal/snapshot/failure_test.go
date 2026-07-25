@@ -233,6 +233,8 @@ type fakeWorkload struct {
 	begun        atomic.Int32
 	aborted      atomic.Int32
 	coldStarts   atomic.Int32
+	ended        atomic.Int32
+	completed    atomic.Int32
 	coldStartErr error
 }
 
@@ -243,7 +245,9 @@ func (f *fakeWorkload) BeginCheckpoint() []int {
 	}
 	return f.pids
 }
+func (f *fakeWorkload) CompleteCheckpoint()  { f.completed.Add(1) }
 func (f *fakeWorkload) AbortCheckpoint()     { f.aborted.Add(1) }
+func (f *fakeWorkload) EndCheckpoint()       { f.ended.Add(1) }
 func (f *fakeWorkload) IsCheckpointed() bool { return false }
 func (f *fakeWorkload) ColdStart(context.Context) error {
 	f.coldStarts.Add(1)
@@ -430,6 +434,9 @@ func TestSleepMarksAsleepBeforeDumping(t *testing.T) {
 	if workload.aborted.Load() != 0 {
 		t.Error("a successful dump must not abort anything")
 	}
+	if workload.completed.Load() != 1 {
+		t.Error("the dumped tree was never reaped; its zombies hold the PIDs the restore needs")
+	}
 }
 
 // Nothing running is not a failure and must not be treated as one — a container
@@ -450,5 +457,82 @@ func TestNothingToCheckpointIsNotAFailure(t *testing.T) {
 	}
 	if c.Disabled() != "" {
 		t.Error("nothing to dump must not count against the warm tier")
+	}
+}
+
+// A connection that arrives between "the workload is idle" and "the dump has
+// started" must not be spliced into a process CRIU is about to freeze. The
+// sleep marks asleep first and then re-reads the counters, so a connection that
+// got in just before the flag did cancels the sleep instead of being dumped
+// mid-request.
+func TestSleepBacksOutWhenAConnectionArrivesFirst(t *testing.T) {
+	control := &fakeControl{}
+	workload := &fakeWorkload{}
+	c, p := newTestCoordinator(t, control, workload)
+
+	// Standing in for the connection that slipped in: the activity counter is
+	// the only thing the sleep path can see, and it is exact rather than
+	// inferred precisely so this decision can be made on it.
+	closed := p.Activity().Opened()
+	defer closed()
+
+	c.maybeSleep(context.Background())
+
+	if control.checkpoints != 0 {
+		t.Error("a workload with an open connection was dumped")
+	}
+	if p.Asleep() {
+		t.Error("the proxy was left believing a running workload is asleep")
+	}
+	if workload.begun.Load() != 0 {
+		t.Error("the supervisor was told to expect a checkpoint that never happened")
+	}
+}
+
+// The warm tier has to work more than once. A restore leaves the tree back at
+// the PIDs CRIU recorded but re-parented, with no monitoring goroutine and no
+// exec.Cmd behind it, so unless the supervisor is told it is running again the
+// workload can never sleep a second time and its death would go unnoticed.
+func TestRestorePutsTheWorkloadBackUnderSupervision(t *testing.T) {
+	workload := &fakeWorkload{}
+	c, _ := newTestCoordinator(t, &fakeControl{}, workload)
+
+	if err := c.Wake(context.Background()); err != nil {
+		t.Fatalf("Wake: %v", err)
+	}
+	if workload.ended.Load() != 1 {
+		t.Error("the supervisor was never told the workload is running again; it would sleep exactly once")
+	}
+}
+
+// A cold start can legitimately finish after the caller has given up: a wedged
+// CRIU can burn the whole wake budget before anyone stops waiting on it. If
+// only the caller cleared the sleeping flag, the workload would be running with
+// the proxy still convinced it is asleep, and every later connection would go
+// into a restore that can no longer succeed. Observed exactly that way on a
+// node before it was fixed.
+func TestColdStartMarksTheProxyAwakeItself(t *testing.T) {
+	control := &fakeControl{restorer: func() error { return ErrControlLost }}
+	c, p := newTestCoordinator(t, control, &fakeWorkload{})
+	p.SetAsleep(true)
+
+	if err := c.Wake(context.Background()); err != nil {
+		t.Fatalf("Wake: %v", err)
+	}
+	if p.Asleep() {
+		t.Error("the proxy was left asleep in front of a running workload")
+	}
+}
+
+// And a successful restore does the same, for the same reason.
+func TestSuccessfulRestoreMarksTheProxyAwake(t *testing.T) {
+	c, p := newTestCoordinator(t, &fakeControl{}, &fakeWorkload{})
+	p.SetAsleep(true)
+
+	if err := c.Wake(context.Background()); err != nil {
+		t.Fatalf("Wake: %v", err)
+	}
+	if p.Asleep() {
+		t.Error("the proxy stayed asleep after a successful restore")
 	}
 }

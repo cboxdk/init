@@ -867,6 +867,151 @@ func (s *Supervisor) AbortCheckpoint() {
 	}
 }
 
+// CompleteCheckpoint is called once the dump has actually finished, and does
+// the two things that only make sense at exactly that moment.
+//
+// It reaps. A dumped process is a zombie until someone waits on it and the
+// zombie keeps its PID, which is precisely the PID the restore has to recreate
+// — "Can't fork for <pid>: File exists". Every descendant needs it, not just
+// the process we started, because a grandchild that outlived its own parent has
+// been re-parented onto us and holds its PID just as stubbornly. Reaping
+// earlier would race the dump; reaping later means the restore has already
+// failed.
+//
+// And it settles the state for instances nothing is waiting on. The first
+// checkpoint of a process is observed by its monitoring goroutine, because
+// os/exec is still waiting on it. Every checkpoint after the first is not: the
+// restored tree arrived re-parented rather than forked, so there is no
+// exec.Cmd behind it and no Wait to return. Without this the second dump would
+// leave the instance looking like it is still running, and the warm tier would
+// work exactly once.
+func (s *Supervisor) CompleteCheckpoint() []int {
+	reaped := snapshot.DrainCheckpointed(snapshot.DrainOptions{})
+
+	s.mu.RLock()
+	instances := append([]*Instance(nil), s.instances...)
+	s.mu.RUnlock()
+
+	for _, instance := range instances {
+		instance.mu.Lock()
+		if instance.checkpointing && instance.state != StateCheckpointed {
+			instance.state = StateCheckpointed
+			s.logger.Info("Process instance checkpointed",
+				"instance_id", instance.id, "pid", instance.pid)
+		}
+		instance.mu.Unlock()
+	}
+
+	return reaped
+}
+
+// EndCheckpoint puts restored instances back into ordinary supervision and
+// reports how many it re-armed.
+//
+// Without this the warm tier works exactly once. The dump ends the instance's
+// lifetime as far as os/exec is concerned — cmd.Wait() has already returned, so
+// its monitoring goroutine is gone — and the restored tree arrives re-parented
+// onto cbox-init rather than forked from it. So the process is genuinely back,
+// at the same PID CRIU recorded, but nothing is watching it: it would never be
+// eligible to sleep again and its death would never be noticed.
+//
+// Watching it takes a different shape than watching a process we started. There
+// is no wait4 on a specific PID available to us any more — the container's
+// wildcard reaper collects it — so liveness is polled. A second of latency on
+// noticing a crash is acceptable for a process that just came back from disk;
+// silently never noticing is not.
+func (s *Supervisor) EndCheckpoint() int {
+	s.mu.RLock()
+	instances := append([]*Instance(nil), s.instances...)
+	s.mu.RUnlock()
+
+	restored := 0
+	for _, instance := range instances {
+		instance.mu.Lock()
+		if instance.state != StateCheckpointed {
+			instance.mu.Unlock()
+			continue
+		}
+		instance.state = StateRunning
+		instance.checkpointing = false
+		instance.allowRestart = true
+		instance.doneCh = make(chan struct{})
+		done := instance.doneCh
+		pid := instance.pid
+		instance.mu.Unlock()
+
+		s.goroutines.Add(1)
+		go func(inst *Instance, pid int, done chan struct{}) {
+			defer s.goroutines.Done()
+			s.monitorRestored(inst, pid, done)
+		}(instance, pid, done)
+
+		restored++
+	}
+
+	if restored > 0 {
+		s.mu.Lock()
+		s.state = StateRunning
+		s.mu.Unlock()
+		s.logger.Info("Process instances restored", "count", restored)
+	}
+	return restored
+}
+
+// monitorRestored watches a process that came back from a checkpoint image.
+func (s *Supervisor) monitorRestored(instance *Instance, pid int, done chan struct{}) {
+	defer close(done)
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		instance.mu.RLock()
+		state := instance.state
+		instance.mu.RUnlock()
+		if state != StateRunning {
+			// Checkpointed again, or being stopped. Either way this watch is
+			// over and whoever changed the state owns what happens next.
+			return
+		}
+
+		// ESRCH is the only answer that means gone. EPERM would mean the
+		// process exists and is not ours, which cannot happen for a tree
+		// re-parented onto this process.
+		if err := syscall.Kill(pid, 0); err == nil {
+			continue
+		} else if err != syscall.ESRCH {
+			continue
+		}
+
+		instance.mu.Lock()
+		if instance.state != StateRunning {
+			instance.mu.Unlock()
+			return
+		}
+		instance.state = StateStopped
+		restartCount := instance.restartCount
+		allowRestart := instance.allowRestart
+		instance.mu.Unlock()
+
+		s.logger.Warn("Restored process instance exited", "instance_id", instance.id, "pid", pid)
+		metrics.RecordProcessStop(s.name, instance.id, -1)
+
+		if allowRestart && s.config.Type != "oneshot" && s.restartPolicy.ShouldRestart(-1, restartCount) {
+			s.attemptRestart(instance, -1, restartCount)
+		} else {
+			s.checkAllInstancesDead()
+		}
+		return
+	}
+}
+
 // RecoverCheckpointed replaces every checkpointed instance with a fresh one and
 // reports how many it started.
 //
