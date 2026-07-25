@@ -46,6 +46,7 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 		m.logger.Info("Starting new process", "name", name, "command", procCfg.Command, "scale", procCfg.Scale)
 
 		supervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
+		supervisor.SetSnapshotStreams(m.snapshotStreams)
 		supervisor.SetOneshotHistory(m.oneshotHistory)
 		supervisor.SetLogBroadcaster(m.logBroadcaster)
 		// Use background context for supervisor lifetime (independent of API request)
@@ -148,6 +149,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 		// If new config is enabled, start with new config
 		if procCfg.Enabled {
 			newSupervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
+			newSupervisor.SetSnapshotStreams(m.snapshotStreams)
 			newSupervisor.SetOneshotHistory(m.oneshotHistory)
 			newSupervisor.SetLogBroadcaster(m.logBroadcaster)
 			// Use background context for supervisor lifetime (independent of API request)
@@ -169,6 +171,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 		m.logger.Info("Starting previously disabled process", "name", name)
 
 		supervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
+		supervisor.SetSnapshotStreams(m.snapshotStreams)
 		supervisor.SetOneshotHistory(m.oneshotHistory)
 		supervisor.SetLogBroadcaster(m.logBroadcaster)
 		// Use background context for supervisor lifetime (independent of API request)

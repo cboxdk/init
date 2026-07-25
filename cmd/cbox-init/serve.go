@@ -192,6 +192,13 @@ func runServe(cmd *cobra.Command, args []string) {
 	pm := process.NewManager(cfg, log, auditLogger)
 	pm.SetConfigPath(cfgPath) // Set config path for saving
 
+	// Decided before anything starts, because os/exec chooses its pipe when a
+	// process starts and only a supervisor-owned pipe leaves a write end to
+	// hand back at restore. The condition is deliberately the same one
+	// startWarmTier checks, so a container never starts with checkpoint-ready
+	// stdio it will not use, or without it when it will.
+	pm.SetSnapshotStreams(warmTierEligible())
+
 	// Start metrics server
 	var metricsServer *metrics.Server
 	if cfg.Global.MetricsEnabledValue() {
@@ -215,6 +222,13 @@ func runServe(cmd *cobra.Command, args []string) {
 	// Monitor process health
 	pm.MonitorProcessHealth(ctx)
 	pm.StartReadinessMonitor(ctx)
+
+	// The warm tier of scale-to-zero. Started after the processes, because it
+	// registers a running child with the node agent, and opt-in in every
+	// direction: no agent socket, no upstream address, or more than one
+	// supervised process all mean the container runs exactly as it always did.
+	warmTier := startWarmTier(ctx, pm, log)
+	slog.Info("Warm tier", "status", warmTierStatus(warmTier))
 
 	// Always start Unix socket for local management (TUI, CLI commands)
 	socketPath := resolveSocketPath(cfg.Global.APISocket)

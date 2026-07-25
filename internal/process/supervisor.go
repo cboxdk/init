@@ -457,11 +457,26 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 	)
 	cmd.Env = envVars
 
-	// CRITICAL: Put subprocess in its own process group
-	// This prevents Ctrl+C (SIGINT) from propagating to child processes
-	// Without this, Ctrl+C kills children → manager thinks crash → restarts
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true, // Create new process group for this process
+	// A session of its own for processes that may be checkpointed, an ordinary
+	// process group for everything else.
+	//
+	// Without the session the child shares cbox-init's, CRIU classifies the
+	// dump as a shell job and demands --shell-job — and a shell-job restore
+	// does not outlive the process that performed it, so the workload comes
+	// back and immediately vanishes.
+	//
+	// The two flags are exclusive rather than additive: setsid already puts the
+	// process in a new group and makes it the session leader, and setpgid on a
+	// session leader fails with EPERM. Everything downstream that addresses the
+	// process group still works, because the new group's id is the child's pid
+	// either way.
+	if s.snapshotStreams {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	} else {
+		// CRITICAL: Put subprocess in its own process group
+		// This prevents Ctrl+C (SIGINT) from propagating to child processes
+		// Without this, Ctrl+C kills children → manager thinks crash → restarts
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	}
 
 	// Apply user/group credentials if configured
@@ -850,6 +865,82 @@ func (s *Supervisor) AbortCheckpoint() {
 		}
 		instance.mu.Unlock()
 	}
+}
+
+// RecoverCheckpointed replaces every checkpointed instance with a fresh one and
+// reports how many it started.
+//
+// This is what a lost checkpoint costs, made explicit. The processes were
+// dumped, so they are genuinely gone; if the images cannot be loaded there is
+// nothing to bring back and the only way to have a working service again is to
+// start one. The in-memory state is lost, and the caller says so — this
+// function exists precisely so that losing it is a deliberate, logged act
+// rather than something that happens because a restore quietly failed and the
+// supervisor's ordinary restart policy picked up the pieces.
+//
+// The container is not recreated and the pod is not deleted. cbox-init is still
+// PID 1, the pod still holds its IP, its volumes and its identity; only the
+// memory image is gone.
+func (s *Supervisor) RecoverCheckpointed(ctx context.Context) (int, error) {
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+
+	s.mu.RLock()
+	instances := append([]*Instance(nil), s.instances...)
+	runCtx := s.ctx
+	s.mu.RUnlock()
+
+	if runCtx == nil {
+		runCtx = ctx
+	}
+
+	recovered := 0
+	var errs []error
+
+	for _, instance := range instances {
+		instance.mu.Lock()
+		if instance.state != StateCheckpointed {
+			instance.mu.Unlock()
+			continue
+		}
+		// The flag is cleared before the replacement starts: whatever happens
+		// to the new process from here is an ordinary supervised lifetime, and
+		// its exit must be treated as a crash again.
+		instance.checkpointing = false
+		id, index := instance.id, instance.index
+		instance.mu.Unlock()
+
+		fresh, err := s.startInstance(runCtx, id, index)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("restarting %s: %w", id, err))
+			instance.mu.Lock()
+			instance.state = StateFailed
+			instance.mu.Unlock()
+			continue
+		}
+
+		s.mu.Lock()
+		for i, existing := range s.instances {
+			if existing.id == id {
+				s.instances[i] = fresh
+				break
+			}
+		}
+		s.mu.Unlock()
+
+		recovered++
+	}
+
+	if recovered > 0 {
+		s.mu.Lock()
+		s.state = StateRunning
+		s.mu.Unlock()
+	}
+
+	if len(errs) > 0 {
+		return recovered, fmt.Errorf("recovering checkpointed instances: %v", errs)
+	}
+	return recovered, nil
 }
 
 // IsCheckpointed reports whether every instance is currently checkpointed.
@@ -1709,4 +1800,34 @@ func (s *Supervisor) GetLogs(limit int) []logger.LogEntry {
 	}
 
 	return allLogs
+}
+
+// SnapshotTarget returns the instance the agent will checkpoint and the pipe
+// its stdout is on. It refuses a scaled process for the same reason the manager
+// refuses several processes: one registration describes one tree.
+func (s *Supervisor) SnapshotTarget() (int, *snapshot.Stream, error) {
+	s.mu.RLock()
+	instances := append([]*Instance(nil), s.instances...)
+	s.mu.RUnlock()
+
+	if len(instances) != 1 {
+		return 0, nil, fmt.Errorf("process %s has %d instances; the warm tier registers one tree", s.name, len(instances))
+	}
+
+	inst := instances[0]
+	inst.mu.RLock()
+	pid, stream, state := inst.pid, inst.stdoutStream, inst.state
+	inst.mu.RUnlock()
+
+	if state != StateRunning {
+		return 0, nil, fmt.Errorf("process %s is %s, not running", s.name, state)
+	}
+	if stream == nil {
+		// os/exec owns the pipe, so there is no write end left to hand CRIU at
+		// restore and the restored process would die of SIGPIPE on its first
+		// write. Refusing here is the difference between no warm tier and a
+		// warm tier that loses the workload on the first wake.
+		return 0, nil, fmt.Errorf("process %s does not have a supervisor-owned stdout pipe", s.name)
+	}
+	return pid, stream, nil
 }

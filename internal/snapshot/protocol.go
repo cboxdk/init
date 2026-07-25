@@ -101,15 +101,44 @@ func (m Message) Int(key string, def int) int {
 	return n
 }
 
+// AgentError is a refusal from the agent, carrying the single-token reason it
+// sent. It is a type rather than a string because the caller has to act
+// differently on different reasons: a dump that failed leaves a running
+// workload alone, while a checkpoint the agent has abandoned means the
+// processes are gone and only a cold start brings the service back.
+type AgentError struct {
+	Reason string
+}
+
+func (e *AgentError) Error() string { return "snapshot agent: " + e.Reason }
+
+// Reasons the agent sends that the container must act on rather than merely
+// log. The remaining reasons all mean "not this time", and the workload is
+// running throughout.
+const (
+	// ReasonRestoreAbandoned means the agent gave up on a checkpoint it could
+	// not load. The dumped processes are gone for good.
+	ReasonRestoreAbandoned = "restore_abandoned"
+
+	// ReasonImagesMissing means there is nothing left to restore from.
+	ReasonImagesMissing = "images_missing"
+)
+
+// Lost reports whether a reason means the checkpointed processes can never come
+// back, which is the only case where losing state is the right answer.
+func (e *AgentError) Lost() bool {
+	return e.Reason == ReasonRestoreAbandoned || e.Reason == ReasonImagesMissing
+}
+
 // Err returns a non-nil error when the message is a failure reply.
 func (m Message) Err() error {
 	if m.Verb != StatusError {
 		return nil
 	}
 	if reason, ok := m.Fields["reason"]; ok {
-		return fmt.Errorf("snapshot agent: %s", reason)
+		return &AgentError{Reason: reason}
 	}
-	return fmt.Errorf("snapshot agent: refused")
+	return &AgentError{Reason: "refused"}
 }
 
 // ParseMessage parses one protocol line. Unknown fields are kept rather than

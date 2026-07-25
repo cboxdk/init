@@ -192,3 +192,119 @@ func TestSupervisorLeavesStdioAloneWithoutSnapshotting(t *testing.T) {
 		t.Error("snapshot streams should only be created when snapshotting is enabled")
 	}
 }
+
+// What a lost checkpoint costs, made explicit. The processes were dumped, so
+// they are genuinely gone; if the images cannot be loaded there is nothing to
+// bring back and the only way to have a working service again is to start one.
+// The container is not recreated and the pod is not deleted — cbox-init is
+// still PID 1 and the pod still holds its IP, its volumes and its identity, so
+// only the memory image is lost.
+func TestSupervisorColdStartsAfterALostCheckpoint(t *testing.T) {
+	sup := checkpointSupervisor(t, "always")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = sup.Stop(context.Background()) }()
+
+	testutil.Eventually(t, func() bool {
+		return len(sup.GetInstances()) == 1 && sup.GetState() == StateRunning
+	}, "process reaches running", 10*time.Second)
+
+	originalPID := sup.GetInstances()[0].PID
+
+	sup.BeginCheckpoint()
+	if err := syscall.Kill(originalPID, syscall.SIGKILL); err != nil {
+		t.Fatalf("simulating the dump: %v", err)
+	}
+	testutil.Eventually(t, func() bool { return sup.IsCheckpointed() }, "instance reports checkpointed", 10*time.Second)
+
+	recovered, err := sup.RecoverCheckpointed(ctx)
+	if err != nil {
+		t.Fatalf("RecoverCheckpointed: %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("recovered = %d, want 1", recovered)
+	}
+
+	testutil.Eventually(t, func() bool {
+		instances := sup.GetInstances()
+		return len(instances) == 1 && instances[0].PID != originalPID && instances[0].State == string(StateRunning)
+	}, "a fresh process replaces the lost one", 10*time.Second)
+
+	if sup.IsCheckpointed() {
+		t.Error("a cold-started instance must not still look checkpointed")
+	}
+
+	// And it is an ordinary supervised process again: the next exit is a crash,
+	// not another intended checkpoint.
+	freshPID := sup.GetInstances()[0].PID
+	if err := syscall.Kill(freshPID, syscall.SIGKILL); err != nil {
+		t.Fatalf("killing the fresh process: %v", err)
+	}
+	testutil.Eventually(t, func() bool {
+		instances := sup.GetInstances()
+		return len(instances) == 1 && instances[0].PID != freshPID
+	}, "the cold-started process is supervised normally", 15*time.Second)
+}
+
+// Nothing checkpointed means nothing to cold start. Saying so beats quietly
+// restarting a healthy workload that was never asleep.
+func TestSupervisorColdStartIgnoresRunningInstances(t *testing.T) {
+	sup := checkpointSupervisor(t, "never")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = sup.Stop(context.Background()) }()
+
+	testutil.Eventually(t, func() bool {
+		return len(sup.GetInstances()) == 1 && sup.GetState() == StateRunning
+	}, "process reaches running", 10*time.Second)
+
+	pid := sup.GetInstances()[0].PID
+
+	recovered, err := sup.RecoverCheckpointed(ctx)
+	if err != nil {
+		t.Fatalf("RecoverCheckpointed: %v", err)
+	}
+	if recovered != 0 {
+		t.Errorf("recovered = %d, want nothing touched", recovered)
+	}
+	if got := sup.GetInstances()[0].PID; got != pid {
+		t.Errorf("a running process was restarted: pid %d became %d", pid, got)
+	}
+}
+
+// The session is the missing half of the process group. Without it CRIU
+// classifies the dump as a shell job and demands --shell-job, and a shell-job
+// restore does not outlive the process that performed it — the workload comes
+// back and immediately disappears.
+func TestSnapshottedChildGetsItsOwnSession(t *testing.T) {
+	sup := checkpointSupervisor(t, "never")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = sup.Stop(context.Background()) }()
+
+	testutil.Eventually(t, func() bool { return len(sup.GetInstances()) == 1 }, "instance starts", 10*time.Second)
+
+	pid := sup.GetInstances()[0].PID
+	sid, err := syscall.Getsid(pid)
+	if err != nil {
+		t.Fatalf("Getsid: %v", err)
+	}
+	if sid != pid {
+		t.Errorf("session id = %d for pid %d; a snapshotted child must lead its own session", sid, pid)
+	}
+}

@@ -213,6 +213,7 @@ func (m *Manager) startRegularProcess(ctx context.Context, name string, procCfg 
 
 	// Create supervisor for this process
 	sup := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
+	sup.SetSnapshotStreams(m.snapshotStreams)
 	sup.SetDeathNotifier(m.NotifyProcessDeath)
 	sup.SetOneshotHistory(m.oneshotHistory)
 	sup.SetLogBroadcaster(m.logBroadcaster)

@@ -93,6 +93,18 @@ func NewProxy(opts ProxyOptions) *Proxy {
 	return p
 }
 
+// SetWaker installs the waker after construction.
+//
+// The proxy and the coordinator each need the other: the coordinator decides
+// when to sleep by reading the proxy's activity counters, and the proxy decides
+// when to wake by calling the coordinator. One of the two has to be wired
+// second, and it is this one.
+func (p *Proxy) SetWaker(w Waker) {
+	p.mu.Lock()
+	p.waker = w
+	p.mu.Unlock()
+}
+
 // Activity exposes the counters the idle loop reads.
 func (p *Proxy) Activity() *Activity { return p.activity }
 
@@ -158,14 +170,15 @@ func (p *Proxy) handle(ctx context.Context, client net.Conn) {
 
 	if p.Asleep() {
 		wakeCtx, cancel := context.WithTimeout(ctx, p.wakeTimeout)
-		err := p.waker.Wake(wakeCtx)
+		err := p.wake(wakeCtx)
 		cancel()
 
 		if err != nil {
-			// Fail loudly and leave the client to see a closed connection, but
-			// do not pretend the workload is awake: a wrong "awake" would send
+			// Fail loudly and close, so the client gets an error instead of
+			// waiting on a connection that will never carry anything. Do not
+			// pretend the workload is awake either: a wrong "awake" would send
 			// every subsequent request into a dial loop.
-			p.log.Error("snapshot restore failed", "error", err)
+			p.log.Error("snapshot restore failed; failing the connection", "error", err)
 			return
 		}
 		p.SetAsleep(false)
@@ -182,6 +195,37 @@ func (p *Proxy) handle(ctx context.Context, client net.Conn) {
 	defer done()
 
 	p.splice(client, upstream)
+}
+
+// wake bounds the restore even when the waker itself does not honour the
+// context.
+//
+// The proxy is holding a customer's accepted connection while this runs, so
+// this timeout is the last thing standing between a stuck node agent and a
+// request that never returns. It does not trust the waker to enforce its own
+// deadline, because the failure being defended against is precisely an agent
+// that is alive but not answering — which closes no socket and returns no
+// error. The goroutine outlives the timeout and that is intended: it is blocked
+// on a control channel that poisons itself, and letting it finish is cheaper
+// than leaving the connection open until it does.
+func (p *Proxy) wake(ctx context.Context) error {
+	p.mu.Lock()
+	waker := p.waker
+	p.mu.Unlock()
+
+	if waker == nil {
+		return errors.New("no waker configured; the workload cannot be restored")
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- waker.Wake(ctx) }()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("restore did not complete within %s: %w", p.wakeTimeout, ctx.Err())
+	}
 }
 
 // splice copies in both directions and tears both down as soon as either ends.

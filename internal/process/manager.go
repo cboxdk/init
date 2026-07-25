@@ -61,14 +61,18 @@ type Manager struct {
 	allDeadCh         chan struct{}
 	allDeadOnce       sync.Once // Ensures allDeadCh is closed only once
 	processDeathCh    chan string
-	startTime      time.Time
-	logBroadcaster *logpkg.LogBroadcaster
+	startTime         time.Time
+	logBroadcaster    *logpkg.LogBroadcaster
+
+	// snapshotStreams makes new supervisors own their children's stdio pipes,
+	// which is the only arrangement a checkpoint can be restored from.
+	snapshotStreams bool
 
 	// Configurable timeouts and limits (initialized from global config or defaults)
-	dependencyTimeout  time.Duration
+	dependencyTimeout   time.Duration
 	processStartTimeout time.Duration
-	processStopTimeout time.Duration
-	maxProcessScale    int
+	processStopTimeout  time.Duration
+	maxProcessScale     int
 }
 
 // NewManager creates a new Manager with the provided configuration.
@@ -139,24 +143,24 @@ func NewManager(cfg *config.Config, logger *slog.Logger, auditLogger *audit.Logg
 	}
 
 	return &Manager{
-		config:             cfg,
-		logger:             logger,
-		auditLogger:        auditLogger,
-		processes:          make(map[string]*Supervisor),
-		scheduler:          scheduler,
-		scheduleExecutor:   scheduleExecutor,
-		resourceCollector:  resourceCollector,
-		oneshotHistory:     oneshotHistory,
-		readinessManager:   readinessMgr,
-		shutdownCh:         make(chan struct{}),
-		allDeadCh:          make(chan struct{}),
-		processDeathCh:     make(chan string, 10),
-		startTime:          startTime,
-		logBroadcaster:     logpkg.NewLogBroadcaster(),
-		dependencyTimeout:  dependencyTimeout,
+		config:              cfg,
+		logger:              logger,
+		auditLogger:         auditLogger,
+		processes:           make(map[string]*Supervisor),
+		scheduler:           scheduler,
+		scheduleExecutor:    scheduleExecutor,
+		resourceCollector:   resourceCollector,
+		oneshotHistory:      oneshotHistory,
+		readinessManager:    readinessMgr,
+		shutdownCh:          make(chan struct{}),
+		allDeadCh:           make(chan struct{}),
+		processDeathCh:      make(chan string, 10),
+		startTime:           startTime,
+		logBroadcaster:      logpkg.NewLogBroadcaster(),
+		dependencyTimeout:   dependencyTimeout,
 		processStartTimeout: processStartTimeout,
-		processStopTimeout: processStopTimeout,
-		maxProcessScale:    maxProcessScale,
+		processStopTimeout:  processStopTimeout,
+		maxProcessScale:     maxProcessScale,
 	}
 }
 
