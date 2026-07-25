@@ -118,6 +118,13 @@ func (m *Manager) updateReadinessStates() {
 			// Oneshot completed successfully
 			processState = readiness.StateStopped
 			health = "unknown"
+		case StateCheckpointed:
+			// A checkpointed process is a healthy, scheduled service that
+			// happens to be asleep. Reporting it stopped would fail the
+			// container's readiness probe and get the pod restarted — which
+			// would destroy exactly the state the warm tier exists to keep.
+			processState = readiness.StateHealthy
+			health = "checkpointed"
 		case StateFailed:
 			processState = readiness.StateFailed
 			health = "unhealthy"

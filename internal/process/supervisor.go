@@ -19,6 +19,7 @@ import (
 	"github.com/cboxdk/init/internal/logtail"
 	"github.com/cboxdk/init/internal/metrics"
 	"github.com/cboxdk/init/internal/signals"
+	"github.com/cboxdk/init/internal/snapshot"
 )
 
 // ProcessState represents the lifecycle state of a process instance.
@@ -49,6 +50,19 @@ const (
 
 	// StateCompleted indicates a oneshot process ran successfully (exit code 0).
 	StateCompleted ProcessState = "completed"
+
+	// StateCheckpointed indicates the process has been snapshotted by the node
+	// agent and its memory image is on disk, waiting for the next connection.
+	//
+	// This is a running service, not a stopped one. The process really has
+	// exited — CRIU stops it as part of the dump — but the exit is the intended
+	// outcome, so it must not be logged as a crash, must not consume the
+	// restart budget, and must not count towards "all instances dead", which
+	// would shut the whole container down. It is the one state where the
+	// supervisor waits on a child specifically so it can be restored, because
+	// an unreaped zombie keeps its PID and the restore then fails with
+	// "Can't fork: File exists".
+	StateCheckpointed ProcessState = "checkpointed"
 )
 
 // Default timeouts for supervisor operations.
@@ -117,6 +131,7 @@ type Supervisor struct {
 	logBroadcaster         *logger.LogBroadcaster        // Shared broadcaster for real-time log subscriptions
 	fileTailers            map[string]context.CancelFunc // active file tailers, keyed by config name
 	healthCheckStrict      bool                          // Fail startup if health monitor creation fails
+	snapshotStreams        bool                          // own the children's stdio pipes so they can survive a checkpoint
 	ctx                    context.Context
 	cancel                 context.CancelFunc
 	readinessCh            chan struct{}  // Closed when service becomes ready
@@ -155,6 +170,9 @@ type Instance struct {
 	doneCh        chan struct{} // Closed when process exits (monitored by monitorInstance)
 	stdoutWriter  *logger.ProcessWriter
 	stderrWriter  *logger.ProcessWriter
+	stdoutStream  *snapshot.Stream // supervisor-owned pipe, survives a checkpoint
+	stderrStream  *snapshot.Stream
+	checkpointing bool // the pending exit is a checkpoint, not a crash
 	allowRestart  bool
 	oneshotExecID int64 // Tracks oneshot execution history entry ID (0 if not oneshot)
 	mu            sync.RWMutex
@@ -486,13 +504,44 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		}
 	}
 
+	// Hand os/exec an *os.File rather than an io.Writer when this process may be
+	// checkpointed.
+	//
+	// The difference is not stylistic. Given an io.Writer, os/exec allocates a
+	// pipe of its own and copies through a goroutine, and the write end is
+	// unreachable from here — so after a dump there is nothing to give CRIU,
+	// which then creates a fresh pipe and the restored process dies on its
+	// first write with no reader. Given an *os.File it dups the descriptor
+	// straight onto the child's fd and runs no goroutine, and we keep the write
+	// end for as long as the process is supervised.
+	var stdoutStream, stderrStream *snapshot.Stream
+
 	if stdoutWriter != nil {
-		cmd.Stdout = stdoutWriter
+		if s.snapshotStreams {
+			stdoutStream, err = snapshot.NewStream(stdoutWriter)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create stdout stream: %w", err)
+			}
+			cmd.Stdout = stdoutStream.Writer()
+		} else {
+			cmd.Stdout = stdoutWriter
+		}
 	} else {
 		cmd.Stdout = io.Discard
 	}
 	if stderrWriter != nil {
-		cmd.Stderr = stderrWriter
+		if s.snapshotStreams {
+			stderrStream, err = snapshot.NewStream(stderrWriter)
+			if err != nil {
+				if stdoutStream != nil {
+					_ = stdoutStream.Close()
+				}
+				return nil, fmt.Errorf("failed to create stderr stream: %w", err)
+			}
+			cmd.Stderr = stderrStream.Writer()
+		} else {
+			cmd.Stderr = stderrWriter
+		}
 	} else {
 		cmd.Stderr = io.Discard
 	}
@@ -519,6 +568,8 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		doneCh:       make(chan struct{}),
 		stdoutWriter: stdoutWriter,
 		stderrWriter: stderrWriter,
+		stdoutStream: stdoutStream,
+		stderrStream: stderrStream,
 		allowRestart: true,
 	}
 
@@ -670,6 +721,31 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 			signals.UnregisterSupervised(pid)
 		}
 	}
+	// A checkpointed instance has exited on purpose. Waiting on it here is the
+	// point: the dumped process is a zombie until reaped, and the zombie keeps
+	// its PID, which is exactly the PID the restore has to recreate.
+	if instance.checkpointing {
+		instance.state = StateCheckpointed
+		instance.mu.Unlock()
+
+		// Every descendant needs reaping too, not just the process we started.
+		// A grandchild that outlived its own parent has been re-parented onto
+		// us, and its zombie holds its PID just as stubbornly.
+		if reaped := snapshot.DrainCheckpointed(snapshot.DrainOptions{}); len(reaped) > 0 {
+			s.logger.Debug("Drained re-parented descendants after checkpoint",
+				"instance_id", instance.id,
+				"pids", reaped,
+			)
+		}
+
+		signals.UnregisterSupervised(pid)
+		s.logger.Info("Process instance checkpointed",
+			"instance_id", instance.id,
+			"pid", pid,
+		)
+		return
+	}
+
 	instance.state = StateStopped
 	restartCount := instance.restartCount
 	// Reset the restart budget once an instance has stayed up long enough to
@@ -719,6 +795,81 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 		)
 		s.checkAllInstancesDead()
 	}
+}
+
+// SetSnapshotStreams makes the supervisor own its children's stdio pipes so
+// they can survive a checkpoint. It must be set before the process starts;
+// changing it later only affects instances started afterwards.
+func (s *Supervisor) SetSnapshotStreams(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.snapshotStreams = enabled
+}
+
+// BeginCheckpoint tells the supervisor that the exits about to happen are a
+// checkpoint rather than a failure. It must be called before the agent dumps,
+// because the dump stops the processes and the monitor goroutine will see the
+// exit immediately afterwards.
+//
+// Returns the PIDs the agent should checkpoint, in the container's own PID
+// numbering, which is what CRIU records and what it will restore.
+func (s *Supervisor) BeginCheckpoint() []int {
+	s.mu.RLock()
+	instances := append([]*Instance(nil), s.instances...)
+	s.mu.RUnlock()
+
+	pids := make([]int, 0, len(instances))
+	for _, instance := range instances {
+		instance.mu.Lock()
+		if instance.state == StateRunning {
+			instance.checkpointing = true
+			// The same flag the ordinary intentional-stop path uses, so the
+			// exit is never logged as a crash and never audited as one.
+			instance.allowRestart = false
+			pids = append(pids, instance.pid)
+		}
+		instance.mu.Unlock()
+	}
+	return pids
+}
+
+// AbortCheckpoint undoes BeginCheckpoint when the dump failed. The processes
+// are still running and must go back to being ordinary supervised processes —
+// a failed checkpoint leaves the workload alone and says so, rather than
+// disabling itself quietly and force-killing the container next time.
+func (s *Supervisor) AbortCheckpoint() {
+	s.mu.RLock()
+	instances := append([]*Instance(nil), s.instances...)
+	s.mu.RUnlock()
+
+	for _, instance := range instances {
+		instance.mu.Lock()
+		if instance.checkpointing {
+			instance.checkpointing = false
+			instance.allowRestart = true
+		}
+		instance.mu.Unlock()
+	}
+}
+
+// IsCheckpointed reports whether every instance is currently checkpointed.
+func (s *Supervisor) IsCheckpointed() bool {
+	s.mu.RLock()
+	instances := append([]*Instance(nil), s.instances...)
+	s.mu.RUnlock()
+
+	if len(instances) == 0 {
+		return false
+	}
+	for _, instance := range instances {
+		instance.mu.RLock()
+		state := instance.state
+		instance.mu.RUnlock()
+		if state != StateCheckpointed {
+			return false
+		}
+	}
+	return true
 }
 
 // ScaleUp adds new instances to reach the target scale
