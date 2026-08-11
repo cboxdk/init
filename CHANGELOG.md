@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-08-11
+
+### Added
+
+- **Snapshot: checkpoint and restore a running container's processes.** A coordinator
+  quiesces supervised children, owns their stdio across the checkpoint so a restored
+  process keeps writing to the same pipes, and treats a checkpointed exit as a
+  checkpoint rather than a crash — no restart storm on resume. The warm tier survives
+  repeated cycles and recovers from an interrupted one.
+- **Engine-aware autotuning for Percona and Valkey.** Sizing is derived from the
+  container's real memory and CPU limits and applied at startup, including InnoDB's
+  buffer-pool rounding, which previously made the applied value disagree with the
+  computed one.
+
+### Fixed
+
+- **Every Cbox base image shipped a binary with a CRITICAL CVE.** `cbox-init` linked
+  grpc v1.75.0 (CVE-2026-33186, improper HTTP/2 handling; plus GHSA-hrxh-6v49-42gf)
+  and was built with Go 1.24, whose stdlib carries eight more across `net/url`,
+  `crypto/x509`, `crypto/tls` and `net/http`. Trivy had been reporting this on every
+  image build, but the scan runs after the push, so it never stopped a publish.
+  grpc 1.83.0, `x/net` 0.57.0, `x/text` 0.40.0, and the toolchain moves to Go 1.26 in
+  go.mod, both workflows and the Dockerfile.
+- **Go MPTCP is disabled so the process is checkpointable.** CRIU cannot parasite-inject
+  through the MPTCP sockets Go dials by default, which made scale-to-zero
+  suspend/resume fail on any container running cbox-init as PID 1.
+
 ## [2.4.1] - 2026-07-15
 
 ### Fixed
