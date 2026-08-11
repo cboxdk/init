@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -1416,6 +1417,20 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 	return s.signalProcessGroup(instance, sig, "shutdown")
 }
 
+// signalMoot reports whether a signal failed only because the process had
+// already exited.
+//
+// NOT A FAILURE TO STOP SOMETHING THAT HAS STOPPED. The signal races the
+// child's own exit: on a loaded machine a process can go between the liveness
+// check and the kill, and `os.ErrProcessDone` came back as "failed to send
+// signal". `cbox-init stop` and `scale 0` then reported an error for work that
+// was already done — and a caller who retries a stop that actually succeeded is
+// a caller who restarts something. Caught by a CI runner slow enough to lose
+// the race that a laptop wins every time.
+func signalMoot(err error) bool {
+	return errors.Is(err, os.ErrProcessDone) || errors.Is(err, syscall.ESRCH)
+}
+
 // signalProcessGroup sends a signal to the instance's process group, falling
 // back to the parent process if the process group cannot be addressed.
 func (s *Supervisor) signalProcessGroup(instance *Instance, sig syscall.Signal, reason string) error {
@@ -1430,20 +1445,23 @@ func (s *Supervisor) signalProcessGroup(instance *Instance, sig syscall.Signal, 
 			"reason", reason,
 			"error", err,
 		)
-		if err := instance.cmd.Process.Signal(sig); err != nil {
+		if err := instance.cmd.Process.Signal(sig); err != nil && !signalMoot(err) {
 			return fmt.Errorf("failed to send signal: %w", err)
 		}
 		return nil
 	}
 
 	if err := syscall.Kill(-pgid, sig); err != nil {
+		if signalMoot(err) {
+			return nil
+		}
 		s.logger.Warn("Failed to send signal to process group, falling back to direct signal",
 			"instance_id", instance.id,
 			"pgid", pgid,
 			"reason", reason,
 			"error", err,
 		)
-		if err := instance.cmd.Process.Signal(sig); err != nil {
+		if err := instance.cmd.Process.Signal(sig); err != nil && !signalMoot(err) {
 			return fmt.Errorf("failed to send signal: %w", err)
 		}
 	}
