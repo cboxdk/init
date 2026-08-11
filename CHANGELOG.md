@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-08-11
+
+### Fixed
+
+- **Stopping a process that has already exited is no longer reported as a failure.**
+  The signal races the child's own exit: on a loaded machine the process can go
+  between the liveness check and the kill, `Process.Signal` returns
+  `os.ErrProcessDone`, and the stop came back "failed to send signal". `scale 0`
+  then reported an error for work that was already done. `os.ErrProcessDone` and
+  `ESRCH` now mean what they say; `EPERM` still fails.
+- **Dependencies swept to current** — gopsutil 4.26.7, client_golang 1.24.1,
+  fsnotify 1.10.1, cobra 1.10.2, otel 1.45.0, bubbles 1.0.0, alpine 3.24, and
+  every GitHub Action to its current major.
+- **CI could not have caught either.** `syscall.Getsid` does not exist on Linux,
+  so the test build failed on the only platform this ships on, and
+  golangci-lint-action v6 refuses a v2 golangci-lint, so the lint job never ran.
+
 ## [2.5.0] - 2026-08-11
 
 ### Added
