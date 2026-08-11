@@ -63,7 +63,7 @@ jobs:
           go-version: '1.26'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           # Pinned for reproducible linting; matches the version documented in
           # CONTRIBUTING.md and the local `make lint` target. Config lives in

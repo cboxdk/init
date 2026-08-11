@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 	"testing"
 	"time"
 
@@ -300,7 +302,7 @@ func TestSnapshottedChildGetsItsOwnSession(t *testing.T) {
 	testutil.Eventually(t, func() bool { return len(sup.GetInstances()) == 1 }, "instance starts", 10*time.Second)
 
 	pid := sup.GetInstances()[0].PID
-	sid, err := syscall.Getsid(pid)
+	sid, err := unix.Getsid(pid)
 	if err != nil {
 		t.Fatalf("Getsid: %v", err)
 	}
