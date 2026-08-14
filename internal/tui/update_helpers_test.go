@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/cboxdk/init/internal/process"
+	"github.com/charmbracelet/bubbles/table"
 )
 
 // TestGetSelectedInstanceID tests instance ID retrieval

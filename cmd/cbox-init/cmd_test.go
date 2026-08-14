@@ -118,10 +118,10 @@ func TestRunStartupPhase(t *testing.T) {
 // TestVersionCommand tests the version command outputs
 func TestVersionCommand(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []string
-		wantOut  []string
-		notWant  []string
+		name    string
+		args    []string
+		wantOut []string
+		notWant []string
 	}{
 		{
 			name:    "full version output",
@@ -264,7 +264,7 @@ processes:
 			wantOutput: "command",
 		},
 		{
-			name: "nonexistent config",
+			name:       "nonexistent config",
 			configData: "", // Will use nonexistent path
 			wantExit:   true,
 			wantOutput: "", // Any error is acceptable
@@ -4673,7 +4673,7 @@ func TestVersionOutputFormat(t *testing.T) {
 
 	if err == nil {
 		// Should have version info
-		if strings.Contains(outputStr, "PHPeek") || strings.Contains(outputStr, "version") {
+		if strings.Contains(outputStr, "cbox-init") || strings.Contains(outputStr, "version") {
 			t.Log("Version output is properly formatted")
 		}
 	}
@@ -5300,9 +5300,9 @@ func TestPromptYesNo(t *testing.T) {
 		{"yes", "false", "yes"},
 		{"n", "true", "no"},
 		{"no", "true", "no"},
-		{"", "true", "yes"},  // empty uses default
-		{"", "false", "no"},  // empty uses default
-		{"Y", "false", "yes"}, // uppercase
+		{"", "true", "yes"},        // empty uses default
+		{"", "false", "no"},        // empty uses default
+		{"Y", "false", "yes"},      // uppercase
 		{"invalid", "false", "no"}, // invalid defaults to no
 	}
 
@@ -5626,31 +5626,31 @@ func TestPromptYesNoDirect(t *testing.T) {
 // TestConfigureInteractiveDirect tests configureInteractive with direct stdin manipulation
 func TestConfigureInteractiveDirect(t *testing.T) {
 	tests := []struct {
-		name     string
-		preset   string
-		input    string
-		wantApp  string
-		wantLog  string
+		name    string
+		preset  string
+		input   string
+		wantApp string
+		wantLog string
 	}{
 		{
-			name:    "laravel_full_config",
-			preset:  "laravel",
+			name:   "laravel_full_config",
+			preset: "laravel",
 			// Input: app name, log level, queue workers, queue connection, then 5 y/n answers
 			input:   "my-laravel-app\ndebug\n5\nsqs\ny\ny\nn\ny\ny\n",
 			wantApp: "my-laravel-app",
 			wantLog: "debug",
 		},
 		{
-			name:    "generic_basic_config",
-			preset:  "php",
+			name:   "generic_basic_config",
+			preset: "php",
 			// Input: empty app name (use default), empty log level (use default), then 5 y/n answers
 			input:   "\n\nn\nn\nn\nn\nn\n",
 			wantApp: "",
 			wantLog: "",
 		},
 		{
-			name:    "laravel_defaults",
-			preset:  "laravel",
+			name:   "laravel_defaults",
+			preset: "laravel",
 			// All empty/defaults
 			input:   "\n\n\n\nn\nn\nn\nn\nn\n",
 			wantApp: "",
@@ -6245,11 +6245,11 @@ func TestScaffoldWithDocker(t *testing.T) {
 // TestRunAutoTuning tests the auto-tuning function
 func TestRunAutoTuning(t *testing.T) {
 	tests := []struct {
-		name           string
-		profile        string
-		threshold      float64
-		mustErr        bool // Must always error (e.g., invalid profile)
-		validProfile   bool // If true, success depends on system memory availability
+		name         string
+		profile      string
+		threshold    float64
+		mustErr      bool // Must always error (e.g., invalid profile)
+		validProfile bool // If true, success depends on system memory availability
 	}{
 		// Valid profiles: may succeed or fail depending on system memory
 		{"dev_profile", "dev", 0, false, true},
@@ -7809,7 +7809,7 @@ func TestStartMetricsServerDirect(t *testing.T) {
 
 	cfg := &config.Config{
 		Global: config.GlobalConfig{
-			MetricsPort: 0, // Will use default
+			MetricsPort: 0,  // Will use default
 			MetricsPath: "", // Will use default
 		},
 	}
@@ -7831,10 +7831,10 @@ func TestStartAPIServerDirect(t *testing.T) {
 
 	cfg := &config.Config{
 		Global: config.GlobalConfig{
-			APIPort:          0, // Will use default
-			APISocket:        "", // No socket
-			APIAuth:          "",
-			AuditEnabled:     false,
+			APIPort:           0,  // Will use default
+			APISocket:         "", // No socket
+			APIAuth:           "",
+			AuditEnabled:      false,
 			APIMaxRequestBody: 0,
 		},
 		Processes: map[string]*config.Process{},
@@ -8449,7 +8449,7 @@ func TestStartMetricsServerWithDefaults(t *testing.T) {
 
 	cfg := &config.Config{
 		Global: config.GlobalConfig{
-			MetricsPort: 0, // 0 triggers default port
+			MetricsPort: 0,  // 0 triggers default port
 			MetricsPath: "", // empty triggers default path
 		},
 	}

@@ -41,7 +41,7 @@ func TestManager_GracefulShutdown(t *testing.T) {
 		Processes: map[string]*config.Process{
 			"test-process": {
 				Enabled:      true,
-				InitialState: "running", // CRITICAL: Explicitly set to start the process
+				InitialState: "running",               // CRITICAL: Explicitly set to start the process
 				Command:      []string{"sleep", "30"}, // Long enough to not exit before shutdown
 				Restart:      "never",
 				Scale:        1,
@@ -99,7 +99,7 @@ func TestManager_ShutdownTimeout(t *testing.T) {
 		Processes: map[string]*config.Process{
 			"long-process": {
 				Enabled:      true,
-				InitialState: "running", // CRITICAL: Explicitly set to start the process
+				InitialState: "running",               // CRITICAL: Explicitly set to start the process
 				Command:      []string{"sleep", "60"}, // Long-running process
 				Restart:      "never",
 				Scale:        1,
@@ -172,7 +172,7 @@ func TestManager_PreStopHooks(t *testing.T) {
 		Processes: map[string]*config.Process{
 			"test-process": {
 				Enabled:      true,
-				InitialState: "running", // CRITICAL: Explicitly set to start the process
+				InitialState: "running",               // CRITICAL: Explicitly set to start the process
 				Command:      []string{"sleep", "30"}, // Long enough to not exit before shutdown
 				Restart:      "never",
 				Scale:        1,

@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cboxdk/init/internal/apiclient"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/process"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TestFormatLogLevel tests log level formatting
@@ -1446,7 +1446,7 @@ func TestHandleWizardCommandInputCursor(t *testing.T) {
 			initialCursor:   100, // beyond text length - clamped for string ops
 			key:             "a",
 			expectedCommand: "phpa", // char added at clamped position (end)
-			expectedCursor:  101,   // cursor incremented from original (note: minor bug in impl)
+			expectedCursor:  101,    // cursor incremented from original (note: minor bug in impl)
 		},
 	}
 
@@ -1785,10 +1785,10 @@ func TestFormatLogEntry(t *testing.T) {
 // TestExecuteSystemAction tests system action execution
 func TestExecuteSystemAction(t *testing.T) {
 	tests := []struct {
-		name           string
-		menuIndex      int
-		isRemote       bool
-		expectNilCmd   bool
+		name         string
+		menuIndex    int
+		isRemote     bool
+		expectNilCmd bool
 	}{
 		{
 			name:         "reload config action",
@@ -1995,9 +1995,9 @@ func TestHandleWizardNameInputCursor(t *testing.T) {
 // TestRefreshOneshotData tests oneshot data refresh
 func TestRefreshOneshotData(t *testing.T) {
 	tests := []struct {
-		name        string
-		setupFunc   func(m *Model)
-		expectData  bool
+		name       string
+		setupFunc  func(m *Model)
+		expectData bool
 	}{
 		{
 			name: "remote mode with nil client",
@@ -2270,11 +2270,11 @@ func TestHandleHelpKeys(t *testing.T) {
 // TestHandleProcessDetailKeys tests process detail view key handling
 func TestHandleProcessDetailKeys(t *testing.T) {
 	tests := []struct {
-		name         string
-		detailProc   string
-		key          string
-		expectToast  bool
-		expectCmd    bool
+		name        string
+		detailProc  string
+		key         string
+		expectToast bool
+		expectCmd   bool
 	}{
 		{
 			name:        "l key with no process shows toast",
@@ -2332,25 +2332,25 @@ func TestHandleProcessDetailKeys(t *testing.T) {
 // TestHandleProcessListKeys tests process list view key handling
 func TestHandleProcessListKeys(t *testing.T) {
 	tests := []struct {
-		name        string
-		key         string
-		initialTab  tabType
-		expectTab   tabType
-		handled     bool
+		name       string
+		key        string
+		initialTab tabType
+		expectTab  tabType
+		handled    bool
 	}{
 		{
-			name:        "tab 1 switches to processes",
-			key:         "1",
-			initialTab:  tabScheduled,
-			expectTab:   tabProcesses,
-			handled:     true,
+			name:       "tab 1 switches to processes",
+			key:        "1",
+			initialTab: tabScheduled,
+			expectTab:  tabProcesses,
+			handled:    true,
 		},
 		{
-			name:        "tab 2 switches to scheduled",
-			key:         "2",
-			initialTab:  tabProcesses,
-			expectTab:   tabScheduled,
-			handled:     true,
+			name:       "tab 2 switches to scheduled",
+			key:        "2",
+			initialTab: tabProcesses,
+			expectTab:  tabScheduled,
+			handled:    true,
 		},
 	}
 
@@ -2880,9 +2880,9 @@ func TestHandleKeyPress(t *testing.T) {
 // TestUpdate tests the main Update function
 func TestUpdate(t *testing.T) {
 	tests := []struct {
-		name        string
-		msg         tea.Msg
-		expectView  viewMode
+		name       string
+		msg        tea.Msg
+		expectView viewMode
 	}{
 		{
 			name: "window size message updates dimensions",

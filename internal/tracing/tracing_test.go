@@ -570,4 +570,3 @@ func TestProvider_Shutdown_WithExpiredContext(t *testing.T) {
 	// Shutdown with expired context - may trigger error path
 	_ = provider.Shutdown(ctx)
 }
-

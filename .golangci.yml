@@ -11,6 +11,14 @@ run:
 
 linters:
   default: standard
+  # Added one at a time, per the policy above, after fixing what each surfaced:
+  #   bodyclose  — response bodies that outlive their function
+  #   errorlint  — == and type assertions on errors that fail once wrapped
+  #   misspell   — typos in comments and strings
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
   settings:
     errcheck:
       # Don't flag the universally-safe patterns: writing to an already-open

@@ -330,12 +330,12 @@ func TestManager_NotifyProcessDeath_ScheduleContext(t *testing.T) {
 		},
 		Processes: map[string]*config.Process{
 			"scheduled-process": {
-				Enabled:      true,
-				Type:         "scheduled",
-				Schedule:     "*/5 * * * *",
-				Command:      []string{"echo", "test"},
-				Restart:      "never",
-				Scale:        1,
+				Enabled:  true,
+				Type:     "scheduled",
+				Schedule: "*/5 * * * *",
+				Command:  []string{"echo", "test"},
+				Restart:  "never",
+				Scale:    1,
 			},
 		},
 	}

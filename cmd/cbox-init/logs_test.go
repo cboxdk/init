@@ -8,9 +8,9 @@ import (
 
 func TestParseLogLevelFilter(t *testing.T) {
 	tests := []struct {
-		level    string
-		want     int
-		wantErr  bool
+		level   string
+		want    int
+		wantErr bool
 	}{
 		{level: "all", want: -1},
 		{level: "debug", want: 0},

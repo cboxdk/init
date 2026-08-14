@@ -11,14 +11,14 @@ import (
 
 // Load loads configuration from YAML file and environment variables.
 // Configuration is loaded with the following priority (highest to lowest):
-//   1. Environment variables (CBOX_INIT_* prefix)
-//   2. YAML file values
-//   3. Default values set by SetDefaults()
+//  1. Environment variables (CBOX_INIT_* prefix)
+//  2. YAML file values
+//  3. Default values set by SetDefaults()
 //
 // Configuration file search order:
-//   1. CBOX_INIT_CONFIG environment variable
-//   2. /etc/cbox-init/cbox-init.yaml (system-wide)
-//   3. cbox-init.yaml (current directory)
+//  1. CBOX_INIT_CONFIG environment variable
+//  2. /etc/cbox-init/cbox-init.yaml (system-wide)
+//  3. cbox-init.yaml (current directory)
 //
 // Returns an error if the configuration file cannot be read or parsed.
 func Load() (*Config, error) {

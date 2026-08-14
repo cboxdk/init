@@ -35,6 +35,9 @@ func (c *Client) StreamLogs(ctx context.Context, process string) (<-chan logger.
 	streamClient := *c.client
 	streamClient.Timeout = 0
 
+	// nolint:bodyclose // The body is the stream: it is closed by the reader
+	// goroutine below (defer resp.Body.Close()) and on the non-200 path. The
+	// linter cannot see ownership passing into the goroutine.
 	resp, err := streamClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to log stream: %w", err)

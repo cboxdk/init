@@ -391,7 +391,7 @@ func (l *Logger) LogSystemStart(version string) {
 			ID:   "cbox-init",
 		},
 		Status:  StatusSuccess,
-		Message: "PHPeek PM started",
+		Message: "cbox-init started",
 		Context: map[string]interface{}{
 			"version": version,
 		},
@@ -417,7 +417,7 @@ func (l *Logger) LogSystemShutdown(reason string, graceful bool) {
 			ID:   "cbox-init",
 		},
 		Status:  status,
-		Message: "PHPeek PM shutdown",
+		Message: "cbox-init shutdown",
 		Context: map[string]interface{}{
 			"reason":   reason,
 			"graceful": graceful,

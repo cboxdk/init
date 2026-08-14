@@ -77,6 +77,8 @@ func Dial(socketPath string) (*Client, error) {
 
 	addr, err := net.ResolveUnixAddr("unix", socketPath)
 	if err != nil {
+		// nolint:errorlint // %v on the cause is deliberate: see the comment on
+		// the dial below. Callers test for ErrUnavailable and nothing else.
 		return nil, fmt.Errorf("%w: resolving %q: %v", ErrUnavailable, socketPath, err)
 	}
 
@@ -86,6 +88,8 @@ func Dial(socketPath string) (*Client, error) {
 		// agent to talk to — and the kernel is not consistent about which errno
 		// a missing socket produces. Wrap rather than classify, so the cause is
 		// still visible in a log while callers only have to test for one thing.
+		// nolint:errorlint // %v, not %w: wrapping the cause too would make it
+		// matchable, and the whole point is that callers test for one thing.
 		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 
@@ -227,6 +231,7 @@ func (c *Client) bound(ctx context.Context) (done func()) {
 // connection is closed and every subsequent call reports the same thing.
 func (c *Client) fail(cause error) error {
 	if c.broken == nil {
+		// nolint:errorlint // Same reasoning as ErrUnavailable above.
 		c.broken = fmt.Errorf("%w: %v", ErrControlLost, cause)
 		_ = c.conn.Close()
 	}

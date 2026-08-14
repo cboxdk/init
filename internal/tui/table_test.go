@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/cboxdk/init/internal/process"
+	"github.com/charmbracelet/bubbles/table"
 )
 
 // TestDefaultTableHeight tests table height calculation
@@ -610,9 +610,9 @@ func TestFormatLastRun(t *testing.T) {
 // TestRenderScheduledTable tests scheduled table rendering
 func TestRenderScheduledTable(t *testing.T) {
 	tests := []struct {
-		name           string
-		scheduledData  int
-		expectNoJobs   bool
+		name          string
+		scheduledData int
+		expectNoJobs  bool
 	}{
 		{"empty table", 0, true},
 		{"with data", 3, false},
@@ -931,12 +931,12 @@ func TestUpdateScheduledTable(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name           string
-		processes      []process.ProcessInfo
-		expectedCount  int
-		expectedNames  []string
-		initialIndex   int
-		expectedIndex  int
+		name          string
+		processes     []process.ProcessInfo
+		expectedCount int
+		expectedNames []string
+		initialIndex  int
+		expectedIndex int
 	}{
 		{
 			name:          "empty processes",
@@ -1227,4 +1227,3 @@ func TestUpdateProcessTableStateDisplay(t *testing.T) {
 		})
 	}
 }
-

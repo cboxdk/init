@@ -1,4 +1,5 @@
-.PHONY: build build-all clean test test-all test-integration bench coverage lint deps install dev help
+.PHONY: build build-all clean test test-all test-integration bench coverage lint deps install dev help \
+	check fmt fmt-check vet vulncheck sbom sbom-check license-check
 
 # Build variables
 BINARY_NAME=cbox-init
@@ -81,6 +82,49 @@ coverage:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Coverage report: coverage.html"
+
+# The full gate, matching CI. Run this before pushing.
+check: fmt-check vet lint test vulncheck sbom-check license-check
+	@echo "✅ All checks passed"
+
+fmt:
+	@echo "🎨 Formatting..."
+	gofmt -w .
+
+fmt-check:
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ Not gofmt-clean:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	@echo "✅ gofmt clean"
+
+vet:
+	@echo "🔍 Vetting..."
+	go vet ./...
+
+# Known-vulnerable dependencies, and the standard library the binary is built
+# against. Reports against the toolchain in use, so keep it in step with CI.
+vulncheck:
+	@echo "🛡️  Scanning for vulnerabilities..."
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+# Deterministic CycloneDX 1.5 SBOM: no serial number, no timestamp, and
+# normalised by tools/sbomnorm, so it only changes when dependencies do.
+sbom:
+	@echo "📦 Generating SBOM..."
+	go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0 \
+		mod -json -licenses -assert-licenses -noserial -notimestamp \
+		-output-version 1.5 -output sbom.json .
+	go run ./tools/sbomnorm sbom.json
+
+sbom-check: sbom
+	git diff --exit-code sbom.json
+	@echo "✅ SBOM current"
+
+license-check:
+	@go run ./tools/licensecheck
 
 # Lint (matches CI). Requires golangci-lint (https://golangci-lint.run).
 lint:

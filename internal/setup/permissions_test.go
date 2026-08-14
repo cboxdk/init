@@ -500,12 +500,12 @@ func TestPermissionManager_ChownRecursive_WithError(t *testing.T) {
 
 func TestReadPuidPgidEnv(t *testing.T) {
 	tests := []struct {
-		name     string
-		puid     string
-		pgid     string
-		wantUID  int
-		wantGID  int
-		wantOk   bool
+		name    string
+		puid    string
+		pgid    string
+		wantUID int
+		wantGID int
+		wantOk  bool
 	}{
 		{name: "both unset", puid: "", pgid: "", wantOk: false},
 		{name: "only PUID set", puid: "33", pgid: "", wantOk: false},

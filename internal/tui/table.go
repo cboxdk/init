@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cboxdk/init/internal/process"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/cboxdk/init/internal/process"
 )
 
 type processDisplayRow struct {
