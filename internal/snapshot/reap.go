@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"errors"
 	"syscall"
 	"time"
 )
@@ -71,7 +72,7 @@ func DrainCheckpointed(opts DrainOptions) []int {
 
 		// ECHILD means there is nothing left to wait for at all, which is a
 		// definitive answer rather than a reason to keep polling.
-		if err == syscall.ECHILD {
+		if errors.Is(err, syscall.ECHILD) {
 			break
 		}
 

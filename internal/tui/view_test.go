@@ -37,8 +37,8 @@ func TestView_ProcessList(t *testing.T) {
 	result := m.View()
 
 	// Should contain header
-	if !strings.Contains(result, "PHPeek PM") {
-		t.Error("expected process list to contain PHPeek PM header")
+	if !strings.Contains(result, "cbox-init") {
+		t.Error("expected process list to contain the cbox-init header")
 	}
 
 	// Should contain tab bar

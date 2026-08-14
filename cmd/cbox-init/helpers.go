@@ -152,22 +152,22 @@ func FormatAutotuneOutput(profile string, profileSource string, threshold float6
 
 // ProcessConfigGlobal extracts global settings for process management
 type ProcessConfigGlobal struct {
-	LogLevel         string
-	LogFormat        string
-	ShutdownTimeout  int
-	MetricsEnabled   bool
-	APIEnabled       bool
-	TracingEnabled   bool
+	LogLevel        string
+	LogFormat       string
+	ShutdownTimeout int
+	MetricsEnabled  bool
+	APIEnabled      bool
+	TracingEnabled  bool
 }
 
 // ExtractGlobalConfig extracts global configuration values
 func ExtractGlobalConfig(cfg *config.Config) ProcessConfigGlobal {
 	return ProcessConfigGlobal{
-		LogLevel:         cfg.Global.LogLevel,
-		LogFormat:        cfg.Global.LogFormat,
-		ShutdownTimeout:  cfg.Global.ShutdownTimeout,
-		MetricsEnabled:   cfg.Global.MetricsEnabledValue(),
-		APIEnabled:       cfg.Global.APIEnabledValue(),
-		TracingEnabled:   cfg.Global.TracingEnabled,
+		LogLevel:        cfg.Global.LogLevel,
+		LogFormat:       cfg.Global.LogFormat,
+		ShutdownTimeout: cfg.Global.ShutdownTimeout,
+		MetricsEnabled:  cfg.Global.MetricsEnabledValue(),
+		APIEnabled:      cfg.Global.APIEnabledValue(),
+		TracingEnabled:  cfg.Global.TracingEnabled,
 	}
 }

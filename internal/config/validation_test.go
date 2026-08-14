@@ -964,12 +964,12 @@ func TestValidateComprehensive_UpperBounds(t *testing.T) {
 			name: "api_max_request_body exceeds max",
 			config: &Config{
 				Global: GlobalConfig{
-					ShutdownTimeout:   30,
-					LogLevel:          "info",
-					LogFormat:         "json",
+					ShutdownTimeout:    30,
+					LogLevel:           "info",
+					LogFormat:          "json",
 					MaxRestartAttempts: 3,
-					RestartBackoff:    5,
-					APIMaxRequestBody: MaxAPIRequestBodySize + 1, // Exceeds max
+					RestartBackoff:     5,
+					APIMaxRequestBody:  MaxAPIRequestBodySize + 1, // Exceeds max
 				},
 				Processes: map[string]*Process{
 					"test": {
@@ -994,8 +994,8 @@ func TestValidateComprehensive_UpperBounds(t *testing.T) {
 					LogFormat:          "json",
 					MaxRestartAttempts: MaxRestartAttemptsLimit, // At max, not over
 					RestartBackoff:     5,
-					APIPort:            9180,     // Non-privileged port
-					MetricsPort:        9181,     // Non-privileged port
+					APIPort:            9180, // Non-privileged port
+					MetricsPort:        9181, // Non-privileged port
 				},
 				Processes: map[string]*Process{
 					"test": {

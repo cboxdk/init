@@ -958,9 +958,9 @@ func TestGenerateConfig_NodeJS(t *testing.T) {
 // TestGenerateConfig_NodeJS_NginxDependsOn tests nginx depends_on for Node.js
 func TestGenerateConfig_NodeJS_NginxDependsOn(t *testing.T) {
 	tests := []struct {
-		name       string
-		preset     Preset
-		dependsOn  string
+		name      string
+		preset    Preset
+		dependsOn string
 	}{
 		{"nextjs", PresetNextJS, "nextjs"},
 		{"nuxt", PresetNuxt, "nuxt"},

@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cboxdk/init/internal/apiclient"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/process"
+	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // viewMode represents the current TUI view
@@ -71,9 +71,9 @@ const (
 
 // Model is the main Bubbletea model for the TUI
 type Model struct {
-	manager      *process.Manager // For embedded mode
+	manager      *process.Manager  // For embedded mode
 	client       *apiclient.Client // For remote mode
-	isRemote     bool             // true if using API client
+	isRemote     bool              // true if using API client
 	currentView  viewMode
 	activeTab    tabType // k9s-style tab selection
 	processTable table.Model

@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -183,7 +184,8 @@ func (e *ProcessExecutor) handleExecutionResult(ctx context.Context, processName
 // handleExecutionError handles different error types from command execution.
 func (e *ProcessExecutor) handleExecutionError(ctx context.Context, processName string, cfg ProcessConfig, logWriter *logger.ProcessWriter, err error, duration time.Duration) (int, error) {
 	// Check for exit error with code
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
 		exitCode := 1
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 			exitCode = status.ExitStatus()

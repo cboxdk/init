@@ -215,11 +215,11 @@ func TestCheckExistingFiles(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		dir        string
-		files      []string
-		wantCount  int
-		wantFiles  []string
+		name      string
+		dir       string
+		files     []string
+		wantCount int
+		wantFiles []string
 	}{
 		{
 			name:      "find existing config",

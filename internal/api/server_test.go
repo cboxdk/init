@@ -804,11 +804,11 @@ func TestServer_HandleAddProcess(t *testing.T) {
 // TestServer_HandleUpdateProcess tests updating an existing process
 func TestServer_HandleUpdateProcess(t *testing.T) {
 	tests := []struct {
-		name            string
-		body            string
-		processName     string
-		expectedStatus  int
-		tolerateTiming  bool // If true, accept 500 with "already finished" on timing-sensitive platforms
+		name           string
+		body           string
+		processName    string
+		expectedStatus int
+		tolerateTiming bool // If true, accept 500 with "already finished" on timing-sensitive platforms
 	}{
 		{
 			name:           "invalid JSON",
@@ -823,11 +823,11 @@ func TestServer_HandleUpdateProcess(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:            "valid update",
-			body:            `{"process": {"enabled": true, "command": ["sleep", "600"], "restart": "never", "scale": 2, "initial_state": "stopped"}}`,
-			processName:     "test-process",
-			expectedStatus:  http.StatusOK, // Success expected if manager supports it
-			tolerateTiming:  true,          // On macOS, processes may finish before stop signal
+			name:           "valid update",
+			body:           `{"process": {"enabled": true, "command": ["sleep", "600"], "restart": "never", "scale": 2, "initial_state": "stopped"}}`,
+			processName:    "test-process",
+			expectedStatus: http.StatusOK, // Success expected if manager supports it
+			tolerateTiming: true,          // On macOS, processes may finish before stop signal
 		},
 		{
 			name:           "non-existent process",

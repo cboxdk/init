@@ -577,4 +577,3 @@ func TestManager_ProcessLifecycle_StartStopRestart(t *testing.T) {
 	defer cancel()
 	_ = manager.Shutdown(shutdownCtx)
 }
-

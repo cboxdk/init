@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cboxdk/init/internal/process"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/cboxdk/init/internal/process"
 )
 
 // Run starts the TUI in full-screen mode

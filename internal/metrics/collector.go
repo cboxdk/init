@@ -201,7 +201,7 @@ var (
 	BuildInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cbox_init_build_info",
-			Help: "PHPeek PM build information",
+			Help: "cbox-init build information",
 		},
 		[]string{"version", "go_version"},
 	)

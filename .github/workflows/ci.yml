@@ -35,6 +35,16 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Verify gofmt
+        if: matrix.os == 'ubuntu-latest'
+        run: make fmt-check
+
+      - name: Verify go.mod is tidy
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
       - name: Run tests
         run: make test
 
@@ -48,6 +58,37 @@ jobs:
           files: ./coverage.out
           flags: unittests
           name: codecov-${{ matrix.os }}
+
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      # Pinned to the patch, not the minor: `1.26` resolved to 1.26.5 while the
+      # advisories below were fixed in 1.26.6, so the scan would have passed on
+      # a toolchain that still shipped them. Bump this when govulncheck fails
+      # on the standard library -- that is the gate doing its job.
+      # Known-vulnerable dependencies, and the standard library this is built
+      # against. Nothing in CI reported either before.
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      # The SBOM is deterministic, so regenerating it is a no-op unless the
+      # dependency set actually changed.
+      - name: Check SBOM is current
+        run: make sbom-check
+
+      - name: Check dependency licenses
+        run: make license-check
 
   lint:
     name: Lint

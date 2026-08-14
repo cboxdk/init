@@ -49,7 +49,7 @@ func (m Model) renderProcessList() string {
 	var b strings.Builder
 
 	// Header with title
-	header := titleStyle.Render("PHPeek PM v1.0.0")
+	header := titleStyle.Render("cbox-init")
 	b.WriteString(header + "\n")
 
 	// Tab bar
@@ -271,7 +271,7 @@ func (m Model) renderHelp() string {
 	var b strings.Builder
 
 	help := `
-PHPeek PM - Keyboard Shortcuts
+cbox-init - Keyboard Shortcuts
 
 Tab Navigation:
   1             Processes tab (longrun services)

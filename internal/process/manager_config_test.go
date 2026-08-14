@@ -1376,12 +1376,12 @@ func TestManager_Start_WithScheduledProcessMaxConcurrent(t *testing.T) {
 		},
 		Processes: map[string]*config.Process{
 			"scheduled-concurrent": {
-				Enabled:                true,
-				Command:                []string{"echo", "concurrent test"},
-				Restart:                "never",
-				Scale:                  1,
-				Schedule:               "*/5 * * * *",
-				ScheduleMaxConcurrent:  2,
+				Enabled:               true,
+				Command:               []string{"echo", "concurrent test"},
+				Restart:               "never",
+				Scale:                 1,
+				Schedule:              "*/5 * * * *",
+				ScheduleMaxConcurrent: 2,
 			},
 		},
 	}

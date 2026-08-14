@@ -17,10 +17,10 @@ type LogEntry struct {
 
 // LogBuffer is a thread-safe ring buffer for storing recent log entries
 type LogBuffer struct {
-	mu      sync.RWMutex
-	entries []LogEntry
-	size    int
-	index   int
+	mu          sync.RWMutex
+	entries     []LogEntry
+	size        int
+	index       int
 	full        bool
 	broadcaster *LogBroadcaster // optional, for real-time subscribers
 }

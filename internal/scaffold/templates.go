@@ -43,11 +43,11 @@ type Config struct {
 	QueueConnection string
 
 	// Node.js specific
-	NodeInstances  int    // Number of Node.js app instances
-	PortBase       int    // Base port for Node.js instances
-	MaxMemoryMB    int    // Memory limit for Node.js processes
-	NodeCommand    string // Node.js start command
-	EnableWorkers  bool   // Enable background workers (for Node.js)
+	NodeInstances int    // Number of Node.js app instances
+	PortBase      int    // Base port for Node.js instances
+	MaxMemoryMB   int    // Memory limit for Node.js processes
+	NodeCommand   string // Node.js start command
+	EnableWorkers bool   // Enable background workers (for Node.js)
 
 	// Ports
 	APIPort     int

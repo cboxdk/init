@@ -165,16 +165,16 @@ func (c *Config) ValidateComprehensive() (*ValidationResult, error) {
 
 // Upper bound constants for configuration validation
 const (
-	MaxShutdownTimeout         = 3600    // 1 hour max
-	MaxRestartAttemptsLimit    = 100     // Prevent infinite restart loops
-	MaxResourceMetricsInterval = 3600    // 1 hour max
-	MaxResourceMetricsSamples  = 100000  // Memory constraint
-	MaxScheduleHistorySize     = 10000   // Per-job history limit
-	MaxOneshotHistoryEntries   = 100000  // Oneshot history limit
-	MaxProcessScaleLimit        = 1000                   // Per-process instance limit
-	MaxAPIRequestBodySize       = 100 * 1024 * 1024      // 100MB max
-	MinZombieReapInterval       = 100 * time.Millisecond // 100ms minimum (CPU efficiency)
-	MaxZombieReapInterval       = 60 * time.Second       // 60 seconds max (timely cleanup)
+	MaxShutdownTimeout         = 3600                   // 1 hour max
+	MaxRestartAttemptsLimit    = 100                    // Prevent infinite restart loops
+	MaxResourceMetricsInterval = 3600                   // 1 hour max
+	MaxResourceMetricsSamples  = 100000                 // Memory constraint
+	MaxScheduleHistorySize     = 10000                  // Per-job history limit
+	MaxOneshotHistoryEntries   = 100000                 // Oneshot history limit
+	MaxProcessScaleLimit       = 1000                   // Per-process instance limit
+	MaxAPIRequestBodySize      = 100 * 1024 * 1024      // 100MB max
+	MinZombieReapInterval      = 100 * time.Millisecond // 100ms minimum (CPU efficiency)
+	MaxZombieReapInterval      = 60 * time.Second       // 60 seconds max (timely cleanup)
 )
 
 // validateGlobalSettings validates global configuration fields
@@ -605,7 +605,7 @@ func (c *Config) lintProcessSecurity(name string, proc *Process, result *Validat
 func (c *Config) validateSystem(result *ValidationResult) {
 	// Check OS compatibility
 	if runtime.GOOS == "windows" {
-		result.AddWarning("system.os", "PHPeek PM primarily designed for Linux containers", "Windows support is experimental")
+		result.AddWarning("system.os", "cbox-init is designed for Linux containers", "Windows support is experimental")
 	}
 
 	// Check for PID 1 capability indicators

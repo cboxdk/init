@@ -128,10 +128,10 @@ func TestSupervisor_ReadinessRequiresSuccessfulProbe(t *testing.T) {
 	auditLogger := audit.NewLogger(logger, false)
 
 	cfg := &config.Process{
-		Enabled:     true,
-		Command:     []string{"sleep", "60"},
-		Restart:     "never",
-		Scale:       1,
+		Enabled: true,
+		Command: []string{"sleep", "60"},
+		Restart: "never",
+		Scale:   1,
 		HealthCheck: &config.HealthCheck{
 			Type:    "tcp",
 			Address: "127.0.0.1:65535",

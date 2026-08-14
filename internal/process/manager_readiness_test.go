@@ -30,9 +30,9 @@ func createReadinessTestManager(t *testing.T) (*Manager, func()) {
 			MaxRestartAttempts: 3,
 			RestartBackoff:     1,
 			Readiness: &config.ReadinessConfig{
-				Enabled:  true,
-				Path: tmpPath,
-				Mode:     "all_running",
+				Enabled: true,
+				Path:    tmpPath,
+				Mode:    "all_running",
 			},
 		},
 		Processes: map[string]*config.Process{
@@ -323,9 +323,9 @@ func TestManager_ReadinessStateMapping(t *testing.T) {
 			MaxRestartAttempts: 0, // No restarts to allow failure state
 			RestartBackoff:     1,
 			Readiness: &config.ReadinessConfig{
-				Enabled:  true,
-				Path: tmpPath,
-				Mode:     "all_running",
+				Enabled: true,
+				Path:    tmpPath,
+				Mode:    "all_running",
 			},
 		},
 		Processes: map[string]*config.Process{

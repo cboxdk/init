@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The supply-chain gate the sibling packages run: `govulncheck`, a deterministic
+  CycloneDX 1.5 SBOM (`tools/sbomnorm`) and a dependency license check
+  (`tools/licensecheck`), plus gofmt and `go mod tidy` drift checks. CI had none
+  of these, so nothing would have reported a vulnerable dependency or a
+  non-permissive licence. 63 dependencies, all permissive.
+- `make check` runs the whole gate locally, identical to CI.
+- `bodyclose`, `errorlint` and `misspell`, added one at a time per this repo's
+  own linter policy after fixing everything they surfaced.
+
+### Fixed
+
+- 26 files were not gofmt-clean; CI had no formatting gate to notice.
+- `handleExecutionError` used a type assertion on the error, and two comparisons
+  used `==`/`!=`, all of which stop matching once an error is wrapped.
+- Stale PHPeek branding in the TUI header and keyboard-shortcut screen, the
+  audit log's start and shutdown records, the build-info metric's help text and
+  a configuration warning.
+
+
 ## [2.5.1] - 2026-08-11
 
 ### Fixed

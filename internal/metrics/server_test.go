@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -163,7 +164,7 @@ func TestServer_StartStop(t *testing.T) {
 	// Verify server stopped
 	select {
 	case err := <-errCh:
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			t.Errorf("Server returned unexpected error: %v", err)
 		}
 	case <-time.After(2 * time.Second):

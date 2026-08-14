@@ -473,10 +473,10 @@ func TestDetectContainerResources_FallbackToHost(t *testing.T) {
 // TestParseCgroupV2Memory tests the cgroup v2 memory parsing function
 func TestParseCgroupV2Memory(t *testing.T) {
 	tests := []struct {
-		name         string
-		content      string
-		expectBytes  int64
-		expectMB     int
+		name        string
+		content     string
+		expectBytes int64
+		expectMB    int
 	}{
 		{
 			name:        "valid 2GB limit",
@@ -646,10 +646,10 @@ func TestParseCgroupV2CPU(t *testing.T) {
 // TestParseCgroupV1Memory tests the cgroup v1 memory parsing function
 func TestParseCgroupV1Memory(t *testing.T) {
 	tests := []struct {
-		name         string
-		content      string
-		expectBytes  int64
-		expectMB     int
+		name        string
+		content     string
+		expectBytes int64
+		expectMB    int
 	}{
 		{
 			name:        "valid 2GB limit",
@@ -678,7 +678,7 @@ func TestParseCgroupV1Memory(t *testing.T) {
 		{
 			name:        "unlimited 1PB threshold",
 			content:     "1125899906842624\n", // 1PB - exactly at threshold
-			expectBytes: 0,                   // Should be ignored
+			expectBytes: 0,                    // Should be ignored
 			expectMB:    0,
 		},
 		{
