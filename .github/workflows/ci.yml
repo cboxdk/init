@@ -70,9 +70,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.6'
           cache: true
 
+      # Pinned to the patch, not the minor: `1.26` resolved to 1.26.5 while the
+      # advisories below were fixed in 1.26.6, so the scan would have passed on
+      # a toolchain that still shipped them. Bump this when govulncheck fails
+      # on the standard library -- that is the gate doing its job.
       # Known-vulnerable dependencies, and the standard library this is built
       # against. Nothing in CI reported either before.
       - name: Run govulncheck

@@ -79,8 +79,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var problems []string
-	excepted := 0
+	var problems, excepted []string
 
 	for _, component := range doc.Components {
 		ids := licenseIDs(component.Licenses)
@@ -95,7 +94,7 @@ func main() {
 		}
 
 		if allowed, ok := exceptions[component.Name]; ok && slices.Contains(ids, allowed.license) {
-			excepted++
+			excepted = append(excepted, fmt.Sprintf("%s (%s): %s", component.Name, allowed.license, allowed.reason))
 			continue
 		}
 
@@ -113,8 +112,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	for _, note := range excepted {
+		fmt.Printf("licensecheck: accepted under a documented exception: %s\n", note)
+	}
+
 	fmt.Printf("licensecheck: %d dependencies, all permissive (%d under a documented exception)\n",
-		len(doc.Components), excepted)
+		len(doc.Components), len(excepted))
 }
 
 // licenseIDs flattens the CycloneDX license shapes into plain SPDX identifiers.
