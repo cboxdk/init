@@ -80,10 +80,13 @@ func UpdatePrometheusMetrics(processName, instanceID string, sample *ResourceSam
 }
 
 // procHandle caches a gopsutil process handle and the PID it was opened for, so
-// a restarted instance (new PID under the same key) gets a fresh handle.
+// a restarted instance (new PID under the same key) gets a fresh handle. A
+// gopsutil Process caches internal state and is NOT safe for concurrent use, so
+// mu serializes samples taken through this handle.
 type procHandle struct {
 	pid  int
 	proc *process.Process
+	mu   sync.Mutex
 }
 
 // ResourceCollector manages resource metric collection
@@ -128,10 +131,14 @@ func (rc *ResourceCollector) Collect(pid int, processName, instanceID string) (*
 		h = &procHandle{pid: pid, proc: proc}
 		rc.handles[key] = h
 	}
-	proc := h.proc
 	rc.mu.Unlock()
 
-	return sampleFromProc(proc)
+	// Serialize reads through this handle: gopsutil's Process is not safe for
+	// concurrent use, and the handle is now shared/cached across ticks. Held
+	// outside rc.mu so sampling one instance does not block collection of others.
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return sampleFromProc(h.proc)
 }
 
 // GetHistory returns time series for a process instance

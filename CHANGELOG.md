@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Fixed a data race in resource sampling introduced by the CPU% handle
+  cache.** Caching the gopsutil process handle (PERF-3) meant a handle could be
+  read by two goroutines at once, and gopsutil's `Process` caches internal state
+  and is not concurrency-safe. Each cached handle now carries a mutex that
+  serializes samples taken through it (held outside the collector lock so one
+  instance's sampling does not block others). Caught by the `-race` gate.
 ### Changed
 
 - **The API client is now SDK-quality.** `internal/apiclient` hand-rolled the
