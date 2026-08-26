@@ -288,7 +288,7 @@ Processes Tab (1):
   e             Edit process configuration
   d             Delete process (confirmation)
   r             Restart process (with confirmation)
-  s             Start process (with confirmation)
+  s             Start process
   x             Stop process (with confirmation)
   +/=           Scale process up (opens dialog)
   -/_           Scale process down (opens dialog)

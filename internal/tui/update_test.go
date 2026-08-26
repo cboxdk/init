@@ -2270,11 +2270,12 @@ func TestHandleHelpKeys(t *testing.T) {
 // TestHandleProcessDetailKeys tests process detail view key handling
 func TestHandleProcessDetailKeys(t *testing.T) {
 	tests := []struct {
-		name        string
-		detailProc  string
-		key         string
-		expectToast bool
-		expectCmd   bool
+		name          string
+		detailProc    string
+		key           string
+		expectToast   bool
+		expectCmd     bool
+		expectConfirm bool
 	}{
 		{
 			name:        "l key with no process shows toast",
@@ -2291,18 +2292,19 @@ func TestHandleProcessDetailKeys(t *testing.T) {
 			expectCmd:   false,
 		},
 		{
-			name:        "s key with no process shows toast",
+			name:        "x key with no process shows toast",
 			detailProc:  "",
-			key:         "s",
+			key:         "x",
 			expectToast: true,
 			expectCmd:   false,
 		},
 		{
-			name:        "r key with process returns command",
-			detailProc:  "php-fpm",
-			key:         "r",
-			expectToast: false,
-			expectCmd:   true,
+			name:          "r key with process opens confirmation",
+			detailProc:    "php-fpm",
+			key:           "r",
+			expectToast:   false,
+			expectCmd:     false, // restart now confirms first, not fire-and-forget
+			expectConfirm: true,
 		},
 	}
 
@@ -2324,6 +2326,10 @@ func TestHandleProcessDetailKeys(t *testing.T) {
 
 			if tt.expectCmd && cmd == nil {
 				t.Error("Expected non-nil command")
+			}
+
+			if tt.expectConfirm && !resultModel.showConfirmation {
+				t.Error("Expected a confirmation dialog to be shown")
 			}
 		})
 	}
@@ -3829,14 +3835,16 @@ func TestHandleProcessDetailKeysAdditional(t *testing.T) {
 			expectToast: true,
 		},
 		{
-			name:        "s stops process",
-			key:         "s",
+			// Stop is `x` in the detail view (it used to be `s`, which is Start
+			// in the list view). `x` opens a confirmation dialog, so no toast.
+			name:        "x stops process",
+			key:         "x",
 			detailProc:  "php-fpm",
 			expectToast: false,
 		},
 		{
-			name:        "s with no process shows toast",
-			key:         "s",
+			name:        "x with no process shows toast",
+			key:         "x",
 			detailProc:  "",
 			expectToast: true,
 		},
