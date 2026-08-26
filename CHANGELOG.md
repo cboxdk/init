@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **More secret env vars are redacted.** The abbreviated forms (`DB_PASS`,
+  `MYSQL_PWD`), separator-less compounds (`SECRETKEY`) and registry credentials
+  (`DOCKER_AUTH_CONFIG`) were still returned in cleartext. The short forms
+  require a boundary on both sides, so `COMPASS_DIR` and `PASSENGER_ROOT` stay
+  readable.
+- **A restarted process is no longer treated as ready from its previous run.**
+  Readiness was only re-armed on an explicit start, so a dependency that became
+  ready, crashed, and was auto-restarted still looked ready — a dependent started
+  afterwards (by a reload or scale-up) launched against a process that was only
+  just booting. Automatic restarts now re-arm it too.
+- **A readiness signal from a superseded run is ignored.** A waiter that
+  sampled the signals just as the process restarted could observe the retired
+  run's "ready" and release its dependents against the new, unproven one.
+  Signals now carry a generation, and a waiter ignores any that is not from the
+  current run.
+- **The reload rollback counts processes it could not stop.** Stop failures were
+  logged but not counted, so a rollback could report success while a process from
+  the failed configuration was still running.
+
 ### Changed
 
 - **BREAKING: REST log responses now use the same field names as the SSE

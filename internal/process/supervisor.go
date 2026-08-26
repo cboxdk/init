@@ -148,6 +148,7 @@ type Supervisor struct {
 	readyFailedOnce    sync.Once      // Ensures readyFailedCh is closed exactly once per run
 	readyFailReason    string         // Why readiness became impossible
 	readinessGenCh     chan struct{}  // Closed when the signals above are re-armed for a new run
+	readinessGen       uint64         // Incremented on each re-arm; identifies which run a signal belongs to
 	isReady            bool           // Track readiness state
 	healthKnown        bool           // Whether at least one health check result has been observed
 	healthHealthy      bool           // Liveness health after thresholds/hysteresis
@@ -352,6 +353,7 @@ func (s *Supervisor) resetReadiness() {
 	// tell the waiter the service is ready when nothing has succeeded.
 	close(s.readinessGenCh)
 	s.readinessGenCh = make(chan struct{})
+	s.readinessGen++
 	s.readinessCh = make(chan struct{})
 	s.readinessOnce = sync.Once{}
 	s.isReady = false
@@ -362,10 +364,17 @@ func (s *Supervisor) resetReadiness() {
 
 // readinessChannels returns the current readiness signals under the lock, so a
 // waiter cannot race a concurrent re-arm in Start.
-func (s *Supervisor) readinessChannels() (ready, failed, rearmed <-chan struct{}) {
+func (s *Supervisor) readinessChannels() (ready, failed, rearmed <-chan struct{}, gen uint64) {
 	s.readinessMu.RLock()
 	defer s.readinessMu.RUnlock()
-	return s.readinessCh, s.readyFailedCh, s.readinessGenCh
+	return s.readinessCh, s.readyFailedCh, s.readinessGenCh, s.readinessGen
+}
+
+// readinessGeneration returns the current run's readiness generation.
+func (s *Supervisor) readinessGeneration() uint64 {
+	s.readinessMu.RLock()
+	defer s.readinessMu.RUnlock()
+	return s.readinessGen
 }
 
 // markReadinessImpossible records that this process can never become ready, so
@@ -437,12 +446,22 @@ func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration
 	defer timer.Stop()
 
 	for {
-		readyCh, failedCh, rearmedCh := s.readinessChannels()
+		readyCh, failedCh, rearmedCh, gen := s.readinessChannels()
 		select {
 		case <-readyCh:
+			// Ignore a signal that belongs to a run which has since been
+			// replaced: a channel snapshotted just before a re-arm may already be
+			// closed, and reporting that as ready would release dependents
+			// against a process that is starting over.
+			if s.readinessGeneration() != gen {
+				continue
+			}
 			s.logger.Info("Service ready")
 			return nil
 		case <-failedCh:
+			if s.readinessGeneration() != gen {
+				continue
+			}
 			return fmt.Errorf("service can never become ready: %s", s.readinessFailure())
 		case <-rearmedCh:
 			// The supervisor started a new run while we were waiting; re-read the
@@ -1827,6 +1846,12 @@ func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCou
 
 	// Record restart metric
 	metrics.RecordProcessRestart(s.name, restartReason)
+
+	// The replacement has to prove itself again: without re-arming, a dependency
+	// that became ready once and then crashed would still look ready, so a
+	// dependent started later (by a reload, or a scale-up) would launch against a
+	// process that is only just booting.
+	s.resetReadiness()
 
 	// Wait for backoff period with context respect
 	select {
