@@ -13,7 +13,7 @@ import (
 func (m *Manager) ScaleProcess(ctx context.Context, name string, desiredScale int) error {
 	// Input validation
 	if name == "" {
-		return fmt.Errorf("process name cannot be empty")
+		return fmt.Errorf("process name cannot be empty: %w", ErrInvalidArgument)
 	}
 	if desiredScale > m.maxProcessScale {
 		return fmt.Errorf("desired scale %d exceeds maximum (%d)", desiredScale, m.maxProcessScale)
@@ -25,7 +25,7 @@ func (m *Manager) ScaleProcess(ctx context.Context, name string, desiredScale in
 	m.mu.RUnlock()
 
 	if !ok || !supOk {
-		return fmt.Errorf("process %s not found", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
 	// Check if scale exceeds max_scale limit
@@ -163,7 +163,7 @@ func (m *Manager) AdjustScale(ctx context.Context, name string, delta int) error
 	sup, supOk := m.processes[name]
 	m.mu.RUnlock()
 	if !ok || !supOk {
-		return fmt.Errorf("process %s not found", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
 	currentScale := len(sup.GetInstances())

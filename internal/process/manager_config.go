@@ -21,17 +21,17 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 
 	// Validate process name
 	if name == "" {
-		return fmt.Errorf("process name cannot be empty")
+		return fmt.Errorf("process name cannot be empty: %w", ErrInvalidArgument)
 	}
 
 	// Check if process already exists
 	if _, exists := m.config.Processes[name]; exists {
-		return fmt.Errorf("process %s already exists", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessExists)
 	}
 
 	// Basic validation
 	if len(procCfg.Command) == 0 {
-		return fmt.Errorf("process command cannot be empty")
+		return fmt.Errorf("process command cannot be empty: %w", ErrInvalidArgument)
 	}
 	if procCfg.Scale < 1 {
 		return fmt.Errorf("process scale must be at least 1")
@@ -71,7 +71,7 @@ func (m *Manager) RemoveProcess(ctx context.Context, name string) error {
 
 	// Check if process exists
 	if _, exists := m.config.Processes[name]; !exists {
-		return fmt.Errorf("process %s does not exist", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
 	// Stop the process if running
@@ -112,12 +112,12 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 	// Check if process exists
 	oldCfg, exists := m.config.Processes[name]
 	if !exists {
-		return fmt.Errorf("process %s does not exist", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
 	// Basic validation
 	if len(procCfg.Command) == 0 {
-		return fmt.Errorf("process command cannot be empty")
+		return fmt.Errorf("process command cannot be empty: %w", ErrInvalidArgument)
 	}
 	if procCfg.Scale < 1 {
 		return fmt.Errorf("process scale must be at least 1")
@@ -378,7 +378,7 @@ func (m *Manager) GetProcessConfig(name string) (*config.Process, error) {
 
 	proc, exists := m.config.Processes[name]
 	if !exists {
-		return nil, fmt.Errorf("process %s not found", name)
+		return nil, fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
 	procCopy := *proc

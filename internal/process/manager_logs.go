@@ -25,7 +25,7 @@ func (m *Manager) GetLogs(processName string, limit int) ([]logger.LogEntry, err
 		return m.scheduleExecutor.GetLogs(processName, limit), nil
 	}
 
-	return nil, fmt.Errorf("process not found: %s", processName)
+	return nil, fmt.Errorf("process %q: %w", processName, ErrProcessNotFound)
 }
 
 // SubscribeLogs registers a real-time log subscriber.

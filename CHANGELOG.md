@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **API status codes are now correct and typed, not guessed from the message.**
+  `httpStatusFromError` matched on message substrings, so rewording a manager
+  error silently flipped a 404 to a 500, an unrelated `exec: … executable file
+  not found in $PATH` was misreported as 404, and a wrong-state operation (e.g.
+  starting an already-running process) returned 500 instead of a 4xx. The manager
+  and scheduler now return typed sentinel errors (`ErrProcessNotFound`,
+  `ErrProcessExists`, `ErrInvalidState`, `ErrInvalidArgument`, `ErrJobNotFound`),
+  and the API maps them with `errors.Is` — not-found → 404, exists/wrong-state →
+  409, bad-input → 400.
 - **Shutdown no longer hangs behind a running scheduled job.** The manager
   waited unboundedly for the scheduler to stop while holding its write lock, and
   cron jobs ran under `context.Background()` so shutdown couldn't cancel them — a

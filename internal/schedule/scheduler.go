@@ -115,7 +115,7 @@ func (s *Scheduler) RemoveJob(name string) error {
 
 	job, exists := s.jobs[name]
 	if !exists {
-		return fmt.Errorf("job %q not found", name)
+		return fmt.Errorf("job %q: %w", name, ErrJobNotFound)
 	}
 
 	// Remove from cron
@@ -214,7 +214,7 @@ func (s *Scheduler) PauseJob(name string) error {
 	s.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("job %q not found", name)
+		return fmt.Errorf("job %q: %w", name, ErrJobNotFound)
 	}
 
 	return job.Pause()
@@ -227,7 +227,7 @@ func (s *Scheduler) ResumeJob(name string) error {
 	s.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("job %q not found", name)
+		return fmt.Errorf("job %q: %w", name, ErrJobNotFound)
 	}
 
 	return job.Resume()
@@ -240,7 +240,7 @@ func (s *Scheduler) TriggerJob(ctx context.Context, name string) error {
 	s.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("job %q not found", name)
+		return fmt.Errorf("job %q: %w", name, ErrJobNotFound)
 	}
 
 	return job.Trigger(ctx)
@@ -253,7 +253,7 @@ func (s *Scheduler) TriggerJobSync(ctx context.Context, name string) (int, error
 	s.mu.RUnlock()
 
 	if !exists {
-		return -1, fmt.Errorf("job %q not found", name)
+		return -1, fmt.Errorf("job %q: %w", name, ErrJobNotFound)
 	}
 
 	return job.TriggerSync(ctx)
@@ -272,7 +272,7 @@ func (s *Scheduler) GetJobStatus(name string) (JobStatus, error) {
 	s.mu.RUnlock()
 
 	if !exists {
-		return JobStatus{}, fmt.Errorf("job %q not found", name)
+		return JobStatus{}, fmt.Errorf("job %q: %w", name, ErrJobNotFound)
 	}
 
 	return job.Status(), nil
@@ -304,7 +304,7 @@ func (s *Scheduler) GetJobHistory(name string, limit int) ([]ExecutionEntry, err
 	s.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("job %q not found", name)
+		return nil, fmt.Errorf("job %q: %w", name, ErrJobNotFound)
 	}
 
 	if limit <= 0 {

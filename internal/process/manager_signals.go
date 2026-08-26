@@ -39,7 +39,7 @@ func (m *Manager) ForwardSignal(sig syscall.Signal) {
 // the signal name is unknown or the process is not found.
 func (m *Manager) SignalProcess(name string, signalName string) error {
 	if name == "" {
-		return fmt.Errorf("process name cannot be empty")
+		return fmt.Errorf("process name cannot be empty: %w", ErrInvalidArgument)
 	}
 
 	sig, err := parseSignalStrict(signalName)
@@ -52,7 +52,7 @@ func (m *Manager) SignalProcess(name string, signalName string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-		return fmt.Errorf("process %s not found", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
 	m.logger.Info("Signalling process", "process", name, "signal", sig)
