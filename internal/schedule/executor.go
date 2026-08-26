@@ -15,6 +15,7 @@ import (
 
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/logger"
+	"github.com/cboxdk/init/internal/signals"
 )
 
 // ProcessExecutor executes scheduled process commands directly
@@ -98,9 +99,10 @@ func (e *ProcessExecutor) Execute(ctx context.Context, processName string) (int,
 		logWriter.AddEvent("▶ Process started")
 	}
 
-	// Run the command
+	// Run the command under reaper coordination so the PID-1 wildcard reaper
+	// can't collect it before our Wait() and make a successful job look failed.
 	startTime := time.Now()
-	runErr := cmd.Run()
+	runErr := signals.RunSupervised(cmd)
 	duration := time.Since(startTime)
 
 	if logWriter != nil {
