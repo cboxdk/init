@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Clearer CLI errors when the daemon is not reachable, and a `--url` alias on
+  `tui`.** A control command that could not reach the API printed only a raw
+  `dial tcp … connection refused`. All the client commands now share one error
+  renderer that appends a hint ("The daemon may not be running. Start it with
+  'cbox-init serve', or point --url …") on a connection failure. `tui` also
+  accepts `--url` as an alias for `--remote`, so the endpoint flag is spelled the
+  same everywhere. (DX-8)
+### Fixed
+
 - **The CLI control commands are now actually tested.** The `list`/`restart`/…
   subprocess tests asserted nothing (only `t.Logf`), so any regression in the
   client commands passed green. Added tests that run the CLI against an httptest

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -24,8 +23,7 @@ func runStartProcess(cmd *cobra.Command, args []string) {
 	name := args[0]
 	client := newClient(startURL)
 	if err := client.StartProcess(name); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to start %s: %v\n", name, err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to start %s", name)
 	}
 	fmt.Printf("✓ %s started\n", name)
 }

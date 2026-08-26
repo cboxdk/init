@@ -28,8 +28,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 
 	processes, err := client.ListProcesses()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to get process status: %v\n", err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to get process status")
 	}
 
 	var found bool

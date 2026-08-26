@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -24,8 +23,7 @@ func runStopProcess(cmd *cobra.Command, args []string) {
 	name := args[0]
 	client := newClient(stopURL)
 	if err := client.StopProcess(name); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to stop %s: %v\n", name, err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to stop %s", name)
 	}
 	fmt.Printf("✓ %s stopped\n", name)
 }
