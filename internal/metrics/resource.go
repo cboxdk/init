@@ -189,6 +189,16 @@ func (rc *ResourceCollector) AddSample(processName, instanceID string, sample Re
 	rc.buffers[key].Add(sample)
 }
 
+// ReleaseHandle drops the cached gopsutil handle for an instance without
+// discarding its metrics history. Use it when the process has exited but its
+// samples should remain queryable (a completed oneshot): the handle refers to a
+// dead PID and is pure dead weight, while the buffer is intentional history.
+func (rc *ResourceCollector) ReleaseHandle(processName, instanceID string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	delete(rc.handles, processName+"-"+instanceID)
+}
+
 // RemoveBuffer removes buffer for stopped process
 func (rc *ResourceCollector) RemoveBuffer(processName, instanceID string) {
 	rc.mu.Lock()

@@ -216,34 +216,34 @@ func (c *Client) RestartProcess(name string) error {
 // to a single process's group.
 func (c *Client) SignalProcess(name, signal string) error {
 	return c.do(context.Background(), http.MethodPost,
-		fmt.Sprintf("/api/v1/processes/%s/signal", name),
+		fmt.Sprintf("/api/v1/processes/%s/signal", url.PathEscape(name)),
 		map[string]string{"signal": signal}, nil)
 }
 
 // ScaleProcess scales a process to an absolute count.
 func (c *Client) ScaleProcess(name string, desired int) error {
 	return c.do(context.Background(), http.MethodPost,
-		fmt.Sprintf("/api/v1/processes/%s/scale", name),
+		fmt.Sprintf("/api/v1/processes/%s/scale", url.PathEscape(name)),
 		map[string]int{"desired": desired}, nil)
 }
 
 // ScaleProcessDelta adjusts process scale by delta
 func (c *Client) ScaleProcessDelta(name string, delta int) error {
 	return c.do(context.Background(), http.MethodPost,
-		fmt.Sprintf("/api/v1/processes/%s/scale", name),
+		fmt.Sprintf("/api/v1/processes/%s/scale", url.PathEscape(name)),
 		map[string]int{"delta": delta}, nil)
 }
 
 // processAction performs a process action (start/stop/restart, schedule/*)
 func (c *Client) processAction(name, action string) error {
 	return c.do(context.Background(), http.MethodPost,
-		fmt.Sprintf("/api/v1/processes/%s/%s", name, action), nil, nil)
+		fmt.Sprintf("/api/v1/processes/%s/%s", url.PathEscape(name), action), nil, nil)
 }
 
 // DeleteProcess removes a process via API
 func (c *Client) DeleteProcess(name string) error {
 	return c.do(context.Background(), http.MethodDelete,
-		fmt.Sprintf("/api/v1/processes/%s", name), nil, nil)
+		fmt.Sprintf("/api/v1/processes/%s", url.PathEscape(name)), nil, nil)
 }
 
 // UpdateProcess updates an existing process definition
@@ -252,7 +252,7 @@ func (c *Client) UpdateProcess(name string, proc *config.Process) error {
 		return fmt.Errorf("process configuration is required")
 	}
 	return c.do(context.Background(), http.MethodPut,
-		fmt.Sprintf("/api/v1/processes/%s", name),
+		fmt.Sprintf("/api/v1/processes/%s", url.PathEscape(name)),
 		map[string]*config.Process{"process": proc}, nil)
 }
 
@@ -312,7 +312,7 @@ func (c *Client) GetProcessConfig(name string) (*config.Process, error) {
 		return nil, fmt.Errorf("process name is required")
 	}
 	var payload apitypes.ProcessDetailResponse
-	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/api/v1/processes/%s", name), nil, &payload); err != nil {
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/api/v1/processes/%s", url.PathEscape(name)), nil, &payload); err != nil {
 		return nil, err
 	}
 	if payload.Config == nil {

@@ -244,7 +244,9 @@ paths:
     get:
       tags: [logs]
       summary: Live log stream (Server-Sent Events)
-      description: "text/event-stream of `event: log` messages with snake_case fields."
+      description: >
+        text/event-stream of `event: log` messages. Each message carries the same
+        LogEntry shape as the REST log endpoints.
       parameters:
         - in: query
           name: process
@@ -324,9 +326,12 @@ components:
           schema:
             type: object
             properties:
+              process: { type: string }
+              limit: { type: integer }
+              count: { type: integer }
               logs:
                 type: array
-                items: { type: object }
+                items: { $ref: "#/components/schemas/LogEntry" }
     BadRequest:
       description: Invalid request
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -350,6 +355,16 @@ components:
       type: object
       properties:
         error: { type: string }
+    LogEntry:
+      type: object
+      description: One log line. Identical on the REST endpoints and the SSE stream.
+      properties:
+        timestamp: { type: string, format: date-time }
+        process: { type: string }
+        instance: { type: string }
+        stream: { type: string, enum: [stdout, stderr] }
+        message: { type: string }
+        level: { type: string, enum: [debug, info, warn, error] }
     ProcessInfo:
       type: object
       description: Runtime status of a process (fields as serialized by the manager)

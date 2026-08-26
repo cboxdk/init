@@ -147,6 +147,7 @@ type Supervisor struct {
 	readyFailedCh      chan struct{}  // Closed when the process can never become ready (oneshot exited non-zero)
 	readyFailedOnce    sync.Once      // Ensures readyFailedCh is closed exactly once per run
 	readyFailReason    string         // Why readiness became impossible
+	readinessGenCh     chan struct{}  // Closed when the signals above are re-armed for a new run
 	isReady            bool           // Track readiness state
 	healthKnown        bool           // Whether at least one health check result has been observed
 	healthHealthy      bool           // Liveness health after thresholds/hysteresis
@@ -279,6 +280,7 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 		healthCheckStrict:      globalCfg.HealthCheckStrict,
 		readinessCh:            make(chan struct{}),
 		readyFailedCh:          make(chan struct{}),
+		readinessGenCh:         make(chan struct{}),
 		isReady:                false,
 	}
 }
@@ -345,6 +347,11 @@ func (s *Supervisor) markReady(reason string) {
 func (s *Supervisor) resetReadiness() {
 	s.readinessMu.Lock()
 	defer s.readinessMu.Unlock()
+	// Wake anyone blocked on the retiring signals so they re-read the new ones.
+	// This must be a separate signal, never a close of readinessCh — that would
+	// tell the waiter the service is ready when nothing has succeeded.
+	close(s.readinessGenCh)
+	s.readinessGenCh = make(chan struct{})
 	s.readinessCh = make(chan struct{})
 	s.readinessOnce = sync.Once{}
 	s.isReady = false
@@ -355,10 +362,10 @@ func (s *Supervisor) resetReadiness() {
 
 // readinessChannels returns the current readiness signals under the lock, so a
 // waiter cannot race a concurrent re-arm in Start.
-func (s *Supervisor) readinessChannels() (ready <-chan struct{}, failed <-chan struct{}) {
+func (s *Supervisor) readinessChannels() (ready, failed, rearmed <-chan struct{}) {
 	s.readinessMu.RLock()
 	defer s.readinessMu.RUnlock()
-	return s.readinessCh, s.readyFailedCh
+	return s.readinessCh, s.readyFailedCh, s.readinessGenCh
 }
 
 // markReadinessImpossible records that this process can never become ready, so
@@ -401,6 +408,13 @@ func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration
 			return nil
 		}
 		s.logger.Info("Waiting for oneshot to complete before dependents start", "timeout", timeout)
+	} else if s.config.Type == "oneshot" {
+		// For a oneshot, "ready" means "finished successfully" whatever the
+		// health check says — a liveness probe on a task that is supposed to exit
+		// must not let dependents start early, and a readiness probe passing
+		// mid-run does not mean the work is done.
+		s.logger.Info("Waiting for oneshot to complete before dependents start (health check gates liveness only)",
+			"timeout", timeout)
 	} else {
 		// Check health check mode - only wait if readiness or both
 		mode := s.config.HealthCheck.Mode
@@ -422,17 +436,23 @@ func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
-	readyCh, failedCh := s.readinessChannels()
-	select {
-	case <-readyCh:
-		s.logger.Info("Service ready")
-		return nil
-	case <-failedCh:
-		return fmt.Errorf("service can never become ready: %s", s.readinessFailure())
-	case <-timer.C:
-		return fmt.Errorf("service did not become ready within %v", timeout)
-	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting for readiness")
+	for {
+		readyCh, failedCh, rearmedCh := s.readinessChannels()
+		select {
+		case <-readyCh:
+			s.logger.Info("Service ready")
+			return nil
+		case <-failedCh:
+			return fmt.Errorf("service can never become ready: %s", s.readinessFailure())
+		case <-rearmedCh:
+			// The supervisor started a new run while we were waiting; re-read the
+			// signals and keep waiting on the new run within the same deadline.
+			s.logger.Debug("Readiness signals re-armed while waiting; watching the new run")
+		case <-timer.C:
+			return fmt.Errorf("service did not become ready within %v", timeout)
+		case <-ctx.Done():
+			return fmt.Errorf("context cancelled while waiting for readiness")
+		}
 	}
 }
 
@@ -1730,6 +1750,12 @@ func (s *Supervisor) handleOneshotExit(instance *Instance, exitCode int, err err
 	}
 	instance.mu.Unlock()
 
+	// The process is gone: drop its cached resource handle (a dead PID), but keep
+	// its metrics history, which the API still serves.
+	if s.resourceCollector != nil {
+		s.resourceCollector.ReleaseHandle(s.name, instance.id)
+	}
+
 	// Record completion in oneshot history
 	if execID > 0 && s.oneshotHistory != nil {
 		s.oneshotHistory.Complete(execID, exitCode, err)
@@ -1910,7 +1936,13 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 				// Signal readiness on first successful health check.
 				// Liveness can stay optimistic across transient failures, but
 				// readiness must only pass after a real probe success.
-				s.markReady("health check passed")
+				//
+				// A oneshot is exempt: its readiness means "completed
+				// successfully" (handleOneshotExit), so a probe passing while the
+				// task is still running must not release its dependents early.
+				if s.config.Type != "oneshot" {
+					s.markReady("health check passed")
+				}
 			} else if !status.Healthy {
 				s.logger.Error("Process unhealthy, triggering restart",
 					"error", status.Error,

@@ -1074,12 +1074,17 @@ const RedactedValue = "***REDACTED***"
 // the name) so ordinary settings like AUTH_DRIVER, OAUTH_ENABLED, AUTHOR or
 // TOKENIZER_PATH are not masked, while DB_PASSWORD, API_TOKEN, APP_KEY and
 // credential-bearing DSN/URL variables are. Case-insensitive.
-// Unambiguous secret words may appear anywhere in the name (DB_PASSWORD,
-// STRIPE_SECRET_KEY); the ambiguous ones (auth, key, pat) only count when they
-// END the name, so API_AUTH and APP_KEY are masked while AUTH_DRIVER,
-// AUTH_GUARD and KEYSPACE — ordinary settings — stay readable.
+// Secret-name matching. The unambiguous nouns match anywhere in the name but
+// must be followed by a non-letter or the end of the name — that catches
+// DBPASSWORD, jwtSecret and AWS_ACCESS_KEY_ID while leaving TOKENIZER_PATH and
+// SECRETARY_EMAIL readable. False negatives leak secrets and false positives
+// only hide a setting, so the rule leans towards masking.
 var secretEnvKeyPattern = regexp.MustCompile(
-	`(?i)((^|[_-])(password|passwd|secret|secrets|token|credential|credentials|apikey|dsn)([_-]|$)|(^|[_-])(auth|key|pat)$)`)
+	`(?i)(password|passwd|secret|token|credentials?|apikey|api[_-]?key|access[_-]?key|private[_-]?key|dsn|salt|passphrase)([^a-z]|$)`)
+
+// ambiguousSecretKeyPattern covers words that are only a secret when they end
+// the name: API_AUTH and APP_KEY are secrets, AUTH_DRIVER and KEYSPACE are not.
+var ambiguousSecretKeyPattern = regexp.MustCompile(`(?i)(^|[_-])(auth|key|pat)$`)
 
 // credentialURLKeyPattern matches variables that commonly hold a connection URL
 // with embedded credentials (DATABASE_URL, REDIS_URL, MAIL_DSN, …). Their value
@@ -1087,14 +1092,19 @@ var secretEnvKeyPattern = regexp.MustCompile(
 // `APP_URL=https://example.com` stays visible.
 var credentialURLKeyPattern = regexp.MustCompile(`(?i)(^|[_-])(url|uri|dsn)([_-]|$)`)
 
-// urlHasCredentials reports whether a value looks like a URL carrying userinfo
-// (scheme://user:pass@host).
+// urlHasCredentials reports whether a value looks like a URL carrying userinfo.
+// Both `scheme://user:pass@host` and the password-only `scheme://:pass@host`
+// form count — Redis and AMQP URLs routinely omit the username.
 func urlHasCredentials(value string) bool {
 	u, err := url.Parse(value)
 	if err != nil || u.User == nil {
 		return false
 	}
-	return u.User.Username() != ""
+	if u.User.Username() != "" {
+		return true
+	}
+	_, hasPassword := u.User.Password()
+	return hasPassword
 }
 
 // shouldRedactEnv decides whether an env var's value must be masked.
@@ -1102,10 +1112,24 @@ func shouldRedactEnv(key, value string) bool {
 	if value == "" {
 		return false
 	}
-	if secretEnvKeyPattern.MatchString(key) {
+	if secretEnvKeyPattern.MatchString(key) || ambiguousSecretKeyPattern.MatchString(key) {
 		return true
 	}
 	return credentialURLKeyPattern.MatchString(key) && urlHasCredentials(value)
+}
+
+// findRedactedEnvKey reports the first env var whose value is the redaction
+// placeholder, for paths where there is nothing to restore it from.
+func findRedactedEnvKey(proc *config.Process) (string, bool) {
+	if proc == nil {
+		return "", false
+	}
+	for k, v := range proc.Env {
+		if v == RedactedValue {
+			return k, true
+		}
+	}
+	return "", false
 }
 
 // restoreRedactedEnv replaces any env value that is the redaction placeholder
@@ -1192,14 +1216,9 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			data, err := json.Marshal(map[string]any{
-				"timestamp": entry.Timestamp.Format(time.RFC3339Nano),
-				"process":   entry.ProcessName,
-				"instance":  entry.InstanceID,
-				"stream":    entry.Stream,
-				"level":     entry.Level,
-				"message":   entry.Message,
-			})
+			// Marshal the entry itself: its JSON tags are the wire contract and
+			// are shared with the REST log endpoints, so the two cannot drift.
+			data, err := json.Marshal(entry)
 			if err != nil {
 				s.logger.Error("Failed to marshal log entry", "error", err)
 				continue
@@ -1256,6 +1275,15 @@ func (s *Server) handleAddProcess(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Process == nil {
 		s.respondError(w, http.StatusBadRequest, "process configuration is required")
+		return
+	}
+	// On create there is no existing value a placeholder could be restored from,
+	// so reject it rather than starting a process with "***REDACTED***" as its
+	// password — which config/save would then persist to the YAML. This is the
+	// clone-an-existing-process flow: read a process (masked), POST it as new.
+	if key, found := findRedactedEnvKey(req.Process); found {
+		s.respondError(w, http.StatusBadRequest,
+			fmt.Sprintf("env value for %q is the redaction placeholder; send the real value when creating a process", key))
 		return
 	}
 
