@@ -1505,7 +1505,7 @@ func (s *Supervisor) executePreStopHook(ctx context.Context, instance *Instance)
 	)
 
 	hookExecutor := hooks.NewExecutor(s.logger)
-	if err := hookExecutor.ExecuteWithType(ctx, s.config.Shutdown.PreStopHook, "pre_stop"); err != nil {
+	if err := hookExecutor.ExecuteWithType(ctx, s.config.Shutdown.PreStopHook, hooks.TypePreStop); err != nil {
 		s.logger.Warn("Pre-stop hook failed",
 			"instance_id", instance.id,
 			"error", err,

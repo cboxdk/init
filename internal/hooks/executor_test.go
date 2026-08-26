@@ -504,7 +504,7 @@ func TestExecutor_ExecuteWithType(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := executor.ExecuteWithType(ctx, hook, "pre_start")
+	err := executor.ExecuteWithType(ctx, hook, TypePreStart)
 	if err != nil {
 		t.Fatalf("Hook execution failed: %v", err)
 	}
