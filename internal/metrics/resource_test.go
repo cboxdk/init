@@ -3,6 +3,7 @@ package metrics
 import (
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -667,4 +668,25 @@ func TestResourceCollector_Collect_InvalidPID(t *testing.T) {
 	if _, err := rc.Collect(0, "p", "0"); err == nil {
 		t.Error("expected error for PID 0")
 	}
+}
+
+// TestResourceCollector_Collect_ConcurrentSameKey stresses concurrent Collect
+// calls for the same instance. Because the gopsutil handle is cached and shared,
+// and gopsutil's Process is not concurrency-safe, this must be serialized by the
+// per-handle mutex — the race detector will flag it otherwise (regression guard
+// for the PERF-3 handle cache).
+func TestResourceCollector_Collect_ConcurrentSameKey(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	rc := NewResourceCollector(time.Second, 10, logger)
+	pid := os.Getpid()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 24; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = rc.Collect(pid, "self", "0")
+		}()
+	}
+	wg.Wait()
 }
