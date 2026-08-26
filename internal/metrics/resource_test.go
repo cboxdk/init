@@ -622,3 +622,49 @@ func TestCollectProcessMetrics_WithRealProcess(t *testing.T) {
 		t.Error("Expected non-zero thread count")
 	}
 }
+
+// TestResourceCollector_Collect_ReusesHandle verifies the collector caches the
+// gopsutil handle per instance across ticks (so CPUPercent measures recent
+// usage) and evicts it when the buffer is removed (PERF-3).
+func TestResourceCollector_Collect_ReusesHandle(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	rc := NewResourceCollector(time.Second, 10, logger)
+	pid := os.Getpid()
+
+	if _, err := rc.Collect(pid, "self", "0"); err != nil {
+		t.Fatalf("first Collect: %v", err)
+	}
+	rc.mu.RLock()
+	h1 := rc.handles["self-0"]
+	rc.mu.RUnlock()
+	if h1 == nil || h1.pid != pid {
+		t.Fatalf("handle not cached for the instance after Collect")
+	}
+
+	if _, err := rc.Collect(pid, "self", "0"); err != nil {
+		t.Fatalf("second Collect: %v", err)
+	}
+	rc.mu.RLock()
+	h2 := rc.handles["self-0"]
+	rc.mu.RUnlock()
+	if h2 != h1 {
+		t.Errorf("second Collect created a new handle; it must reuse the cached one")
+	}
+
+	rc.RemoveBuffer("self", "0")
+	rc.mu.RLock()
+	_, exists := rc.handles["self-0"]
+	rc.mu.RUnlock()
+	if exists {
+		t.Error("handle was not evicted on RemoveBuffer")
+	}
+}
+
+// TestResourceCollector_Collect_InvalidPID rejects an out-of-range PID.
+func TestResourceCollector_Collect_InvalidPID(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	rc := NewResourceCollector(time.Second, 10, logger)
+	if _, err := rc.Collect(0, "p", "0"); err == nil {
+		t.Error("expected error for PID 0")
+	}
+}
