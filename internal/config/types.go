@@ -366,6 +366,14 @@ func (c *Config) setGlobalAPIMetricsDefaults() {
 	if c.Global.APIPort == 0 {
 		c.Global.APIPort = 9180
 	}
+	// Safe by default: the management API is a control plane (add/stop
+	// processes, save/reload config) and must not be exposed on all interfaces
+	// unless the operator opts in. Empty means loopback-only; set an explicit
+	// api_host (e.g. 0.0.0.0) to open it, which validation then requires be
+	// paired with authentication or an ACL.
+	if c.Global.APIHost == "" {
+		c.Global.APIHost = "127.0.0.1"
+	}
 	if c.Global.ResourceMetricsEnabled == nil {
 		c.Global.SetResourceMetricsEnabled(false)
 	}
