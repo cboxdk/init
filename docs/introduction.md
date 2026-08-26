@@ -64,12 +64,9 @@ Cbox Init manages multiple processes within a single Docker container, making it
 │         Cbox Init (PID 1)                      │
 │                                                 │
 │  ┌──────────┐  ┌──────────┐  ┌─────────────┐ │
-│  │ Metrics  │  │   API    │  │  Heartbeat  │ │
-│  │ :9090    │  │  :9180   │  │  Monitor    │ │
-│  └──────────┘  └──────────┘  └──────┬──────┘ │
-│                                       │         │
-│                            External monitoring │
-│                            (healthchecks.io)   │
+│  │ Metrics  │  │   API    │  │  Readiness  │ │
+│  │ :9090    │  │  :9180   │  │  /readyz    │ │
+│  └──────────┘  └──────────┘  └─────────────┘ │
 │                                                 │
 │  ┌──────────────────────────────────────────┐ │
 │  │     Process Manager & Orchestration      │ │
@@ -93,8 +90,8 @@ Cbox Init manages multiple processes within a single Docker container, making it
 │  ┌──────────┐ ┌──────────────────────┐       │
 │  │ WebSocket│ │   Cron Scheduler     │       │
 │  │  Server  │ │  • Standard 5-field  │       │
-│  │          │ │  • Task statistics   │       │
-│  │          │ │  • Heartbeat pings   │       │
+│  │          │ │  • Execution history │       │
+│  │          │ │  • Pause / resume    │       │
 │  └──────────┘ └──────────────────────┘       │
 └─────────────────────────────────────────────────┘
 ```
@@ -109,8 +106,8 @@ Cbox Init manages multiple processes within a single Docker container, making it
 
 **Scheduled Tasks**
 - Built-in cron scheduler with standard 5-field format
-- Per-task execution statistics and metrics
-- External heartbeat monitoring integration (healthchecks.io, Cronitor, etc.)
+- Per-task execution history and statistics, queryable over the API
+- Pause / resume / manual-trigger and overlap protection
 - Graceful cancellation on shutdown
 
 **Health Monitoring**

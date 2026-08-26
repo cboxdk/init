@@ -111,7 +111,7 @@ curl http://localhost:9090/metrics
 cbox_init_manager_uptime_seconds               # Manager uptime
 cbox_init_process_up{process="nginx"}          # Process status (1=up, 0=down)
 cbox_init_process_restarts_total{process="*"}  # Restart count
-cbox_init_process_health_status{process="*"}   # Health status
+cbox_init_health_check_status{name="*",type="*"}  # Health check status
 cbox_init_process_start_time{process="*"}      # Process start timestamp
 cbox_init_hook_execution_seconds{hook="*"}     # Hook execution time
 ```
@@ -137,7 +137,7 @@ cbox_init_manager_uptime_seconds
 sum(cbox_init_process_restarts_total)
 
 # Unhealthy processes
-count(cbox_init_process_health_status == 0)
+count(cbox_init_health_check_status == 0)
 
 # Processes by state
 count by (state) (cbox_init_process_up)
@@ -175,7 +175,7 @@ groups:
 
       # Unhealthy process
       - alert: ProcessUnhealthy
-        expr: cbox_init_process_health_status == 0
+        expr: cbox_init_health_check_status == 0
         for: 2m
         labels:
           severity: warning
@@ -592,7 +592,7 @@ receivers:
       {
         "title": "Health Check Status",
         "targets": [{
-          "expr": "cbox_init_process_health_status"
+          "expr": "cbox_init_health_check_status"
         }]
       },
       {

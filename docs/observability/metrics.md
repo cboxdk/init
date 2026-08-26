@@ -195,7 +195,7 @@ cbox_init_build_info
 sum(cbox_init_process_up) by (name)
 
 # Count of processes with health check failures
-count(cbox_init_health_check_status{status="0"}) by (name)
+count(cbox_init_health_check_status == 0) by (name)
 ```
 
 ### Restart Monitoring

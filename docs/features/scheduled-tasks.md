@@ -1,6 +1,6 @@
 ---
 title: "Scheduled Tasks"
-description: "Built-in cron scheduler for periodic tasks with per-task statistics and heartbeat monitoring"
+description: "Built-in cron scheduler for periodic tasks with per-task execution history and a schedule status API"
 weight: 23
 ---
 
@@ -12,11 +12,17 @@ Cbox Init includes a built-in cron-like scheduler for running periodic tasks wit
 
 The scheduler provides:
 - ✅ **Standard cron format:** Familiar 5-field syntax
-- ✅ **Per-task statistics:** Track run count, success/failure rates, duration
-- ✅ **Heartbeat integration:** External monitoring support (healthchecks.io, etc.)
-- ✅ **Structured logging:** Task-specific logs with execution context
-- ✅ **Graceful shutdown:** Running tasks cancelled cleanly on shutdown
+- ✅ **Per-task execution history:** Bounded ring buffer of past runs with exit codes and durations
+- ✅ **Per-task statistics:** Run/success/failure counts, success rate, average duration
+- ✅ **Overlap protection:** A job never runs concurrently with itself by default
+- ✅ **Pause / resume / manual trigger:** Over the management API
+- ✅ **Graceful shutdown:** Running tasks are cancelled cleanly on shutdown
 - ✅ **No cron daemon:** Self-contained scheduling in Go
+
+> **Not implemented:** outbound heartbeat pings to services such as
+> healthchecks.io, and Prometheus metrics for scheduled tasks. Query the
+> [schedule status API](#schedule-status-api) instead. See
+> [Heartbeat Monitoring](../observability/heartbeat-monitoring) for the current status.
 
 ## Basic Configuration
 
@@ -55,39 +61,27 @@ processes:
 ### Common Patterns
 
 ```yaml
-# Every minute
-schedule: "* * * * *"
-
-# Every 5 minutes
-schedule: "*/5 * * * *"
-
-# Every 15 minutes
-schedule: "*/15 * * * *"
-
-# Every hour at :30
-schedule: "30 * * * *"
-
-# Daily at 2 AM
-schedule: "0 2 * * *"
-
-# Every weekday at 9 AM
-schedule: "0 9 * * 1-5"
-
-# First day of month
-schedule: "0 0 1 * *"
-
-# Every 6 hours
-schedule: "0 */6 * * *"
-
-# Twice daily (6 AM and 6 PM)
-schedule: "0 6,18 * * *"
-
-# Business hours (9-5, Mon-Fri)
-schedule: "0 9-17 * * 1-5"
-
-# Weekend mornings
-schedule: "0 8 * * 0,6"
+schedule: "* * * * *"       # Every minute
+schedule: "*/5 * * * *"     # Every 5 minutes
+schedule: "30 * * * *"      # Every hour at :30
+schedule: "0 2 * * *"       # Daily at 2 AM
+schedule: "0 9 * * 1-5"     # Every weekday at 9 AM
+schedule: "0 0 1 * *"       # First day of month
+schedule: "0 6,18 * * *"    # Twice daily (6 AM and 6 PM)
+schedule: "0 9-17 * * 1-5"  # Business hours (9-5, Mon-Fri)
 ```
+
+## Schedule Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `schedule` | string | — | 5-field cron expression |
+| `schedule_timezone` | string | `UTC` | `UTC`, `Local`, or an IANA name (`America/New_York`) |
+| `schedule_timeout` | duration | none | Kill the run if it exceeds this (`30s`, `5m`, `1h`) |
+| `schedule_max_concurrent` | int | `0` | `0`/`1` = no overlap; `>1` = allow N parallel runs |
+
+The retained history size per job is set globally with `schedule_history_size`
+(default `100`).
 
 ## Task Execution
 
@@ -96,223 +90,38 @@ schedule: "0 8 * * 0,6"
 ```
 [Cron Trigger]
       ↓
-[Check if already running]
+[Skip if already running] (overlap protection)
       ↓
 [Start task process]
       ↓
-[Send start heartbeat] (optional)
+[Wait for completion or timeout]
       ↓
-[Wait for completion]
-      ↓
-[Record statistics]
-      ↓
-[Send success/failure heartbeat] (optional)
+[Record execution in history]
       ↓
 [Wait for next trigger]
 ```
 
+A job's state is one of `idle`, `executing`, or `paused`.
+
 ### Environment Variables
 
-Each scheduled task receives additional environment variables:
+Each scheduled task process receives these environment variables in addition to
+its own `env`:
 
 ```bash
-CBOX_INIT_PROCESS_NAME=backup-job
-CBOX_INIT_INSTANCE_ID=backup-job-run-42
-CBOX_INIT_SCHEDULED=true
-CBOX_INIT_SCHEDULE="0 2 * * *"
-CBOX_INIT_START_TIME=1732162800
+CBOX_INIT_PROCESS=backup-job   # The process name
+CBOX_INIT_SCHEDULED=true       # Marks this as a scheduled run
 ```
 
 **Use in scripts:**
 ```bash
 #!/bin/bash
-echo "Task: $CBOX_INIT_PROCESS_NAME"
-echo "Instance: $CBOX_INIT_INSTANCE_ID"
-echo "Started: $(date -d @$CBOX_INIT_START_TIME)"
+echo "Scheduled task: $CBOX_INIT_PROCESS"
 ```
 
-## Statistics Tracking
+## Concurrency Control
 
-### Per-Task Metrics
-
-Cbox Init tracks execution statistics for each scheduled task:
-
-- **Last run time:** When task last executed
-- **Next run time:** When task will run next
-- **Last exit code:** Most recent exit status
-- **Run count:** Total executions
-- **Success count:** Successful completions (exit 0)
-- **Failure count:** Failed executions (exit ≠ 0)
-- **Average duration:** Mean execution time
-
-### Prometheus Metrics
-
-```bash
-# Last execution timestamp
-cbox_init_scheduled_task_last_run_timestamp{task="backup-job"}
-
-# Next scheduled execution
-cbox_init_scheduled_task_next_run_timestamp{task="backup-job"}
-
-# Last exit code
-cbox_init_scheduled_task_last_exit_code{task="backup-job"}
-
-# Execution duration (histogram)
-cbox_init_scheduled_task_duration_seconds{task="backup-job"}
-
-# Total runs by status
-cbox_init_scheduled_task_total{task="backup-job",status="success"}
-cbox_init_scheduled_task_total{task="backup-job",status="failure"}
-```
-
-### Management API
-
-```bash
-# Get task status
-curl http://localhost:9180/api/v1/processes | \
-  jq '.[] | select(.scheduled==true)'
-
-# Response:
-{
-  "name": "backup-job",
-  "scheduled": true,
-  "schedule": "0 2 * * *",
-  "state": "waiting",
-  "last_run": "2024-11-21T02:00:00Z",
-  "next_run": "2024-11-22T02:00:00Z",
-  "last_exit_code": 0,
-  "run_count": 30,
-  "success_count": 29,
-  "failure_count": 1,
-  "avg_duration": 45.2
-}
-```
-
-## Heartbeat Monitoring
-
-### Configuration
-
-```yaml
-processes:
-  critical-backup:
-    command: ["php", "artisan", "backup:critical"]
-    schedule: "0 3 * * *"
-    heartbeat:
-      success_url: https://hc-ping.com/your-uuid-here
-      failure_url: https://hc-ping.com/your-uuid-here/fail
-      timeout: 10
-      retry_count: 3
-```
-
-### Heartbeat Flow
-
-```
-[Task Starts]
-      ↓
-[Ping: /start] (optional)
-      ↓
-[Task Executes]
-      ↓
-[Exit Code 0?]
-  ├─ Yes → [Ping: success_url]
-  └─ No  → [Ping: failure_url]
-```
-
-### Supported Services
-
-**healthchecks.io:**
-```yaml
-heartbeat:
-  success_url: https://hc-ping.com/uuid
-  failure_url: https://hc-ping.com/uuid/fail
-```
-
-**Cronitor:**
-```yaml
-heartbeat:
-  success_url: https://cronitor.link/p/key/job-name
-  failure_url: https://cronitor.link/p/key/job-name/fail
-```
-
-**Better Uptime:**
-```yaml
-heartbeat:
-  success_url: https://betteruptime.com/api/v1/heartbeat/uuid
-```
-
-**Custom Endpoint:**
-```yaml
-heartbeat:
-  success_url: https://monitoring.example.com/ping/backup
-  method: POST
-  headers:
-    Authorization: Bearer your-token
-    X-Task: database-backup
-  timeout: 30
-  retry_count: 5
-```
-
-## Complete Example
-
-```yaml
-version: "1.0"
-
-global:
-  metrics_enabled: true
-  metrics_port: 9090
-
-processes:
-  # Database backup - Daily at 2 AM
-  database-backup:
-    enabled: true
-    command: ["php", "artisan", "backup:database"]
-    schedule: "0 2 * * *"
-    restart: never
-    env:
-      BACKUP_PATH: /backups
-      RETENTION_DAYS: "30"
-    heartbeat:
-      success_url: https://hc-ping.com/backup-uuid
-      failure_url: https://hc-ping.com/backup-uuid/fail
-      timeout: 30
-
-  # Cache warming - Every 15 minutes
-  cache-warmer:
-    enabled: true
-    command: ["php", "artisan", "cache:warm"]
-    schedule: "*/15 * * * *"
-    restart: never
-
-  # Reports - Hourly during business hours
-  hourly-reports:
-    enabled: true
-    command: ["php", "artisan", "reports:generate"]
-    schedule: "0 9-17 * * 1-5"  # 9 AM - 5 PM, Mon-Fri
-    restart: never
-    heartbeat:
-      success_url: https://hc-ping.com/reports-uuid
-      timeout: 60
-
-  # Weekly maintenance - Sunday at 3 AM
-  weekly-maintenance:
-    enabled: true
-    command: ["/usr/local/bin/maintenance.sh"]
-    schedule: "0 3 * * 0"  # Sunday
-    restart: never
-    env:
-      OPTIMIZE_DATABASE: "true"
-    heartbeat:
-      success_url: https://hc-ping.com/weekly-uuid
-      timeout: 300
-```
-
-## Advanced Features
-
-### Concurrency Control
-
-Cbox Init provides native concurrency controls for scheduled tasks via configuration options.
-
-#### schedule_max_concurrent
+### schedule_max_concurrent
 
 Prevents task overlap by limiting concurrent executions:
 
@@ -325,11 +134,10 @@ processes:
 ```
 
 **Values:**
-- `0` - Unlimited concurrent executions (default)
-- `1` - No overlap (skip trigger if task still running)
-- `N` - Allow up to N concurrent executions
+- `0` or `1` - No overlap (skip trigger if the previous run is still active)
+- `N` (>1) - Allow up to N concurrent executions
 
-#### schedule_timeout
+### schedule_timeout
 
 Kills tasks that exceed a maximum execution time:
 
@@ -338,139 +146,150 @@ processes:
   backup:
     command: ["php", "artisan", "backup:run"]
     schedule: "0 2 * * *"
-    schedule_timeout: "30m"  # Kill if runs longer than 30 minutes
+    schedule_timeout: "30m"  # Cancel if it runs longer than 30 minutes
 ```
 
 **Duration formats:** `30s`, `5m`, `1h`, `1h30m`
 
-**Best practice:** Set timeout less than schedule interval to prevent overlap.
+**Best practice:** Set the timeout below the schedule interval to prevent overlap.
 
-#### Combined Example
+### Combined Example
 
 ```yaml
 processes:
   long-task:
     command: ["php", "artisan", "process:large-dataset"]
-    schedule: "0 * * * *"  # Every hour
-    schedule_timeout: "55m"  # Kill if exceeds 55 minutes
-    schedule_max_concurrent: 1  # No overlap
+    schedule: "0 * * * *"        # Every hour
+    schedule_timeout: "55m"      # Cancel if it exceeds 55 minutes
+    schedule_max_concurrent: 1   # No overlap
     restart: never
 ```
 
-#### Alternative: Application-Level Control
+## Schedule Status API
 
-**Option 1: Use max-time in command**
-```yaml
-long-task:
-  command: ["php", "artisan", "process:large-dataset", "--max-time=3500"]
-  schedule: "0 * * * *"  # Every hour
-```
+Cbox Init records real per-task execution history and statistics, exposed over
+the [management API](../observability/api) (enable it with `api_enabled: true`).
 
-**Option 2: Lock file in script**
-```bash
-#!/bin/bash
-LOCKFILE="/tmp/my-task.lock"
-
-if [ -f "$LOCKFILE" ]; then
-    echo "Task already running"
-    exit 0
-fi
-
-touch "$LOCKFILE"
-trap "rm -f $LOCKFILE" EXIT
-
-# Do work
-php artisan expensive:task
-```
-
-### Retry Logic
+### Status
 
 ```bash
-#!/bin/bash
-# task-with-retry.sh
-MAX_RETRIES=3
-
-for i in $(seq 1 $MAX_RETRIES); do
-    if php artisan sync:external-api; then
-        echo "Sync successful"
-        exit 0
-    fi
-    echo "Attempt $i failed, retrying..."
-    sleep 10
-done
-
-echo "All retries failed"
-exit 1
+curl http://localhost:9180/api/v1/processes/backup-job/schedule
 ```
 
-```yaml
-data-sync:
-  command: ["/task-with-retry.sh"]
-  schedule: "*/30 * * * *"
-  heartbeat:
-    failure_url: https://hc-ping.com/uuid/fail
+```json
+{
+  "process": "backup-job",
+  "schedule": {
+    "name": "backup-job",
+    "schedule": "0 2 * * *",
+    "timezone": "UTC",
+    "state": "idle",
+    "last_run": "2026-08-26T02:00:00Z",
+    "next_run": "2026-08-27T02:00:00Z",
+    "stats": {
+      "total_executions": 30,
+      "success_count": 29,
+      "failure_count": 1,
+      "running_count": 0,
+      "success_rate": 96.67,
+      "average_duration": 45200000000,
+      "last_execution_time": "2026-08-26T02:00:00Z",
+      "last_success_time": "2026-08-26T02:00:45Z",
+      "last_failure_time": "2026-08-20T02:00:12Z"
+    }
+  }
+}
 ```
 
-### Conditional Execution
+`average_duration` is a Go duration in nanoseconds (here ≈ 45.2s).
+
+### History
 
 ```bash
-#!/bin/bash
-# conditional-task.sh
-
-# Only run on first Monday of month
-DAY=$(date +%d)
-WEEKDAY=$(date +%u)
-
-if [ "$DAY" -le 7 ] && [ "$WEEKDAY" -eq 1 ]; then
-    echo "First Monday - running monthly report"
-    php artisan reports:monthly
-else
-    echo "Not first Monday - skipping"
-fi
+curl "http://localhost:9180/api/v1/processes/backup-job/schedule/history?limit=5"
 ```
+
+```json
+{
+  "process": "backup-job",
+  "limit": 5,
+  "count": 1,
+  "history": [
+    {
+      "id": 42,
+      "start_time": "2026-08-26T02:00:00Z",
+      "end_time": "2026-08-26T02:00:45Z",
+      "exit_code": 0,
+      "success": true,
+      "error": "",
+      "triggered": "schedule"
+    }
+  ]
+}
+```
+
+`triggered` is `schedule` for cron-driven runs and `manual` for API triggers.
+
+### Pause, Resume, Trigger
+
+```bash
+# Pause (skip scheduled triggers until resumed)
+curl -X POST http://localhost:9180/api/v1/processes/backup-job/schedule/pause
+
+# Resume
+curl -X POST http://localhost:9180/api/v1/processes/backup-job/schedule/resume
+
+# Trigger now (async; returns immediately)
+curl -X POST http://localhost:9180/api/v1/processes/backup-job/schedule/trigger
+
+# Trigger now and wait for the exit code (synchronous)
+curl -X POST "http://localhost:9180/api/v1/processes/backup-job/schedule/trigger?sync=true"
+```
+
+## Complete Example
 
 ```yaml
-monthly-report:
-  command: ["/conditional-task.sh"]
-  schedule: "0 8 * * 1"  # Every Monday at 8 AM
-```
+version: "1.0"
 
-## Monitoring & Alerting
+global:
+  api_enabled: true
+  api_port: 9180
 
-### Alert on Task Failure
+processes:
+  # Database backup - Daily at 2 AM
+  database-backup:
+    enabled: true
+    command: ["php", "artisan", "backup:database"]
+    schedule: "0 2 * * *"
+    schedule_timeout: "10m"
+    restart: never
+    env:
+      BACKUP_PATH: /backups
+      RETENTION_DAYS: "30"
 
-```yaml
-# Prometheus alert
-- alert: ScheduledTaskFailed
-  expr: cbox_init_scheduled_task_last_exit_code != 0
-  for: 5m
-  annotations:
-    summary: "Task {{ $labels.task }} failed"
-    description: "Exit code: {{ $value }}"
-```
+  # Cache warming - Every 15 minutes
+  cache-warmer:
+    enabled: true
+    command: ["php", "artisan", "cache:warm"]
+    schedule: "*/15 * * * *"
+    schedule_max_concurrent: 1
+    restart: never
 
-### Alert on Missed Execution
+  # Reports - Hourly during business hours
+  hourly-reports:
+    enabled: true
+    command: ["php", "artisan", "reports:generate"]
+    schedule: "0 9-17 * * 1-5"  # 9 AM - 5 PM, Mon-Fri
+    restart: never
 
-```yaml
-# Alert if task hasn't run in expected interval
-- alert: TaskNotRunning
-  expr: time() - cbox_init_scheduled_task_last_run_timestamp > 86400
-  annotations:
-    summary: "Task {{ $labels.task }} hasn't run in 24h"
-```
-
-### Dashboard Panels
-
-```promql
-# Task execution success rate
-sum(cbox_init_scheduled_task_total{status="success"}) /
-sum(cbox_init_scheduled_task_total) * 100
-
-# Average task duration
-avg(cbox_init_scheduled_task_duration_seconds)
-
-# Next run time (time until next execution)
-cbox_init_scheduled_task_next_run_timestamp - time()
+  # Weekly maintenance - Sunday at 3 AM
+  weekly-maintenance:
+    enabled: true
+    command: ["/usr/local/bin/maintenance.sh"]
+    schedule: "0 3 * * 0"  # Sunday
+    restart: never
+    env:
+      OPTIMIZE_DATABASE: "true"
 ```
 
 ## Laravel Scheduler Integration
@@ -478,36 +297,29 @@ cbox_init_scheduled_task_next_run_timestamp - time()
 ### Option 1: Cbox Init Native Scheduling
 
 ```yaml
-# Define each task separately in Cbox Init config
 processes:
   backup-daily:
     command: ["php", "artisan", "backup:run"]
     schedule: "0 2 * * *"
+    restart: never
 
   emails-hourly:
     command: ["php", "artisan", "emails:send"]
     schedule: "0 * * * *"
-
-  cache-cleanup:
-    command: ["php", "artisan", "cache:prune"]
-    schedule: "0 0 * * *"
+    restart: never
 ```
 
-**Pros:**
-- Individual task monitoring
-- Per-task heartbeats
-- Direct control over schedule
-- Task-specific resource limits
+**Pros:** individual task monitoring via the schedule API, per-task timeouts, direct control over each schedule.
 
 ### Option 2: Laravel Scheduler
 
 ```yaml
-# Use Laravel's built-in scheduler
 processes:
   laravel-scheduler:
     enabled: true
-    command: ["php", "artisan", "schedule:work"]  # Or schedule:run with cron
-    restart: always  # Keep scheduler running
+    command: ["php", "artisan", "schedule:run"]
+    schedule: "* * * * *"  # Let Laravel decide which tasks run
+    restart: never
 ```
 
 **app/Console/Kernel.php:**
@@ -520,161 +332,33 @@ protected function schedule(Schedule $schedule)
 }
 ```
 
-**Pros:**
-- Centralized task definition in code
-- Laravel's fluent schedule API
-- Conditional scheduling logic
-- Built-in overlap prevention
-
-**Cons:**
-- Single point of failure (scheduler process)
-- No per-task heartbeat monitoring
-- All tasks share same logs
-
-### Hybrid Approach
-
-```yaml
-# Critical tasks: Cbox Init native (with heartbeats)
-processes:
-  critical-backup:
-    command: ["php", "artisan", "backup:critical"]
-    schedule: "0 3 * * *"
-    heartbeat:
-      success_url: https://hc-ping.com/critical-uuid
-
-  # Non-critical tasks: Laravel scheduler
-  laravel-scheduler:
-    command: ["php", "artisan", "schedule:work"]
-    restart: always
-```
-
-## Task Statistics
-
-### Via Prometheus
-
-```bash
-# Last run time
-curl http://localhost:9090/metrics | \
-  grep 'cbox_init_scheduled_task_last_run_timestamp{task="backup-job"}'
-
-# Success count
-curl http://localhost:9090/metrics | \
-  grep 'cbox_init_scheduled_task_total{task="backup-job",status="success"}'
-
-# Average duration
-curl http://localhost:9090/metrics | \
-  grep 'cbox_init_scheduled_task_duration_seconds'
-```
-
-### Via Management API
-
-```bash
-# Get all scheduled tasks
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:9180/api/v1/processes | \
-  jq '.[] | select(.scheduled==true) | {name, last_run, next_run, success_count, failure_count}'
-```
-
-## Troubleshooting
-
-### Task Not Running
-
-**Check schedule parsing:**
-```bash
-# Validate cron expression
-# Use https://crontab.guru or similar
-
-# Check logs for schedule confirmation
-docker logs app | grep "Scheduled task registered"
-```
-
-**Verify task is enabled:**
-```yaml
-my-task:
-  enabled: true  # Must be true
-  schedule: "0 2 * * *"
-```
-
-### Task Runs Multiple Times
-
-**Problem:** Task configured with `restart: always`
-
-**Solution:**
-```yaml
-scheduled-task:
-  schedule: "0 2 * * *"
-  restart: never  # REQUIRED for scheduled tasks
-```
-
-### Task Timeout
-
-**Problem:** Task doesn't complete before next trigger
-
-**Solution:**
-```yaml
-slow-task:
-  schedule: "0 * * * *"  # Every hour
-  timeout: 3500  # 58 minutes (less than interval)
-```
-
-### Missed Executions
-
-**Check system time:**
-```bash
-# Verify container time is correct
-docker exec app date
-
-# Check timezone
-docker exec app date +%Z
-```
-
-**Set timezone:**
-```yaml
-services:
-  app:
-    environment:
-      TZ: "America/New_York"
-```
+**Trade-off:** centralised task definition in code, but all tasks share one process and one execution-history entry per minute.
 
 ## Best Practices
 
 ### ✅ Do
 
-**Always use restart: never:**
+**Always use `restart: never`** so a completed task is not restarted:
 ```yaml
 scheduled-task:
   schedule: "0 2 * * *"
-  restart: never  # Tasks should not auto-restart
+  restart: never
 ```
 
-**Add heartbeat monitoring for critical tasks:**
+**Bound long tasks with `schedule_timeout`** and keep it below the interval:
 ```yaml
-critical-backup:
-  schedule: "0 3 * * *"
-  heartbeat:
-    success_url: https://hc-ping.com/uuid
-    failure_url: https://hc-ping.com/uuid/fail
+hourly-task:
+  schedule: "0 * * * *"   # Every hour
+  schedule_timeout: "55m" # Below the 60-minute interval
 ```
 
-**Set appropriate timeouts:**
-```yaml
-backup-task:
-  schedule: "0 2 * * *"
-  timeout: 1800  # 30 minutes max
-```
-
-**Make tasks idempotent:**
-```bash
-# Safe to run multiple times
-php artisan cache:clear  # Idempotent
-php artisan backup:create  # Creates new backup each time
-```
+**Make tasks idempotent** so retries and manual triggers are safe.
 
 ### ❌ Don't
 
-**Don't use restart: always:**
+**Don't use `restart: always`** — the task would rerun immediately after finishing:
 ```yaml
-# ❌ Bad - task will run immediately after completion
+# ❌ Bad
 task:
   schedule: "0 2 * * *"
   restart: always
@@ -685,109 +369,37 @@ task:
   restart: never
 ```
 
-**Don't run daemon processes:**
+**Don't run daemons on a schedule** — scheduled commands must exit:
 ```yaml
-# ❌ Bad - daemons don't work with schedule
+# ❌ Bad — never exits
 task:
   schedule: "* * * * *"
-  command: ["./background-daemon"]  # Never exits!
+  command: ["./background-daemon"]
 
-# ✅ Good - one-time execution
+# ✅ Good — runs and exits
 task:
   schedule: "* * * * *"
-  command: ["./process-batch-then-exit"]  # Runs and exits
+  command: ["./process-batch-then-exit"]
 ```
 
-**Don't forget timeout < interval:**
-```yaml
-# ❌ Bad - task might overlap
-task:
-  schedule: "0 * * * *"  # Every hour
-  timeout: 7200  # 2 hours!
+## Troubleshooting
 
-# ✅ Good
-task:
-  schedule: "0 * * * *"  # Every hour
-  timeout: 3500  # 58 minutes
-```
+### Task Not Running
 
-## Real-World Examples
+- Validate the cron expression (e.g. with crontab.guru).
+- Confirm the process is `enabled: true`.
+- Check the logs for the scheduler registering the job.
 
-### Database Backup with Rotation
+### Task Runs Multiple Times
 
-```yaml
-database-backup:
-  command: ["/backup-with-rotation.sh"]
-  schedule: "0 2 * * *"  # Daily at 2 AM
-  restart: never
-  env:
-    BACKUP_DIR: /backups
-    KEEP_DAYS: "7"
-    S3_BUCKET: my-backups
-  heartbeat:
-    success_url: https://hc-ping.com/backup-uuid
-    timeout: 600  # 10 minute backup timeout
-```
+Set `restart: never` — a scheduled task with `restart: always` reruns immediately after completing.
 
-**backup-with-rotation.sh:**
-```bash
-#!/bin/bash
-set -e
+### Task Overlaps Itself
 
-BACKUP_FILE="db-$(date +%Y%m%d-%H%M%S).sql.gz"
-
-# Create backup
-mysqldump -h database -u root -p"$DB_PASSWORD" laravel | gzip > "/tmp/$BACKUP_FILE"
-
-# Upload to S3
-aws s3 cp "/tmp/$BACKUP_FILE" "s3://$S3_BUCKET/backups/"
-
-# Delete old local backups
-find "$BACKUP_DIR" -name "*.sql.gz" -mtime +$KEEP_DAYS -delete
-
-# Delete old S3 backups
-aws s3 ls "s3://$S3_BUCKET/backups/" | \
-  awk '{print $4}' | \
-  while read file; do
-    # ... delete old files
-  done
-
-echo "Backup complete: $BACKUP_FILE"
-```
-
-### API Data Sync with Retry
-
-```yaml
-api-sync:
-  command: ["/sync-with-retry.sh"]
-  schedule: "*/30 * * * *"  # Every 30 minutes
-  restart: never
-  env:
-    API_ENDPOINT: https://api.example.com/data
-    API_KEY: ${EXTERNAL_API_KEY}
-  heartbeat:
-    success_url: https://hc-ping.com/sync-uuid
-    failure_url: https://hc-ping.com/sync-uuid/fail
-    retry_count: 3
-```
-
-### Report Generation
-
-```yaml
-daily-report:
-  command: ["php", "artisan", "reports:daily"]
-  schedule: "0 8 * * *"  # Daily at 8 AM
-  restart: never
-  env:
-    REPORT_FORMAT: pdf
-    EMAIL_RECIPIENTS: team@example.com
-  heartbeat:
-    success_url: https://hc-ping.com/reports-uuid
-```
+Set `schedule_max_concurrent: 1` (the default already skips overlapping runs) and/or a `schedule_timeout` below the interval.
 
 ## See Also
 
 - [Process Configuration](../configuration/processes) - Schedule configuration
-- [Heartbeat Monitoring](../observability/heartbeat-monitoring) - External monitoring
+- [Management API](../observability/api) - Runtime task inspection and control
 - [Examples](../examples/scheduled-tasks) - Practical examples
-- [Prometheus Metrics](../observability/metrics) - Task metrics
