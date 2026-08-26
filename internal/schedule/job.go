@@ -85,8 +85,12 @@ type ScheduledJob struct {
 	CurrentExecID int64 // ID of currently running execution
 
 	// Execution control
-	Timeout       time.Duration // Execution timeout (0 = no timeout)
-	MaxConcurrent int           // Max concurrent executions (0/1 = no overlap, >1 = allow parallel)
+	Timeout time.Duration // Execution timeout (0 = no timeout)
+	// MaxConcurrent is retained for forward compatibility but is NOT yet honored:
+	// a job that is still running when its next tick fires is always skipped
+	// (see executeSync's executionMu + JobStateExecuting guard). Values > 1 do
+	// not enable parallel runs today.
+	MaxConcurrent int
 
 	// Internal
 	cronID      cron.EntryID
@@ -123,9 +127,9 @@ type JobOptions struct {
 	// job's context is cancelled. Zero means no timeout (run until completion).
 	Timeout time.Duration
 
-	// MaxConcurrent limits how many instances can run simultaneously.
-	// 0 or 1 means no overlap (skip if already running), >1 allows parallel runs.
-	// Use with caution as parallel runs may cause resource contention.
+	// MaxConcurrent is accepted but not yet honored: overlapping runs are always
+	// skipped, so a value > 1 does not enable parallel executions today. Retained
+	// so existing configs keep loading and for a future parallel mode.
 	MaxConcurrent int
 }
 

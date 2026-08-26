@@ -108,7 +108,7 @@ type Process struct {
 	Schedule              string            `yaml:"schedule" json:"schedule"`                               // Cron expression: "*/5 * * * *"
 	ScheduleTimezone      string            `yaml:"schedule_timezone" json:"schedule_timezone"`             // Timezone: "UTC" (default) | "Local"
 	ScheduleTimeout       string            `yaml:"schedule_timeout" json:"schedule_timeout"`               // Execution timeout: "30s", "5m", "1h" (default: no timeout)
-	ScheduleMaxConcurrent int               `yaml:"schedule_max_concurrent" json:"schedule_max_concurrent"` // Max concurrent: 1=no overlap, 0=unlimited (default: 0)
+	ScheduleMaxConcurrent int               `yaml:"schedule_max_concurrent" json:"schedule_max_concurrent"` // Accepted but not yet honored: overlapping runs are always skipped, so >1 does not enable parallel executions
 	Heartbeat             *HeartbeatConfig  `yaml:"heartbeat" json:"heartbeat"`                             // Heartbeat monitoring config
 	MaxMemoryMB           int               `yaml:"max_memory_mb" json:"max_memory_mb"`                     // Max memory in MB before restart (0 = disabled)
 	PortBase              int               `yaml:"port_base" json:"port_base"`                             // Base port for scaled instances (PORT = port_base + index)

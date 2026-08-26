@@ -86,8 +86,10 @@ type Manager struct {
 // all configured processes. The Manager should be shut down via Shutdown()
 // when no longer needed.
 func NewManager(cfg *config.Config, logger *slog.Logger, auditLogger *audit.Logger) *Manager {
+	// Construction records the start time as local state only; the corresponding
+	// global metric is emitted from Start(), not here, so merely constructing a
+	// Manager (e.g. for a dry-run or config check) has no global side effect.
 	startTime := time.Now()
-	metrics.SetManagerStartTime(float64(startTime.Unix()))
 
 	// Initialize resource collector if enabled
 	var resourceCollector *metrics.ResourceCollector
