@@ -11,12 +11,14 @@ import (
 
 // Checker validates IP addresses against ACL rules
 type Checker struct {
-	config     *config.ACLConfig
-	allowNets  []*net.IPNet
-	allowIPs   []net.IP
-	denyNets   []*net.IPNet
-	denyIPs    []net.IP
-	trustProxy bool
+	config      *config.ACLConfig
+	allowNets   []*net.IPNet
+	allowIPs    []net.IP
+	denyNets    []*net.IPNet
+	denyIPs     []net.IP
+	trustProxy  bool
+	trustedNets []*net.IPNet
+	trustedIPs  []net.IP
 }
 
 // NewChecker creates a new ACL checker from configuration
@@ -44,7 +46,43 @@ func NewChecker(cfg *config.ACLConfig) (*Checker, error) {
 		}
 	}
 
+	// Parse trusted-proxy list (whose X-Forwarded-For we will honor).
+	for _, entry := range cfg.TrustedProxies {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "/") {
+			_, ipnet, err := net.ParseCIDR(entry)
+			if err != nil {
+				return nil, fmt.Errorf("invalid trusted_proxies CIDR %q: %w", entry, err)
+			}
+			checker.trustedNets = append(checker.trustedNets, ipnet)
+		} else {
+			ip := net.ParseIP(entry)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid trusted_proxies IP %q", entry)
+			}
+			checker.trustedIPs = append(checker.trustedIPs, ip)
+		}
+	}
+
 	return checker, nil
+}
+
+// isTrustedProxy reports whether ip is a configured trusted reverse proxy.
+func (c *Checker) isTrustedProxy(ip net.IP) bool {
+	for _, tip := range c.trustedIPs {
+		if ip.Equal(tip) {
+			return true
+		}
+	}
+	for _, tnet := range c.trustedNets {
+		if tnet.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // parseAndAddEntry parses an IP or CIDR and adds to appropriate list
@@ -129,37 +167,36 @@ func (c *Checker) isInDenyList(ip net.IP) bool {
 	return false
 }
 
-// ExtractIP extracts the real client IP from an HTTP request
+// ExtractIP extracts the real client IP from an HTTP request.
 func (c *Checker) ExtractIP(r *http.Request) (net.IP, error) {
-	// If TrustProxy is enabled, check X-Forwarded-For header
-	if c != nil && c.trustProxy {
-		xff := r.Header.Get("X-Forwarded-For")
-		if xff != "" {
-			// X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
-			// Take the first (leftmost) IP as the original client
+	// The direct TCP peer.
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// No port, treat as IP directly.
+		host = r.RemoteAddr
+	}
+	peer := net.ParseIP(host)
+	if peer == nil {
+		return nil, fmt.Errorf("invalid IP address: %s", host)
+	}
+
+	// Honor X-Forwarded-For only when trust_proxy is enabled AND the direct peer
+	// is a configured trusted proxy. Without the peer check, any client
+	// connecting directly could spoof X-Forwarded-For to forge an allowed source
+	// IP and bypass the ACL. When trusted_proxies is empty, no peer is trusted,
+	// so the header is ignored (fail closed).
+	if c != nil && c.trustProxy && c.isTrustedProxy(peer) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// "client, proxy1, proxy2" — the leftmost is the original client.
 			ips := strings.Split(xff, ",")
-			if len(ips) > 0 {
-				clientIP := strings.TrimSpace(ips[0])
-				ip := net.ParseIP(clientIP)
-				if ip != nil {
-					return ip, nil
-				}
+			clientIP := strings.TrimSpace(ips[0])
+			if ip := net.ParseIP(clientIP); ip != nil {
+				return ip, nil
 			}
 		}
 	}
 
-	// Fallback: extract from RemoteAddr (format: "IP:port")
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		// No port, treat as IP directly
-		host = r.RemoteAddr
-	}
-
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid IP address: %s", host)
-	}
-	return ip, nil
+	return peer, nil
 }
 
 // Middleware returns an HTTP middleware that enforces ACL rules

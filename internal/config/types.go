@@ -276,6 +276,11 @@ type ACLConfig struct {
 	AllowList  []string `yaml:"allow_list" json:"allow_list"`   // Allowed IP addresses/CIDRs
 	DenyList   []string `yaml:"deny_list" json:"deny_list"`     // Denied IP addresses/CIDRs
 	TrustProxy bool     `yaml:"trust_proxy" json:"trust_proxy"` // Trust X-Forwarded-For header (default: false)
+	// TrustedProxies lists the IPs/CIDRs of reverse proxies whose
+	// X-Forwarded-For header is honored. X-Forwarded-For is trusted ONLY when
+	// trust_proxy is true AND the direct connection comes from one of these —
+	// otherwise any client could spoof the header to forge an allowed source IP.
+	TrustedProxies []string `yaml:"trusted_proxies" json:"trusted_proxies"`
 }
 
 // ReadinessConfig configures container readiness for Kubernetes integration.

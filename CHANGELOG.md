@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`trust_proxy` no longer lets any client spoof its source IP.** With
+  `api_acl.trust_proxy` enabled, the `X-Forwarded-For` header was trusted from
+  *any* direct connection, so a client bypassing the proxy could send
+  `X-Forwarded-For: <allowed-ip>` and defeat the IP ACL. A new
+  `api_acl.trusted_proxies` list names the reverse proxies whose header is
+  honored; `X-Forwarded-For` is now used only when the direct peer is one of
+  them, and is ignored otherwise (fail closed, including when the list is empty).
+  `check-config` warns when `trust_proxy` is set without `trusted_proxies`. (CDX-7)
+
 ### Fixed
 
 - **Startup no longer mixes log formats or claims the config is valid before it

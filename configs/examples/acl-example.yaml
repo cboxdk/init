@@ -93,7 +93,11 @@ processes:
 #   allow_list:
 #     - "10.0.0.0/8"         # Internal VPC range
 #   deny_list: []
-#   trust_proxy: true        # IMPORTANT: Trust X-Forwarded-For header
+#   trust_proxy: true        # Trust X-Forwarded-For, but only from trusted_proxies
+#   trusted_proxies:         # REQUIRED with trust_proxy: the proxy's own IP/CIDR.
+#     - "10.0.0.0/8"         # X-Forwarded-For is honored only when the direct
+#                            # connection comes from here; otherwise it is ignored
+#                            # so a client cannot spoof the header to forge an IP.
 
 # Example 3: Development Environment (Allow localhost only)
 #
