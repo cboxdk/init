@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -60,7 +61,12 @@ func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookT
 		err := e.executeOnce(ctx, hook)
 		if err == nil {
 			duration := time.Since(startTime).Seconds()
-			e.logger.Info("Hook completed successfully", "name", hook.Name)
+			e.logger.Info("Hook completed successfully",
+				"name", hook.Name,
+				"type", hookType,
+				"duration_seconds", duration,
+				"exit_code", 0,
+			)
 			metrics.RecordHookExecution(hook.Name, hookType, duration, true)
 			return nil
 		}
@@ -68,7 +74,9 @@ func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookT
 		lastErr = err
 		e.logger.Warn("Hook failed",
 			"name", hook.Name,
+			"type", hookType,
 			"attempt", attempt+1,
+			"exit_code", exitCode(err),
 			"error", err,
 		)
 	}
@@ -78,6 +86,9 @@ func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookT
 	if hook.ContinueOnError {
 		e.logger.Warn("Hook failed but continuing due to continue_on_error",
 			"name", hook.Name,
+			"type", hookType,
+			"duration_seconds", duration,
+			"exit_code", exitCode(lastErr),
 			"error", lastErr,
 		)
 		metrics.RecordHookExecution(hook.Name, hookType, duration, false)
@@ -86,6 +97,16 @@ func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookT
 
 	metrics.RecordHookExecution(hook.Name, hookType, duration, false)
 	return fmt.Errorf("hook %s failed after %d attempts: %w", hook.Name, attempts, lastErr)
+}
+
+// exitCode extracts the process exit code from an execution error.
+// Returns -1 when the command did not run to completion (e.g. timeout kill).
+func exitCode(err error) int {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	return -1
 }
 
 func (e *Executor) executeOnce(ctx context.Context, hook *config.Hook) error {

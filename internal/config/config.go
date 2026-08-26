@@ -50,6 +50,11 @@ func (c *Config) Validate() error {
 		return err
 	}
 
+	// Validate lifecycle hooks
+	if err := c.validateHooks(); err != nil {
+		return err
+	}
+
 	// Validate processes
 	if len(c.Processes) == 0 {
 		return fmt.Errorf("no processes defined")
@@ -80,6 +85,31 @@ func (c *Config) validateGlobal() error {
 	}
 	if c.Global.LogFormat != "json" && c.Global.LogFormat != "text" {
 		return fmt.Errorf("invalid log_format: %s", c.Global.LogFormat)
+	}
+	return nil
+}
+
+// validateHooks validates all lifecycle hook lists
+func (c *Config) validateHooks() error {
+	for _, list := range c.hookLists() {
+		for i, hook := range list.Hooks {
+			name := hook.Name
+			if name == "" {
+				name = fmt.Sprintf("%s[%d]", list.Key, i)
+			}
+			if len(hook.Command) == 0 {
+				return fmt.Errorf("%s hook %s has no command", list.Key, name)
+			}
+			if hook.Timeout < 0 {
+				return fmt.Errorf("%s hook %s has negative timeout: %d", list.Key, name, hook.Timeout)
+			}
+			if hook.Retry < 0 {
+				return fmt.Errorf("%s hook %s has negative retry: %d", list.Key, name, hook.Retry)
+			}
+			if hook.RetryDelay < 0 {
+				return fmt.Errorf("%s hook %s has negative retry_delay: %d", list.Key, name, hook.RetryDelay)
+			}
+		}
 	}
 	return nil
 }

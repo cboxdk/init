@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -124,7 +125,20 @@ func buildFieldNode(t reflect.Type) *fieldNode {
 var (
 	globalFieldTree  = buildFieldNode(reflect.TypeOf(GlobalConfig{}))
 	processFieldTree = buildFieldNode(reflect.TypeOf(Process{}))
+	hookFieldTree    = buildFieldNode(reflect.TypeOf(Hook{}))
 )
+
+// hookEnvTypes maps the env-var segment for each hook list to its YAML key,
+// in the order hook lists appear in HooksConfig.
+var hookEnvTypes = []struct {
+	envPrefix string
+	yamlKey   string
+}{
+	{"PRE_START_", "pre-start"},
+	{"POST_START_", "post-start"},
+	{"PRE_STOP_", "pre-stop"},
+	{"POST_STOP_", "post-stop"},
+}
 
 func normalizeKey(key string) string {
 	return strings.ToLower(strings.ReplaceAll(key, "-", "_"))
@@ -210,6 +224,7 @@ func ensureProcessMap(raw map[string]interface{}) map[string]interface{} {
 func applyEnvOverridesMap(raw map[string]interface{}) error {
 	globalMap := ensureGlobalMap(raw)
 	processesMap := ensureProcessMap(raw)
+	hookCollector := map[string]map[int]map[string]interface{}{}
 
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
@@ -227,13 +242,138 @@ func applyEnvOverridesMap(raw map[string]interface{}) error {
 				continue
 			}
 			setNestedValue(globalMap, path, parseEnvValue(value))
+		case strings.HasPrefix(key, "CBOX_INIT_HOOK_"):
+			segment := strings.TrimPrefix(key, "CBOX_INIT_HOOK_")
+			collectHookEnvOverride(hookCollector, segment, value)
 		case strings.HasPrefix(key, "CBOX_INIT_PROCESS_"):
 			segment := strings.TrimPrefix(key, "CBOX_INIT_PROCESS_")
 			applyProcessEnvOverride(processesMap, segment, value)
 		}
 	}
 
+	applyHookEnvOverrides(raw, hookCollector)
+
 	return nil
+}
+
+// collectHookEnvOverride parses one CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD> variable
+// into the collector, keyed by hook-list YAML key and index. Unknown types,
+// indexes, or fields are ignored, matching the behavior of the other prefixes.
+func collectHookEnvOverride(collector map[string]map[int]map[string]interface{}, segment string, value string) {
+	var yamlKey string
+	for _, ht := range hookEnvTypes {
+		if strings.HasPrefix(segment, ht.envPrefix) {
+			yamlKey = ht.yamlKey
+			segment = strings.TrimPrefix(segment, ht.envPrefix)
+			break
+		}
+	}
+	if yamlKey == "" {
+		return
+	}
+
+	sep := strings.Index(segment, "_")
+	if sep <= 0 {
+		return
+	}
+	index, err := strconv.Atoi(segment[:sep])
+	if err != nil || index < 0 {
+		return
+	}
+	fieldSegment := segment[sep+1:]
+	if fieldSegment == "" {
+		return
+	}
+
+	// Hook environment variables keep their key verbatim, like process ENV_.
+	if envKey := strings.TrimPrefix(fieldSegment, "ENV_"); envKey != fieldSegment && envKey != "" {
+		envMap := ensureMap(hookEnvEntry(collector, yamlKey, index), "env")
+		envMap[envKey] = value
+		return
+	}
+
+	// ALLOW_FAILURE is the documented env spelling for continue_on_error.
+	normalized := normalizeKey(fieldSegment)
+	if normalized == "allow_failure" {
+		normalized = "continue_on_error"
+	}
+
+	path, ok := matchFieldPath(hookFieldTree, strings.Split(normalized, "_"))
+	if !ok || len(path) == 0 {
+		return
+	}
+
+	hookMap := hookEnvEntry(collector, yamlKey, index)
+	if path[0] == "command" {
+		hookMap["command"] = parseCommandValue(value)
+		return
+	}
+	setNestedValue(hookMap, path, parseEnvValue(value))
+}
+
+// hookEnvEntry returns (creating as needed) the collector entry for one hook.
+func hookEnvEntry(collector map[string]map[int]map[string]interface{}, yamlKey string, index int) map[string]interface{} {
+	byIndex, ok := collector[yamlKey]
+	if !ok {
+		byIndex = map[int]map[string]interface{}{}
+		collector[yamlKey] = byIndex
+	}
+	hookMap, ok := byIndex[index]
+	if !ok {
+		hookMap = map[string]interface{}{}
+		byIndex[index] = hookMap
+	}
+	return hookMap
+}
+
+// applyHookEnvOverrides appends env-defined hooks to the raw config, after any
+// YAML-defined hooks, ordered by their env index within each hook list.
+func applyHookEnvOverrides(raw map[string]interface{}, collector map[string]map[int]map[string]interface{}) {
+	if len(collector) == 0 {
+		return
+	}
+
+	hooksMap := ensureMap(raw, "hooks")
+	for _, ht := range hookEnvTypes {
+		byIndex, ok := collector[ht.yamlKey]
+		if !ok {
+			continue
+		}
+
+		indexes := make([]int, 0, len(byIndex))
+		for index := range byIndex {
+			indexes = append(indexes, index)
+		}
+		sort.Ints(indexes)
+
+		list, _ := hooksMap[ht.yamlKey].([]interface{})
+		for _, index := range indexes {
+			list = append(list, byIndex[index])
+		}
+		hooksMap[ht.yamlKey] = list
+	}
+}
+
+// parseCommandValue parses a command list from an env value: a JSON array
+// (["php","artisan","migrate"]) or a comma-separated list (php,artisan,migrate).
+func parseCommandValue(raw string) interface{} {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "[") {
+		var arr []interface{}
+		if err := json.Unmarshal([]byte(raw), &arr); err == nil {
+			return arr
+		}
+	}
+
+	parts := strings.Split(raw, ",")
+	command := make([]interface{}, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			command = append(command, part)
+		}
+	}
+	return command
 }
 
 func buildPathFromKey(segment string, tree *fieldNode) []string {
@@ -288,7 +428,11 @@ func applyProcessEnvOverride(processes map[string]interface{}, segment string, v
 			name = normalizeProcessName(procEncoded)
 		}
 		procMap := ensureMap(processes, name)
-		setNestedValue(procMap, path, parseEnvValue(value))
+		if len(path) == 1 && path[0] == "command" {
+			setNestedValue(procMap, path, parseCommandValue(value))
+		} else {
+			setNestedValue(procMap, path, parseEnvValue(value))
+		}
 		return
 	}
 }
