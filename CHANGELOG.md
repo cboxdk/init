@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Shared, typed DTOs for the API's data responses.** The server built the
+  process-list, process-detail, logs, and oneshot-history responses as ad-hoc
+  `map[string]any`, and the client decoded each into a separate anonymous struct
+  — no compile-time link between the two, so a field rename could silently break
+  the client. These four shapes now live once in a new `internal/apitypes`
+  package that both the server and the client import. Wire format unchanged.
+  (STYLE-3, STYLE-5)
 ### Fixed
 
 - **Clearer CLI errors when the daemon is not reachable, and a `--url` alias on

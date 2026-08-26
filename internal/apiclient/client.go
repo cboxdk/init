@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cboxdk/init/internal/apitypes"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/process"
@@ -186,9 +187,7 @@ func (c *Client) do(ctx context.Context, method, path string, reqBody, out any) 
 
 // ListProcesses fetches process list from API
 func (c *Client) ListProcesses() ([]process.ProcessInfo, error) {
-	var response struct {
-		Processes []process.ProcessInfo `json:"processes"`
-	}
+	var response apitypes.ProcessListResponse
 	if err := c.do(context.Background(), http.MethodGet, "/api/v1/processes", nil, &response); err != nil {
 		return nil, err
 	}
@@ -297,9 +296,7 @@ func (c *Client) GetStackLogs(limit int) ([]logger.LogEntry, error) {
 }
 
 func (c *Client) fetchLogs(path string) ([]logger.LogEntry, error) {
-	var payload struct {
-		Logs []logger.LogEntry `json:"logs"`
-	}
+	var payload apitypes.LogsResponse
 	if err := c.do(context.Background(), http.MethodGet, path, nil, &payload); err != nil {
 		return nil, err
 	}
@@ -311,9 +308,7 @@ func (c *Client) GetProcessConfig(name string) (*config.Process, error) {
 	if name == "" {
 		return nil, fmt.Errorf("process name is required")
 	}
-	var payload struct {
-		Config *config.Process `json:"config"`
-	}
+	var payload apitypes.ProcessDetailResponse
 	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/api/v1/processes/%s", name), nil, &payload); err != nil {
 		return nil, err
 	}
@@ -354,9 +349,7 @@ func (c *Client) GetOneshotHistory(limit int) ([]process.OneshotExecution, error
 	if limit > 0 {
 		path = fmt.Sprintf("%s?limit=%d", path, limit)
 	}
-	var response struct {
-		Executions []process.OneshotExecution `json:"executions"`
-	}
+	var response apitypes.OneshotHistoryResponse
 	if err := c.do(context.Background(), http.MethodGet, path, nil, &response); err != nil {
 		return nil, err
 	}
