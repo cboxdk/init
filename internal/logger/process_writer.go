@@ -1,10 +1,11 @@
 package logger
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"log/slog"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/cboxdk/init/internal/config"
@@ -32,6 +33,12 @@ type ProcessWriter struct {
 	// Log buffer for TUI/API access
 	logBuffer *LogBuffer
 
+	// mu guards buffer and the multiline state so a ProcessWriter can be shared
+	// by concurrent writers. os/exec spawns one copier goroutine per distinct
+	// io.Writer, so a caller that hands the same writer to both cmd.Stdout and
+	// cmd.Stderr (the scheduled-job path) gets two goroutines calling Write at
+	// once; without this they race on the buffer and can panic.
+	mu     sync.Mutex
 	buffer bytes.Buffer
 }
 
@@ -84,14 +91,25 @@ func NewProcessWriter(logger *slog.Logger, processName, instanceID, stream strin
 // Write implements io.Writer
 // Processes incoming bytes through the full logging pipeline
 func (pw *ProcessWriter) Write(p []byte) (n int, err error) {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+
 	pw.buffer.Write(p)
 
-	// Process complete lines
-	scanner := bufio.NewScanner(&pw.buffer)
-	var remaining bytes.Buffer
-
-	for scanner.Scan() {
-		line := scanner.Text()
+	// Consume only complete lines — up to and including the last newline — and
+	// leave any trailing partial line in the buffer for the next Write or Flush.
+	// A bufio.Scanner would instead emit the final token even without a trailing
+	// newline, which split a line flushed mid-write into several log entries and
+	// left the incomplete-line / oversized-buffer handling below permanently
+	// unreachable.
+	for {
+		data := pw.buffer.Bytes()
+		i := bytes.IndexByte(data, '\n')
+		if i < 0 {
+			break
+		}
+		line := strings.TrimSuffix(string(data[:i]), "\r")
+		pw.buffer.Next(i + 1)
 		pw.processLine(line)
 	}
 
@@ -102,14 +120,8 @@ func (pw *ProcessWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	// Keep incomplete line in buffer
-	if pw.buffer.Len() > 0 {
-		remaining.Write(pw.buffer.Bytes())
-	}
-	pw.buffer = remaining
-
-	// SAFETY: Flush buffer if it exceeds max size to prevent OOM
-	// This handles pathological cases where process outputs no newlines
+	// SAFETY: Flush buffer if it exceeds max size to prevent OOM.
+	// This handles pathological cases where a process outputs no newlines.
 	if pw.buffer.Len() > maxBufferSize {
 		partialLine := pw.buffer.String()
 		pw.buffer.Reset()
@@ -234,6 +246,9 @@ func (pw *ProcessWriter) processEntry(entry string) {
 // Flush flushes any remaining buffered output
 // CRITICAL: Must be called when process exits to avoid losing buffered output
 func (pw *ProcessWriter) Flush() {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+
 	// Flush incomplete line buffer
 	if pw.buffer.Len() > 0 {
 		line := pw.buffer.String()
