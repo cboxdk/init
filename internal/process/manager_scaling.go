@@ -119,13 +119,13 @@ func (m *Manager) scaleFromZero(ctx context.Context, name string, sup *Superviso
 		"name", name,
 		"desired", desiredScale,
 	)
-	if cfg := m.config.Processes[name]; cfg != nil {
-		cfg.Scale = desiredScale
-	}
+	// Route the config write through updateScaleConfig, which holds the manager
+	// lock. Writing m.config.Processes[name].Scale directly here (this runs after
+	// ScaleProcess released its read lock) raced updateScaleConfig and GetConfig.
+	_ = m.updateScaleConfig(name, desiredScale) // also records the desired-scale metric
 	if err := m.startSupervisor(ctx, sup); err != nil {
 		return fmt.Errorf("failed to start process %s for scale %d: %w", name, desiredScale, err)
 	}
-	metrics.SetDesiredScale(name, desiredScale)
 	if desiredScale == 1 {
 		return nil
 	}
