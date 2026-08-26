@@ -178,9 +178,31 @@ func runServe(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	// Setup signal handling
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	// Setup signal handling. Beyond the shutdown trio, cbox-init behaves like an
+	// init: SIGHUP reloads the configuration, and SIGUSR1/SIGUSR2 are forwarded to
+	// the managed workload (nginx reload, php-fpm log reopen / graceful reload) so
+	// `docker kill -s HUP|USR1|USR2 <container>` reaches the application.
+	sigChan := make(chan os.Signal, 8)
+	signal.Notify(sigChan,
+		syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, // graceful shutdown
+		syscall.SIGHUP,                   // configuration reload
+		syscall.SIGUSR1, syscall.SIGUSR2, // forwarded to the workload
+	)
+
+	// Orphan reaping requires either being PID 1 (the kernel re-parents orphans
+	// onto us automatically) or being registered as a child subreaper. When
+	// cbox-init is wrapped — `docker run --init`, a shell entrypoint, or a k8s pod
+	// where the pause container is PID 1 under shareProcessNamespace — it is not
+	// PID 1, and without the subreaper flag its zombie-reaping and restart
+	// guarantees silently stop applying to grandchildren.
+	if signals.IsPID1() {
+		slog.Info("Running as PID 1")
+	} else if err := signals.SetSubreaper(); err != nil {
+		slog.Warn("Not running as PID 1 and could not register as child subreaper; "+
+			"orphaned grandchildren may not be reaped", "error", err)
+	} else {
+		slog.Info("Not running as PID 1; registered as child subreaper for orphan reaping")
+	}
 
 	// Start zombie reaper
 	go signals.ReapZombies(cfg.Global.ZombieReapInterval)
@@ -617,13 +639,38 @@ func startAPIServer(ctx context.Context, cfg *config.Config, pm *process.Manager
 
 // waitForShutdown waits for shutdown signal or all processes dying
 func waitForShutdown(sigChan chan os.Signal, pm *process.Manager) string {
-	select {
-	case sig := <-sigChan:
+	for {
+		select {
+		case sig := <-sigChan:
+			if reason := classifySignal(sig, pm); reason != "" {
+				return reason
+			}
+			// Signal handled in place (forwarded to the workload); keep waiting.
+		case <-pm.AllDeadChannel():
+			slog.Warn("All managed processes have died")
+			return "all processes died"
+		}
+	}
+}
+
+// classifySignal decides what a received signal means for the main loop. It
+// returns a non-empty shutdown or reload reason to act on, or "" when the signal
+// was handled in place (forwarded to the workload) and the loop should keep
+// waiting. SIGHUP maps to a config reload — which works with or without watch
+// mode — and SIGUSR1/SIGUSR2 are relayed to every managed process group.
+func classifySignal(sig os.Signal, pm *process.Manager) string {
+	switch sig {
+	case syscall.SIGHUP:
+		slog.Info("Received SIGHUP, reloading configuration")
+		return "config_reload"
+	case syscall.SIGUSR1, syscall.SIGUSR2:
+		if s, ok := sig.(syscall.Signal); ok {
+			pm.ForwardSignal(s)
+		}
+		return ""
+	default:
 		slog.Info("Received shutdown signal", "signal", sig.String())
 		return fmt.Sprintf("signal: %s", sig.String())
-	case <-pm.AllDeadChannel():
-		slog.Warn("All managed processes have died")
-		return "all processes died"
 	}
 }
 
@@ -640,16 +687,20 @@ func waitForShutdownOrReload(
 	}
 
 	// Watch mode enabled, also listen for reload events
-	select {
-	case sig := <-sigChan:
-		slog.Info("Received shutdown signal", "signal", sig.String())
-		return fmt.Sprintf("signal: %s", sig.String())
-	case <-pm.AllDeadChannel():
-		slog.Warn("All managed processes have died")
-		return "all processes died"
-	case <-reloadChan:
-		slog.Info("Config reload requested")
-		return "config_reload"
+	for {
+		select {
+		case sig := <-sigChan:
+			if reason := classifySignal(sig, pm); reason != "" {
+				return reason
+			}
+			// Signal handled in place (forwarded to the workload); keep waiting.
+		case <-pm.AllDeadChannel():
+			slog.Warn("All managed processes have died")
+			return "all processes died"
+		case <-reloadChan:
+			slog.Info("Config reload requested")
+			return "config_reload"
+		}
 	}
 }
 

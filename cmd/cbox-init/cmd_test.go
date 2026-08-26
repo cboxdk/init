@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -5831,6 +5832,53 @@ func TestMainEntryPoint(t *testing.T) {
 	// but we can verify the package compiles correctly and exports are available
 	if version == "" {
 		t.Error("version should be set")
+	}
+}
+
+// TestClassifySignal covers the signal-plane routing: SIGHUP reloads,
+// SIGUSR1/2 are forwarded (handled in place, no shutdown reason), and the
+// shutdown trio return a shutdown reason.
+func TestClassifySignal(t *testing.T) {
+	cfg := &config.Config{Version: "1.0", Global: config.GlobalConfig{ShutdownTimeout: 5}, Processes: make(map[string]*config.Process)}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pm := process.NewManager(cfg, log, audit.NewLogger(log, false))
+
+	if got := classifySignal(syscall.SIGHUP, pm); got != "config_reload" {
+		t.Errorf("SIGHUP => %q, want config_reload", got)
+	}
+	if got := classifySignal(syscall.SIGUSR1, pm); got != "" {
+		t.Errorf("SIGUSR1 => %q, want \"\" (forwarded, keep waiting)", got)
+	}
+	if got := classifySignal(syscall.SIGUSR2, pm); got != "" {
+		t.Errorf("SIGUSR2 => %q, want \"\" (forwarded, keep waiting)", got)
+	}
+	if got := classifySignal(syscall.SIGTERM, pm); !strings.Contains(got, "signal") {
+		t.Errorf("SIGTERM => %q, want a shutdown reason containing 'signal'", got)
+	}
+}
+
+// A forwarded signal (SIGUSR1) must not end the wait; only a real shutdown
+// signal after it should. This proves classifySignal's "keep waiting" path is
+// wired into the loop.
+func TestWaitForShutdown_ForwardedSignalDoesNotStop(t *testing.T) {
+	cfg := &config.Config{Version: "1.0", Global: config.GlobalConfig{ShutdownTimeout: 5}, Processes: make(map[string]*config.Process)}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pm := process.NewManager(cfg, log, audit.NewLogger(log, false))
+
+	sigChan := make(chan os.Signal, 2)
+	done := make(chan string, 1)
+	go func() { done <- waitForShutdown(sigChan, pm) }()
+
+	sigChan <- syscall.SIGUSR1 // forwarded, must not return
+	sigChan <- syscall.SIGTERM // now it should return a shutdown reason
+
+	select {
+	case result := <-done:
+		if !strings.Contains(result, "signal") {
+			t.Errorf("waitForShutdown() = %q, want a shutdown reason", result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("waitForShutdown() timed out; a forwarded signal likely stopped the loop")
 	}
 }
 
