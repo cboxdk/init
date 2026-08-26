@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-08-26
+
 ### Added
 
 - **Benchmarks for the hot paths.** The repo had a `make bench` target but no
@@ -15,19 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read/write — `GetRange` now shows a single allocation, locking in the O(n)
   fix) and `ProcessWriter.Write` (the per-child log path, incl. cross-write
   partial-line assembly). (PERF-9)
-
-### Fixed
-
-- **405 responses now include an `Allow` header, and a doubled word in
-  `check-config` is gone.** Every `405 Method Not Allowed` from the management
-  API now advertises the accepted methods as RFC 7231 §6.5.5 requires (clients
-  and proxies rely on it). And the suggestion formatter printed "→ Consider:
-  Consider …" because the suggestions already begin with "Consider"; the
-  redundant prefix is removed. (DX-13)
-
-## [3.0.0] - 2026-08-26
-
-### Added
 
 - **Per-process signal action.** `cbox-init signal <process> <signal>` (and
   `POST /api/v1/processes/{name}/signal` with `{"signal":"SIGHUP"}`) delivers an
@@ -132,6 +121,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have made the drift gate above either wrong or littered with special cases.
 
 ### Fixed
+
+- **405 responses now include an `Allow` header, and a doubled word in
+  `check-config` is gone.** Every `405 Method Not Allowed` from the management
+  API now advertises the accepted methods as RFC 7231 §6.5.5 requires (clients
+  and proxies rely on it). And the suggestion formatter printed "→ Consider:
+  Consider …" because the suggestions already begin with "Consider"; the
+  redundant prefix is removed. (DX-13)
 
 - **Stopping the management API is now bounded and never hangs.** `Server.Stop`
   called `http.Server.Shutdown(ctx)` and surfaced any error, so a lingering
