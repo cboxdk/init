@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The CLI control commands are now actually tested.** The `list`/`restart`/…
+  subprocess tests asserted nothing (only `t.Logf`), so any regression in the
+  client commands passed green. Added tests that run the CLI against an httptest
+  server and assert on real output and exit codes: `list` prints the process rows
+  and exits non-zero when a process is unhealthy; `restart` confirms on success
+  and exits non-zero (with an error message) on a 404. (TEST-4)
+### Fixed
+
 - **Fixed a data race in resource sampling introduced by the CPU% handle
   cache.** Caching the gopsutil process handle (PERF-3) meant a handle could be
   read by two goroutines at once, and gopsutil's `Process` caches internal state
