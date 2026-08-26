@@ -25,6 +25,23 @@ import (
 // DefaultMaxRequestBodySize is the default request body size limit (8MB)
 const DefaultMaxRequestBodySize = 8 * 1024 * 1024 // 8MB
 
+// MaxLogLimit bounds the ?limit= parameter on log endpoints. Without it a single
+// request could ask the manager to pre-allocate len(processes)*limit entries — a
+// multi-GB allocation (or an integer overflow) that is fatal in PID 1. Matches
+// the cap already enforced on the metrics-history endpoint.
+const MaxLogLimit = 10000
+
+// clampLogLimit bounds a positive, caller-supplied log limit to MaxLogLimit.
+// Parsing stays lenient (a non-numeric or non-positive limit falls back to the
+// endpoint default); only oversized values are clamped, so a pathological
+// ?limit=1000000000 can't drive a huge allocation.
+func clampLogLimit(limit int) int {
+	if limit > MaxLogLimit {
+		return MaxLogLimit
+	}
+	return limit
+}
+
 // rateLimiter implements a token bucket rate limiter per client IP
 type rateLimiter struct {
 	visitors        map[string]*visitor
@@ -954,7 +971,7 @@ func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request, processNa
 	limit := 100 // Default limit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
+			limit = clampLogLimit(parsedLimit)
 		}
 	}
 
@@ -1062,7 +1079,7 @@ func (s *Server) handleStackLogs(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
+			limit = clampLogLimit(parsedLimit)
 		}
 	}
 

@@ -41,7 +41,17 @@ func (m *Manager) GetStackLogs(limit int) []logger.LogEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	allLogs := make([]logger.LogEntry, 0, len(m.processes)*limit)
+	// Bound the pre-allocation hint. A caller-supplied limit flows in here, and
+	// len(processes)*limit with a large limit either requests a giant backing
+	// array or overflows negative — a runtime-fatal make() in PID 1. Each
+	// supervisor returns at most its ring-buffer size anyway, so append grows
+	// from a modest hint as needed. The API layer also clamps limit (MaxLogLimit).
+	const maxPreallocPerProcess = 1000
+	preallocPerProcess := limit
+	if preallocPerProcess <= 0 || preallocPerProcess > maxPreallocPerProcess {
+		preallocPerProcess = maxPreallocPerProcess
+	}
+	allLogs := make([]logger.LogEntry, 0, len(m.processes)*preallocPerProcess)
 
 	for _, sup := range m.processes {
 		// Reuse supervisor ordering logic and enforce a per-process cap

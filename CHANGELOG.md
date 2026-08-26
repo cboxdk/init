@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the management API now binds loopback by default.** `api_host`
+  defaulted to empty, meaning all interfaces — enabling the API with no
+  `api_auth` and no `api_acl` served the full control plane (add/stop processes,
+  save/reload config) unauthenticated on `0.0.0.0:9180`. `api_host` now defaults
+  to `127.0.0.1`, and configuration validation **refuses to start** an API bound
+  to a non-loopback interface without either a bearer token (`api_auth`) or an IP
+  ACL (`api_acl`). To expose the API deliberately, set an explicit `api_host`
+  (e.g. `0.0.0.0`) *and* configure auth or an ACL. The local Unix socket and
+  loopback binds are unaffected; `metrics_host` is unchanged (Prometheus scrapes
+  it on the pod/container IP).
+
+### Fixed
+
+- **A single log request could crash PID 1.** `GET /api/v1/logs?limit=N` and the
+  per-process logs endpoint pre-allocated `len(processes) * limit` entries with
+  no upper bound, so a large `limit` requested a multi-GB backing array (or
+  overflowed to a negative capacity) — a runtime-fatal `make()` in PID 1,
+  reachable on the unauthenticated local socket. The limit is now clamped to
+  10000 (matching the metrics-history endpoint) and the manager caps its
+  pre-allocation hint independently.
+
 ### Fixed
 
 - **`check-config --json` now emits real JSON.** The flag advertised for CI/CD
