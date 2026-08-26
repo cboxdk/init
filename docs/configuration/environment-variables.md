@@ -209,8 +209,9 @@ CBOX_INIT_GLOBAL_API_AUTH=your-secure-token-here
 # Enable/disable process
 CBOX_INIT_PROCESS_<NAME>_ENABLED=true
 
-# Command (JSON array)
+# Command (JSON array or comma-separated)
 CBOX_INIT_PROCESS_<NAME>_COMMAND='["php-fpm","-F","-R"]'
+CBOX_INIT_PROCESS_<NAME>_COMMAND=php-fpm,-F,-R
 
 # Priority (startup order)
 CBOX_INIT_PROCESS_<NAME>_PRIORITY=10
@@ -236,6 +237,40 @@ CBOX_INIT_PROCESS_QUEUE_ENV_QUEUE_CONNECTION=redis
 CBOX_INIT_PROCESS_QUEUE_ENV_REDIS_HOST=localhost
 CBOX_INIT_PROCESS_APP_ENV_DEBUG=true
 ```
+
+## Lifecycle Hook Settings
+
+Global hooks can be defined without any YAML using indexed variables:
+
+```bash
+# Pattern: CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD>
+# <TYPE>: PRE_START | POST_START | PRE_STOP | POST_STOP
+# <N>:    non-negative index (determines order)
+
+# Command (comma-separated or JSON array)
+CBOX_INIT_HOOK_PRE_START_0_COMMAND=php,please,stache:warm
+CBOX_INIT_HOOK_PRE_START_0_COMMAND='["php","please","stache:warm"]'
+
+# Name (defaults to pre-start-<n>)
+CBOX_INIT_HOOK_PRE_START_0_NAME=stache-warm
+
+# Timeout in seconds (default 30)
+CBOX_INIT_HOOK_PRE_START_0_TIMEOUT=300
+
+# Best-effort: log failure and continue startup (default false).
+# ALLOW_FAILURE and CONTINUE_ON_ERROR are equivalent.
+CBOX_INIT_HOOK_PRE_START_0_ALLOW_FAILURE=true
+
+# Retries and delay between them, in seconds
+CBOX_INIT_HOOK_PRE_START_0_RETRY=2
+CBOX_INIT_HOOK_PRE_START_0_RETRY_DELAY=5
+
+# Working directory and hook-local environment variables
+CBOX_INIT_HOOK_PRE_START_0_WORKING_DIR=/var/www/html
+CBOX_INIT_HOOK_PRE_START_0_ENV_APP_ENV=production
+```
+
+Env-defined hooks are appended after any YAML-defined hooks in the same list, ordered by their index. See [Lifecycle Hooks](lifecycle-hooks.md) for hook semantics.
 
 ## Complete Examples
 

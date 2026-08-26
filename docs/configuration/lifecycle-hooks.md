@@ -74,10 +74,33 @@ hooks:
       timeout: 120
 ```
 
-**Settings:**
-- `name` - Hook identifier (for logging)
-- `command` - Command to execute (array format)
-- `timeout` - Maximum execution time in seconds
+**Settings (all hook lists):**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `name` | string | `<hook-list>-<index>` (e.g. `pre-start-0`) | Hook identifier used in logs and metrics |
+| `command` | array | *(required)* | Command to execute (array format, no shell) |
+| `timeout` | int | `30` | Maximum execution time in seconds |
+| `retry` | int | `0` | Retries after a failed attempt |
+| `retry_delay` | int | `0` | Seconds to wait between retries |
+| `continue_on_error` | bool | `false` | Log the failure and continue instead of aborting startup |
+| `env` | map | — | Extra environment variables for the hook command |
+| `working_dir` | string | — | Working directory for the hook command |
+
+**Fail-fast vs. best-effort:** a failing or timed-out pre-start hook aborts container startup by default — the right behavior for migrations. For best-effort work like cache warming, where a cold cache is degraded but not down, set `continue_on_error: true`:
+
+```yaml
+hooks:
+  pre-start:
+    - name: migrate
+      command: ["php", "artisan", "migrate", "--force"]
+      timeout: 300            # failure aborts startup (default)
+
+    - name: stache-warm
+      command: ["php", "please", "stache:warm"]
+      timeout: 300
+      continue_on_error: true # log error, start anyway
+```
 
 **Use Cases:**
 - **Database migrations:** Run schema updates
@@ -221,6 +244,28 @@ Process Post-Stop Hooks (parallel, per process)
     ↓
 Container Exit
 ```
+
+## Defining Hooks via Environment Variables
+
+Global hooks can be defined entirely through environment variables — no YAML mount required. This is the intended path for docker-compose and Kubernetes deployments built on prepared base images:
+
+```bash
+CBOX_INIT_HOOK_PRE_START_0_NAME=stache-warm
+CBOX_INIT_HOOK_PRE_START_0_COMMAND=php,please,stache:warm
+CBOX_INIT_HOOK_PRE_START_0_TIMEOUT=300
+CBOX_INIT_HOOK_PRE_START_0_ALLOW_FAILURE=true
+
+CBOX_INIT_HOOK_PRE_START_1_COMMAND=php,artisan,event:cache
+```
+
+The pattern is `CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD>` where `<TYPE>` is `PRE_START`, `POST_START`, `PRE_STOP`, or `POST_STOP` and `<N>` is a non-negative index that determines ordering. Env-defined hooks are appended after any YAML-defined hooks in the same list.
+
+- `COMMAND` accepts a comma-separated list (`php,please,stache:warm`) or a JSON array (`["php","please","stache:warm"]`). Use the JSON form when an argument contains a comma.
+- `ALLOW_FAILURE` is the env spelling of `continue_on_error` (both are accepted).
+- All other hook fields map by name: `NAME`, `TIMEOUT`, `RETRY`, `RETRY_DELAY`, `WORKING_DIR`, and `ENV_<KEY>` for hook environment variables.
+- `NAME` defaults to `<hook-list>-<n>` (e.g. `pre-start-0`).
+
+See [Environment Variables](environment-variables.md) for the full override reference.
 
 ## Advanced Patterns
 

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Global lifecycle hooks can be defined entirely via environment variables —
+  `CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD>` (e.g. `CBOX_INIT_HOOK_PRE_START_0_COMMAND=php,please,stache:warm`)
+  — so docker-compose/k8s deployments on prepared base images need no YAML
+  mount for warmup or migration hooks. Env-defined hooks append after
+  YAML-defined ones, ordered by index; `ALLOW_FAILURE` is accepted as the env
+  spelling of `continue_on_error`. (#33)
+- `COMMAND` env overrides (hooks and processes) accept a comma-separated list
+  alongside the existing JSON-array form.
+- Hooks are validated at config load (command required, non-negative
+  timeout/retry/retry_delay) and unnamed hooks get a stable default name
+  (`pre-start-0`, …) so logs and metrics always carry a hook identity.
+- Hook execution logs carry structured `type`, `duration_seconds` and
+  `exit_code` fields.
+
 - The supply-chain gate the sibling packages run: `govulncheck`, a deterministic
   CycloneDX 1.5 SBOM (`tools/sbomnorm`) and a dependency license check
   (`tools/licensecheck`), plus gofmt and `go mod tidy` drift checks. CI had none

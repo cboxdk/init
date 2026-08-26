@@ -613,9 +613,40 @@ func (c *Config) SetDefaults() {
 	// Set global defaults
 	c.setGlobalDefaults()
 
+	// Hook defaults
+	c.setHookDefaults()
+
 	// Process defaults
 	for name, proc := range c.Processes {
 		c.setProcessDefaults(name, proc)
+	}
+}
+
+// hookLists returns the four hook lists with their YAML keys, in lifecycle order.
+func (c *Config) hookLists() []struct {
+	Key   string
+	Hooks []Hook
+} {
+	return []struct {
+		Key   string
+		Hooks []Hook
+	}{
+		{"pre-start", c.Hooks.PreStart},
+		{"post-start", c.Hooks.PostStart},
+		{"pre-stop", c.Hooks.PreStop},
+		{"post-stop", c.Hooks.PostStop},
+	}
+}
+
+// setHookDefaults assigns a stable default name (<hook-list>-<index>) to hooks
+// defined without one, so logs and metrics always carry a hook identity.
+func (c *Config) setHookDefaults() {
+	for _, list := range c.hookLists() {
+		for i := range list.Hooks {
+			if list.Hooks[i].Name == "" {
+				list.Hooks[i].Name = fmt.Sprintf("%s-%d", list.Key, i)
+			}
+		}
 	}
 }
 
