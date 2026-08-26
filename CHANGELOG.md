@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Laravel scaffold no longer generates a queue worker that races Horizon.**
+  `scaffold laravel` enabled both Horizon and a raw `queue:work --queue=default`
+  worker by default. Horizon supervises its own workers for every queue, so the
+  two drained the `default` queue simultaneously and raced for each job. The raw
+  worker is now omitted whenever Horizon is enabled (Symfony and Horizon-less
+  Laravel setups still get it). The generated API block also documents its
+  loopback-by-default binding and how to secure it. (DX-11)
+
 ### Changed
 
 - **Lifecycle hook types are now constants, and the four execution blocks share

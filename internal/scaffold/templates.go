@@ -146,9 +146,15 @@ global:
   log_format: json
   {{- if .EnableAPI }}
 
-  # Management API
+  # Management API. Binds loopback (127.0.0.1) by default, so it is reachable
+  # only from inside the container. To expose it (e.g. a published port), set
+  # api_host: 0.0.0.0 AND uncomment api_auth or configure api_acl — cbox-init
+  # refuses to serve a non-loopback API without one. check-config will remind you
+  # to secure it for production even on loopback.
   api_enabled: true
+  api_host: 127.0.0.1
   api_port: {{ .APIPort }}
+  # api_auth: "${CBOX_API_TOKEN}"
   {{- end }}
   {{- if .EnableMetrics }}
 
@@ -405,8 +411,11 @@ processes:
         command: ["php", "artisan", "horizon:terminate"]
         timeout: 60
   {{- end }}
-  {{- if and .EnableQueue (or (eq .Framework "laravel") (eq .Framework "symfony")) }}
+  {{- if and .EnableQueue (not .EnableHorizon) (or (eq .Framework "laravel") (eq .Framework "symfony")) }}
 
+  # Raw queue worker. Omitted when Horizon is enabled: Horizon supervises its own
+  # workers for every queue, so running queue:work on the same (default) queue
+  # alongside it would have both drain it and race for jobs.
   queue-default:
     enabled: true
     command: ["php", "artisan", "queue:work", "{{ .QueueConnection }}", "--queue=default", "--tries=3"]
