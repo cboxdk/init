@@ -143,6 +143,8 @@ type Supervisor struct {
 	healthKnown            bool           // Whether at least one health check result has been observed
 	healthHealthy          bool           // Liveness health after thresholds/hysteresis
 	lastCheckSucceeded     bool           // Raw result from the most recent health check
+	lastExitCode           int            // Exit code of the most recent instance death (see lastExitSet)
+	lastExitSet            bool           // Whether an instance has ever exited (distinguishes "exited 0" from "never ran")
 	goroutines             sync.WaitGroup // CRITICAL: Track all goroutines for clean shutdown
 	mu                     sync.RWMutex
 	operationMu            sync.Mutex // Serializes lifecycle/scale operations so reads can proceed
@@ -826,6 +828,14 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 	}
 	instance.mu.Unlock()
 
+	// Remember this instance's exit code for the container-level exit decision.
+	// When every process is dead, the manager uses the worst of these to decide
+	// PID 1's own exit code (see Manager.TerminalExitCode).
+	s.mu.Lock()
+	s.lastExitCode = exitCode
+	s.lastExitSet = true
+	s.mu.Unlock()
+
 	// Record process stop metrics
 	metrics.RecordProcessStop(s.name, instance.id, exitCode)
 
@@ -1458,6 +1468,15 @@ func (s *Supervisor) executePreStopHook(ctx context.Context, instance *Instance)
 		)
 		// Continue with shutdown even if hook fails
 	}
+}
+
+// LastExitCode returns the exit code of the most recent instance death and
+// whether any instance has ever exited. It feeds the container-level exit-code
+// decision when all processes are dead.
+func (s *Supervisor) LastExitCode() (code int, exited bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastExitCode, s.lastExitSet
 }
 
 // ForwardSignal delivers sig to every running instance's process group. It is

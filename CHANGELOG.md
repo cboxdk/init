@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The container exits non-zero when its workload dies.** When all managed
+  processes were dead, PID 1 returned 0, so Docker `restart: on-failure` and
+  Kubernetes saw a *successful* exit and did not restart a crash-looped
+  container. cbox-init now exits non-zero when the death is abnormal — any
+  process exited non-zero or was signalled, or a long-running process is dead
+  even after a clean exit — while a container whose only work was a oneshot that
+  completed with exit 0 still exits 0.
 - **Processes added or updated via the API are now fully validated.** Only the
   command and scale were checked, so a `POST /processes` with a typo'd restart
   policy (`on_failure`) or an invalid `type`/`initial_state` was accepted with

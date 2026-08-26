@@ -319,8 +319,9 @@ func runServe(cmd *cobra.Command, args []string) {
 	}
 
 	// Main event loop - handles shutdown signals and config reloads
+	var shutdownReason string
 	for {
-		shutdownReason := waitForShutdownOrReload(sigChan, pm, reloadChan, watchMode)
+		shutdownReason = waitForShutdownOrReload(sigChan, pm, reloadChan, watchMode)
 
 		// Handle reload vs shutdown
 		if shutdownReason == "config_reload" {
@@ -342,6 +343,18 @@ func runServe(cmd *cobra.Command, args []string) {
 		// Graceful shutdown for other reasons (signal, all processes dead)
 		performGracefulShutdown(cfg, pm, apiServer, metricsServer, auditLogger, shutdownReason)
 		break
+	}
+
+	// If the container is exiting because its workload died (not because it was
+	// told to stop), PID 1 must exit non-zero so Docker `restart: on-failure` and
+	// Kubernetes see the failure and restart the container. A clean death — every
+	// process was a oneshot that completed with exit 0 — still exits 0.
+	if shutdownReason == "all processes died" {
+		if code := pm.TerminalExitCode(); code != 0 {
+			slog.Error("All managed processes have exited abnormally; exiting non-zero so the orchestrator restarts the container",
+				"exit_code", code)
+			os.Exit(code)
+		}
 	}
 }
 
