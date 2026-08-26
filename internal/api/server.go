@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -1053,10 +1054,37 @@ func (s *Server) handleGetProcess(w http.ResponseWriter, _ *http.Request, proces
 		return
 	}
 
+	// Redact secret-looking env values so an operator inspecting a process over
+	// the API is not shown DB_PASSWORD/API_TOKEN/etc. in cleartext. GetProcessConfig
+	// returns a copy, so this does not affect the running configuration. (SEC-4)
+	redactProcessEnv(cfg)
+
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"process": processName,
 		"config":  cfg,
 	})
+}
+
+// secretEnvKeyPattern matches environment-variable names that typically hold a
+// secret. Case-insensitive.
+var secretEnvKeyPattern = regexp.MustCompile(`(?i)(password|passwd|secret|token|credential|api[_-]?key|access[_-]?key|private[_-]?key|auth)`)
+
+// redactProcessEnv masks the values of secret-looking env vars on a *copy* of a
+// process config, in place. It expects a config the caller owns (e.g. from
+// GetProcessConfig, which copies Env).
+func redactProcessEnv(cfg *config.Process) {
+	if cfg == nil || len(cfg.Env) == 0 {
+		return
+	}
+	redacted := make(map[string]string, len(cfg.Env))
+	for k, v := range cfg.Env {
+		if v != "" && secretEnvKeyPattern.MatchString(k) {
+			redacted[k] = "***REDACTED***"
+		} else {
+			redacted[k] = v
+		}
+	}
+	cfg.Env = redacted
 }
 
 // handleLogStream provides a Server-Sent Events stream of real-time log entries.
