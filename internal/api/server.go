@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -20,6 +21,7 @@ import (
 	"github.com/cboxdk/init/internal/audit"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/process"
+	"github.com/cboxdk/init/internal/schedule"
 	tlsmgr "github.com/cboxdk/init/internal/tls"
 )
 
@@ -1283,14 +1285,18 @@ func (s *Server) respondError(w http.ResponseWriter, status int, message string)
 }
 
 func httpStatusFromError(err error) int {
-	if err == nil {
+	switch {
+	case err == nil:
 		return http.StatusOK
-	}
-	lowered := strings.ToLower(err.Error())
-	if strings.Contains(lowered, "not found") || strings.Contains(lowered, "does not exist") {
+	case errors.Is(err, process.ErrProcessNotFound), errors.Is(err, schedule.ErrJobNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, process.ErrProcessExists), errors.Is(err, process.ErrInvalidState):
+		return http.StatusConflict
+	case errors.Is(err, process.ErrInvalidArgument):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
 	}
-	return http.StatusInternalServerError
 }
 
 // Port returns the port the server is listening on

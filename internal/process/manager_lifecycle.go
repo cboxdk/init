@@ -418,7 +418,7 @@ func (m *Manager) getShutdownOrder() []string {
 func (m *Manager) StartProcess(ctx context.Context, name string) error {
 	// Input validation
 	if name == "" {
-		return fmt.Errorf("process name cannot be empty")
+		return fmt.Errorf("process name cannot be empty: %w", ErrInvalidArgument)
 	}
 
 	m.mu.RLock()
@@ -427,21 +427,21 @@ func (m *Manager) StartProcess(ctx context.Context, name string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-		return fmt.Errorf("process %s not found in running processes", name)
+		return fmt.Errorf("process %q not found in running processes: %w", name, ErrProcessNotFound)
 	}
 	if !cfgOk {
-		return fmt.Errorf("process %s not found in configuration", name)
+		return fmt.Errorf("process %q not found in configuration: %w", name, ErrProcessNotFound)
 	}
 
 	// Check if process is enabled
 	if !procCfg.Enabled {
-		return fmt.Errorf("process %s is disabled in configuration", name)
+		return fmt.Errorf("process %q is disabled in configuration: %w", name, ErrInvalidState)
 	}
 
 	// Check current state
 	currentState := sup.GetState()
 	if currentState != StateStopped {
-		return fmt.Errorf("process %s is not stopped (current state: %s)", name, currentState)
+		return fmt.Errorf("process %q is not stopped (current state: %s): %w", name, currentState, ErrInvalidState)
 	}
 
 	m.logger.Info("Starting process via control command",
@@ -467,7 +467,7 @@ func (m *Manager) StartProcess(ctx context.Context, name string) error {
 func (m *Manager) StopProcess(ctx context.Context, name string) error {
 	// Input validation
 	if name == "" {
-		return fmt.Errorf("process name cannot be empty")
+		return fmt.Errorf("process name cannot be empty: %w", ErrInvalidArgument)
 	}
 
 	m.mu.RLock()
@@ -475,7 +475,7 @@ func (m *Manager) StopProcess(ctx context.Context, name string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-		return fmt.Errorf("process %s not found", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
 	// Check current state
@@ -512,7 +512,7 @@ func (m *Manager) StopProcess(ctx context.Context, name string) error {
 func (m *Manager) RestartProcess(ctx context.Context, name string) error {
 	// Input validation
 	if name == "" {
-		return fmt.Errorf("process name cannot be empty")
+		return fmt.Errorf("process name cannot be empty: %w", ErrInvalidArgument)
 	}
 
 	m.mu.RLock()
@@ -521,10 +521,10 @@ func (m *Manager) RestartProcess(ctx context.Context, name string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-		return fmt.Errorf("process %s not found", name)
+		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 	if !cfgOk {
-		return fmt.Errorf("process %s not found in configuration", name)
+		return fmt.Errorf("process %q not found in configuration: %w", name, ErrProcessNotFound)
 	}
 
 	currentState := sup.GetState()

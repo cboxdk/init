@@ -20,9 +20,11 @@ import (
 	"testing"
 	"time"
 
+	"errors"
 	"github.com/cboxdk/init/internal/audit"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/process"
+	"github.com/cboxdk/init/internal/schedule"
 )
 
 // createTestManager creates a real manager with minimal config for testing
@@ -2771,52 +2773,62 @@ func TestServer_RespondJSON(t *testing.T) {
 func TestServer_HttpStatusFromError(t *testing.T) {
 	tests := []struct {
 		name       string
-		errMsg     string
+		err        error
 		wantStatus int
 	}{
 		{
-			name:       "not found error",
-			errMsg:     "process not found",
+			name:       "process not found (sentinel)",
+			err:        fmt.Errorf("process %q: %w", "web", process.ErrProcessNotFound),
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name:       "does not exist error",
-			errMsg:     "resource does not exist",
+			name:       "job not found (sentinel)",
+			err:        fmt.Errorf("job %q: %w", "backup", schedule.ErrJobNotFound),
 			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "already exists -> conflict",
+			err:        fmt.Errorf("process %q: %w", "web", process.ErrProcessExists),
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:       "invalid state -> conflict",
+			err:        fmt.Errorf("process %q is not stopped: %w", "web", process.ErrInvalidState),
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:       "invalid argument -> bad request",
+			err:        fmt.Errorf("process command cannot be empty: %w", process.ErrInvalidArgument),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// The regression this whole change is about: an exec failure whose
+			// message merely CONTAINS "not found" must NOT be reported as a 404 —
+			// the process crashed, it isn't missing.
+			name:       "exec 'not found in $PATH' is not a 404",
+			err:        errors.New(`exec: "php-fpm": executable file not found in $PATH`),
+			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name:       "generic error",
-			errMsg:     "something went wrong",
+			err:        errors.New("something went wrong"),
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name:       "nil error",
-			errMsg:     "",
+			err:        nil,
 			wantStatus: http.StatusOK,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var err error
-			if tt.errMsg != "" {
-				err = &testError{msg: tt.errMsg}
-			}
-			status := httpStatusFromError(err)
-
+			status := httpStatusFromError(tt.err)
 			if status != tt.wantStatus {
-				t.Errorf("Expected status %d, got %d", tt.wantStatus, status)
+				t.Errorf("httpStatusFromError(%v) = %d, want %d", tt.err, status, tt.wantStatus)
 			}
 		})
 	}
-}
-
-type testError struct {
-	msg string
-}
-
-func (e *testError) Error() string {
-	return e.msg
 }
 
 // TestRateLimiter_CleanupVisitors_ActualCleanup tests the cleanup of stale visitors
