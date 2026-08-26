@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/cboxdk/init/internal/config"
 )
@@ -322,10 +323,19 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 // failed reload into a total outage. It runs on a detached context with its own
 // bounded deadline.
 func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, touched map[string]bool) int {
-	budget := m.processStopTimeout + m.processStartTimeout
-	if budget <= 0 {
-		budget = DefaultProcessStopTimeout + DefaultProcessStartTimeout
+	// Budget the whole rollback, not one process: it stops and restarts every
+	// touched process in sequence, so a per-process timeout would expire midway
+	// and make the rollback report processes as down while their start was in
+	// fact still in flight.
+	perProcess := m.processStopTimeout + m.processStartTimeout
+	if perProcess <= 0 {
+		perProcess = DefaultProcessStopTimeout + DefaultProcessStartTimeout
 	}
+	count := len(touched)
+	if count < 1 {
+		count = 1
+	}
+	budget := perProcess * time.Duration(count)
 	rbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 	defer cancel()
 
@@ -363,7 +373,14 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 	order, err := m.getStartupOrder()
 	if err != nil {
 		m.logger.Error("Rollback: could not determine startup order", "error", err)
-		return len(touched)
+		// Count only what actually needed restoring.
+		unrestored := 0
+		for name := range touched {
+			if p, ok := oldCfg.Processes[name]; ok && p.Enabled {
+				unrestored++
+			}
+		}
+		return unrestored
 	}
 	for _, name := range order {
 		if !touched[name] {
@@ -378,6 +395,14 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 				m.logger.Error("Rollback: failed to re-register scheduled process", "name", name, "error", err)
 				failures++
 			}
+			continue
+		}
+		// Honor depends_on while restoring, exactly as a normal start does —
+		// otherwise a rollback can start a service before the migration it
+		// depends on has finished.
+		if err := m.waitForDependencies(rbCtx, name, procCfg.DependsOn); err != nil {
+			m.logger.Error("Rollback: dependency not ready", "name", name, "error", err)
+			failures++
 			continue
 		}
 		if err := m.startRegularProcess(rbCtx, name, procCfg); err != nil {

@@ -6,13 +6,18 @@ import (
 )
 
 // LogEntry represents a single log entry with metadata
+// The JSON names are the API's wire contract for a log entry and match the SSE
+// stream exactly, so a consumer of GET /api/v1/logs and of /api/v1/logs/stream
+// parses one shape. (Before 3.0 the REST endpoints serialized the Go field names
+// — Timestamp/ProcessName/InstanceID — while the stream used these; the two
+// needed separate parsers.)
 type LogEntry struct {
-	Timestamp   time.Time
-	ProcessName string
-	InstanceID  string
-	Stream      string // stdout or stderr
-	Message     string
-	Level       string // debug, info, warn, error
+	Timestamp   time.Time `json:"timestamp"`
+	ProcessName string    `json:"process"`
+	InstanceID  string    `json:"instance"`
+	Stream      string    `json:"stream"` // stdout or stderr
+	Message     string    `json:"message"`
+	Level       string    `json:"level"` // debug, info, warn, error
 }
 
 // LogBuffer is a thread-safe ring buffer for storing recent log entries

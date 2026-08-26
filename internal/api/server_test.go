@@ -4861,32 +4861,38 @@ func TestClampLogLimit(t *testing.T) {
 // real secrets — including Laravel's APP_KEY and credential-bearing DSN/URLs —
 // are masked. (SEC-4)
 func TestShouldRedactEnv(t *testing.T) {
-	cases := map[string]struct {
-		val  string
-		want bool
-	}{
-		"DB_PASSWORD":    {"hunter2", true},
-		"API_TOKEN":      {"abc", true},
-		"APP_KEY":        {"base64:xx", true},
-		"AWS_SECRET_KEY": {"s", true},
-		"MAIL_DSN":       {"smtp://u:p@h", true},
-		"STRIPE_SECRET":  {"sk", true},
-		"DATABASE_URL":   {"mysql://user:pw@db/app", true},
-		"GITHUB_PAT":     {"ghp_x", true},
-		"API_AUTH":       {"bearer", true},
-		"AUTH_DRIVER":    {"session", false},
-		"OAUTH_ENABLED":  {"true", false},
-		"AUTHOR":         {"me", false},
-		"TOKENIZER_PATH": {"/x", false},
-		"LOG_LEVEL":      {"info", false},
-		"KEYSPACE":       {"ks", false},
-		"APP_URL":        {"https://example.com", false},
-		"SESSION_DRIVER": {"redis", false},
-		"EMPTY_TOKEN":    {"", false},
+	// Must be masked. False negatives leak a secret, so this list is the
+	// important half: it includes the forms an earlier pattern missed —
+	// separator-less (DBPASSWORD), camelCase (jwtSecret), *_SALT (WordPress),
+	// access/private keys, and password-only URLs (Redis/AMQP).
+	secret := map[string]string{
+		"DB_PASSWORD": "x", "API_TOKEN": "x", "APP_KEY": "x", "API_AUTH": "x",
+		"AWS_SECRET_KEY": "x", "AWS_ACCESS_KEY_ID": "x",
+		"PRIVATE_KEY_PEM": "x", "SSH_PRIVATE_KEY_BASE64": "x",
+		"AUTH_SALT": "x", "SECURE_AUTH_SALT": "x", "LOGGED_IN_SALT": "x", "NONCE_SALT": "x",
+		"DBPASSWORD": "x", "MYSQLPASSWORD": "x", "jwtSecret": "x", "CLIENTSECRET": "x",
+		"JWT_PASSPHRASE": "x", "GOOGLE_APPLICATION_CREDENTIALS": "/creds.json",
+		"GITHUB_PAT": "x", "STRIPE_SECRET": "sk",
+		"MAIL_DSN":     "smtp://u:p@mail",
+		"DATABASE_URL": "mysql://user:pw@db/app",
+		"REDIS_URL":    "redis://:supersecret@redis:6379/0",
+		"AMQP_URL":     "amqp://:pw@rabbit:5672",
 	}
-	for k, c := range cases {
-		if got := shouldRedactEnv(k, c.val); got != c.want {
-			t.Errorf("shouldRedactEnv(%q, %q) = %v, want %v", k, c.val, got, c.want)
+	// Must stay readable: ordinary framework settings an operator needs to see.
+	readable := map[string]string{
+		"AUTH_DRIVER": "session", "OAUTH_ENABLED": "true", "AUTHOR": "me",
+		"TOKENIZER_PATH": "/x", "SECRETARY_EMAIL": "a@b.c", "KEYSPACE": "ks",
+		"LOG_LEVEL": "info", "PORT": "9000", "APP_URL": "https://example.com",
+		"SESSION_DRIVER": "redis", "APP_ENV": "prod", "EMPTY_TOKEN": "",
+	}
+	for k, v := range secret {
+		if !shouldRedactEnv(k, v) {
+			t.Errorf("shouldRedactEnv(%q, %q) = false; this value would leak", k, v)
+		}
+	}
+	for k, v := range readable {
+		if shouldRedactEnv(k, v) {
+			t.Errorf("shouldRedactEnv(%q, %q) = true; ordinary settings must stay readable", k, v)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 func (c *Client) StreamLogs(ctx context.Context, process string) (<-chan logger.LogEntry, error) {
 	path := "/api/v1/logs/stream"
 	if process != "" {
-		path = fmt.Sprintf("%s?process=%s", path, process)
+		path = fmt.Sprintf("%s?process=%s", path, url.QueryEscape(process))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.getURL(path), nil)

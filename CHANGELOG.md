@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: REST log responses now use the same field names as the SSE
+  stream.** `GET /api/v1/logs` and `GET /api/v1/processes/{name}/logs`
+  serialized Go field names (`Timestamp`, `ProcessName`, `InstanceID`) while
+  `/logs/stream` emitted `timestamp`, `process`, `instance` — two parsers for one
+  concept. Both now emit the stream's spelling, from a single shared type, and
+  the OpenAPI spec documents it. Consumers of the REST log endpoints must update
+  their field names.
+- **A oneshot can no longer be configured with `restart: on-failure`.** A
+  oneshot's exit is handled by the completion path, which never consults the
+  restart policy, so the setting silently did nothing — it is now rejected at
+  config load with a pointer to `restart: never`.
+
+### Fixed
+
+- **More secrets are redacted, and a few settings are readable again.** The
+  previous pass over the secret-name pattern fixed its false positives but
+  introduced false negatives: `AWS_ACCESS_KEY_ID`, `PRIVATE_KEY_PEM`, WordPress's
+  `*_SALT` values, separator-less names (`DBPASSWORD`) and camelCase
+  (`jwtSecret`) were all returned in cleartext. Matching now requires a secret
+  word to be followed by a non-letter (or end), which catches those while still
+  leaving `TOKENIZER_PATH` and `SECRETARY_EMAIL` visible. Password-only URLs
+  (`redis://:secret@host`, common for Redis and AMQP) are detected too.
+- **Creating a process rejects the redaction placeholder.** `POST /processes`
+  had no equivalent of the update path's guard, so cloning a process read from
+  the API started it with `***REDACTED***` as its password — which
+  `config/save` would then write to the YAML. It is now a 400.
+- **The reload rollback budgets the whole rollback, waits for dependencies, and
+  counts accurately.** It used a per-process timeout for the entire sequence, so
+  it could report processes as down while their start was still in flight; it
+  restarted processes without honoring `depends_on`, so a rolled-back stack could
+  start a service before its migration finished; and its error path over-counted
+  failures.
+- **A waiter is no longer stranded when a process restarts underneath it.** If a
+  supervisor re-armed its readiness signals while a dependent was already
+  waiting, the waiter kept watching the retired channel until its timeout. It is
+  now woken to watch the new run.
+- **The API client escapes process names in URLs** (paths and the log-stream
+  query), so a name containing a space or `&` no longer misroutes.
+- **A completed oneshot releases its resource-sampling handle** instead of
+  keeping a handle to a dead PID for the container's lifetime; its metrics
+  history is retained.
+
 ### Fixed
 
 - **Readiness is re-armed on every run.** The readiness signals were sticky for

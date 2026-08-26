@@ -278,6 +278,13 @@ func (c *Config) validateOneshotProcess(name string, proc *Process) error {
 	if proc.Restart == "always" {
 		return fmt.Errorf("oneshot process %s cannot have restart: always", name)
 	}
+	// A oneshot's exit is handled by the completion path, which never consults
+	// the restart policy — so `on-failure` looked like it would retry a failed
+	// migration and silently did nothing. Reject it rather than accept a knob
+	// that has no effect.
+	if proc.Restart == "on-failure" {
+		return fmt.Errorf("oneshot process %s cannot have restart: on-failure (a oneshot is not retried; use restart: never)", name)
+	}
 	if proc.Scale > 1 {
 		return fmt.Errorf("oneshot process %s cannot have scale > 1 (got %d)", name, proc.Scale)
 	}

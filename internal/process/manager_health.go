@@ -31,13 +31,23 @@ func (m *Manager) MonitorProcessHealth(ctx context.Context) {
 	}()
 }
 
-// NotifyProcessDeath is called by supervisors when a process dies and won't restart.
+// NotifyProcessDeath is called by supervisors when a process dies and won't
+// restart.
+//
+// It must never block or take the manager lock: it runs on the supervisor's
+// monitor goroutine, and callers such as Shutdown, RemoveProcess, UpdateProcess
+// and the reload paths hold m.mu while waiting for a process to stop. Checking
+// the global state inline here (as it used to when the channel was full) could
+// therefore block on m.mu.RLock behind that write lock, while the waiter blocked
+// on the instance's done channel — wedging PID 1 for good. Dropping a
+// notification is safe: the drainer re-evaluates all processes on the next one,
+// and the sweep is idempotent.
 func (m *Manager) NotifyProcessDeath(processName string) {
 	select {
 	case m.processDeathCh <- processName:
 	default:
-		// Channel full, check immediately
-		m.checkAllProcessesDead()
+		m.logger.Debug("Process death notification dropped (queue full); the next notification re-checks global state",
+			"process", processName)
 	}
 }
 
