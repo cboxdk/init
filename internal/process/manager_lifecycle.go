@@ -30,16 +30,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	// a side effect of construction.
 	metrics.SetManagerStartTime(float64(m.startTime.Unix()))
 
-	// Execute pre-start hooks
-	if len(m.config.Hooks.PreStart) > 0 {
-		m.logger.Info("Executing pre-start hooks", "count", len(m.config.Hooks.PreStart))
-		executor := hooks.NewExecutor(m.logger)
-		for _, hook := range m.config.Hooks.PreStart {
-			if err := executor.ExecuteWithType(ctx, &hook, "pre_start"); err != nil {
-				return fmt.Errorf("pre-start hook %s failed: %w", hook.Name, err)
-			}
-		}
-		m.logger.Info("Pre-start hooks completed successfully")
+	// Execute pre-start hooks. These are fatal: a failure aborts startup.
+	if err := m.runHooks(ctx, m.config.Hooks.PreStart, hooks.TypePreStart, true); err != nil {
+		return err
 	}
 
 	// Get startup order (topological sort by priority and dependencies)
@@ -98,25 +91,33 @@ func (m *Manager) Start(ctx context.Context) error {
 		)
 	}
 
-	m.logger.Debug("Finished starting all processes, checking for post-start hooks",
-		"hook_count", len(m.config.Hooks.PostStart),
-	)
-
-	// Execute post-start hooks
-	if len(m.config.Hooks.PostStart) > 0 {
-		m.logger.Info("Executing post-start hooks", "count", len(m.config.Hooks.PostStart))
-		executor := hooks.NewExecutor(m.logger)
-		for _, hook := range m.config.Hooks.PostStart {
-			if err := executor.ExecuteWithType(ctx, &hook, "post_start"); err != nil {
-				// Post-start failures are warnings, not fatal
-				m.logger.Warn("Post-start hook failed", "hook", hook.Name, "error", err)
-			}
-		}
-		m.logger.Info("Post-start hooks completed successfully")
-	}
+	// Execute post-start hooks. These are non-fatal: a failure is logged and
+	// startup continues.
+	_ = m.runHooks(ctx, m.config.Hooks.PostStart, hooks.TypePostStart, false)
 
 	m.logger.Debug("Manager.Start() about to return nil - startup complete")
 
+	return nil
+}
+
+// runHooks executes a lifecycle hook list of the given type. When fatal is true
+// the first failure aborts and is returned (pre-start semantics); otherwise each
+// failure is logged as a warning and the remaining hooks still run. A nil/empty
+// list is a no-op.
+func (m *Manager) runHooks(ctx context.Context, list []config.Hook, hookType hooks.Type, fatal bool) error {
+	if len(list) == 0 {
+		return nil
+	}
+	m.logger.Info("Executing hooks", "type", hookType, "count", len(list))
+	executor := hooks.NewExecutor(m.logger)
+	for i := range list {
+		if err := executor.ExecuteWithType(ctx, &list[i], hookType); err != nil {
+			if fatal {
+				return fmt.Errorf("%s hook %s failed: %w", hookType, list[i].Name, err)
+			}
+			m.logger.Warn("Hook failed", "type", hookType, "hook", list[i].Name, "error", err)
+		}
+	}
 	return nil
 }
 
@@ -309,16 +310,8 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	// Execute pre-stop hooks
-	if len(m.config.Hooks.PreStop) > 0 {
-		m.logger.Info("Executing pre-stop hooks", "count", len(m.config.Hooks.PreStop))
-		executor := hooks.NewExecutor(m.logger)
-		for _, hook := range m.config.Hooks.PreStop {
-			if err := executor.ExecuteWithType(ctx, &hook, "pre_stop"); err != nil {
-				m.logger.Warn("Pre-stop hook failed", "hook", hook.Name, "error", err)
-			}
-		}
-	}
+	// Execute pre-stop hooks (non-fatal).
+	_ = m.runHooks(ctx, m.config.Hooks.PreStop, hooks.TypePreStop, false)
 
 	m.logger.Info("Shutting down processes", "count", len(m.processes))
 
@@ -363,16 +356,8 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 
-	// Execute post-stop hooks
-	if len(m.config.Hooks.PostStop) > 0 {
-		m.logger.Info("Executing post-stop hooks", "count", len(m.config.Hooks.PostStop))
-		executor := hooks.NewExecutor(m.logger)
-		for _, hook := range m.config.Hooks.PostStop {
-			if err := executor.ExecuteWithType(ctx, &hook, "post_stop"); err != nil {
-				m.logger.Warn("Post-stop hook failed", "hook", hook.Name, "error", err)
-			}
-		}
-	}
+	// Execute post-stop hooks (non-fatal).
+	_ = m.runHooks(ctx, m.config.Hooks.PostStop, hooks.TypePostStop, false)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("shutdown completed with %d errors: %v", len(errs), errs)

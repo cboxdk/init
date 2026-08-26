@@ -15,6 +15,19 @@ import (
 	"github.com/cboxdk/init/internal/signals"
 )
 
+// Type identifies a lifecycle hook list. It doubles as a Prometheus label, so
+// call sites use these constants instead of bare strings — a typo'd string
+// ("pre-start" vs "pre_start") would otherwise silently fork the metric series.
+type Type string
+
+const (
+	TypePreStart  Type = "pre_start"
+	TypePostStart Type = "post_start"
+	TypePreStop   Type = "pre_stop"
+	TypePostStop  Type = "post_stop"
+	TypeUnknown   Type = "unknown"
+)
+
 // Executor executes lifecycle hooks with retry logic
 type Executor struct {
 	logger *slog.Logger
@@ -27,11 +40,11 @@ func NewExecutor(log *slog.Logger) *Executor {
 
 // Execute runs a single hook with retry logic
 func (e *Executor) Execute(ctx context.Context, hook *config.Hook) error {
-	return e.ExecuteWithType(ctx, hook, "unknown")
+	return e.ExecuteWithType(ctx, hook, TypeUnknown)
 }
 
 // ExecuteWithType runs a single hook with retry logic and records metrics with hook type
-func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookType string) error {
+func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookType Type) error {
 	e.logger.Info("Executing hook",
 		"name", hook.Name,
 		"type", hookType,
@@ -69,7 +82,7 @@ func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookT
 				"duration_seconds", duration,
 				"exit_code", 0,
 			)
-			metrics.RecordHookExecution(hook.Name, hookType, duration, true)
+			metrics.RecordHookExecution(hook.Name, string(hookType), duration, true)
 			return nil
 		}
 
@@ -93,11 +106,11 @@ func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookT
 			"exit_code", exitCode(lastErr),
 			"error", lastErr,
 		)
-		metrics.RecordHookExecution(hook.Name, hookType, duration, false)
+		metrics.RecordHookExecution(hook.Name, string(hookType), duration, false)
 		return nil
 	}
 
-	metrics.RecordHookExecution(hook.Name, hookType, duration, false)
+	metrics.RecordHookExecution(hook.Name, string(hookType), duration, false)
 	return fmt.Errorf("hook %s failed after %d attempts: %w", hook.Name, attempts, lastErr)
 }
 

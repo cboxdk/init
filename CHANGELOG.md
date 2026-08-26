@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Lifecycle hook types are now constants, and the four execution blocks share
+  one helper.** The manager ran pre-start / post-start / pre-stop / post-stop
+  hooks through four near-identical copy-pasted loops, each passing a bare string
+  (`"pre_start"`, …) that becomes a Prometheus label — a typo would silently fork
+  the metric series. Hook types are now `hooks.Type` constants used everywhere
+  (manager and the per-process pre-stop hook), and a single `runHooks` helper
+  handles all four lists with the correct fatal/non-fatal semantics. No behavior
+  change. (STYLE-7)
+
 - **`schedule_max_concurrent` is documented honestly and warns when misused.** The
   field advertised "> 1 allows parallel runs", but scheduled executions are always
   serialized (an overlapping run is skipped), so a value above 1 never had any
