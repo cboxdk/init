@@ -374,6 +374,18 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Guard against double-start. The manager checks state before calling Start,
+	// but that check is outside any lock, so two concurrent callers (API + TUI +
+	// watcher all reach the manager) can both pass it and each append `Scale`
+	// instances while overwriting s.ctx/s.cancel — leaking the first set. Under
+	// operationMu, re-checking here makes Start idempotent for an
+	// already-running supervisor. (Reproduced in review: 4 concurrent starts on
+	// a scale-1 process yielded 4 instances.)
+	if s.state == StateRunning || s.state == StateStarting {
+		s.logger.Debug("Start called on an already-running supervisor; ignoring", "state", s.state)
+		return nil
+	}
+
 	// Create context for this supervisor's lifetime
 	s.ctx, s.cancel = context.WithCancel(ctx)
 
@@ -1756,6 +1768,14 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 				s.logger.Error("Process unhealthy, triggering restart",
 					"error", status.Error,
 				)
+
+				// Re-arm the monitor: reset its failure history and start a fresh
+				// warmup grace window so the restarted instance is judged from a
+				// clean slate and gets time to boot, instead of being killed again
+				// on the next probe and abandoned once restarts run out.
+				if s.healthMonitor != nil {
+					s.healthMonitor.Rearm()
+				}
 
 				// Record health check restart
 				metrics.RecordProcessRestart(s.name, "health_check")
