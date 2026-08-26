@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -136,6 +137,54 @@ func (c *Config) validateProcess(name string, proc *Process) error {
 		return err
 	}
 
+	// Shutdown signal validation
+	if err := c.validateProcessShutdown(name, proc); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// KnownSignalNames is the set of signal names accepted in shutdown.signal and
+// shutdown.kill_signal, in the canonical "SIGxxx" spelling. It is the source of
+// truth for validation; the process package's runtime parser is kept in sync
+// with it by a drift-guard test.
+var KnownSignalNames = map[string]bool{
+	"SIGTERM":  true,
+	"SIGINT":   true,
+	"SIGQUIT":  true,
+	"SIGKILL":  true,
+	"SIGHUP":   true,
+	"SIGUSR1":  true,
+	"SIGUSR2":  true,
+	"SIGWINCH": true,
+	"SIGCONT":  true,
+	"SIGSTOP":  true,
+	"SIGTSTP":  true,
+	"SIGABRT":  true,
+}
+
+// IsValidSignalName reports whether name is an accepted signal, case-insensitive
+// and with an optional "SIG" prefix ("term", "TERM", "SIGTERM" all match).
+func IsValidSignalName(name string) bool {
+	key := strings.ToUpper(strings.TrimSpace(name))
+	if !strings.HasPrefix(key, "SIG") {
+		key = "SIG" + key
+	}
+	return KnownSignalNames[key]
+}
+
+// validateProcessShutdown validates the per-process shutdown signal names
+func (c *Config) validateProcessShutdown(name string, proc *Process) error {
+	if proc.Shutdown == nil {
+		return nil
+	}
+	if proc.Shutdown.Signal != "" && !IsValidSignalName(proc.Shutdown.Signal) {
+		return fmt.Errorf("process %s has invalid shutdown.signal: %q", name, proc.Shutdown.Signal)
+	}
+	if proc.Shutdown.KillSignal != "" && !IsValidSignalName(proc.Shutdown.KillSignal) {
+		return fmt.Errorf("process %s has invalid shutdown.kill_signal: %q", name, proc.Shutdown.KillSignal)
+	}
 	return nil
 }
 
