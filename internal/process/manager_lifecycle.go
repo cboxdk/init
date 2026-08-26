@@ -289,12 +289,20 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		m.logger.Warn("Failed to stop readiness manager", "error", err)
 	}
 
-	// Stop the scheduler first (prevents new job executions)
+	// Stop the scheduler first (prevents new job executions). Stop() cancels the
+	// scheduler's run context so in-flight jobs are cancelled; bound the wait
+	// with the shutdown context so a job that ignores cancellation can't block
+	// shutdown forever (the manager write-lock is held here, so a hang would
+	// freeze the API too).
 	if m.scheduler.IsStarted() {
 		m.logger.Info("Stopping scheduler")
 		schedulerCtx := m.scheduler.Stop()
-		<-schedulerCtx.Done() // Wait for scheduler to stop
-		m.logger.Info("Scheduler stopped")
+		select {
+		case <-schedulerCtx.Done():
+			m.logger.Info("Scheduler stopped")
+		case <-ctx.Done():
+			m.logger.Warn("Timed out waiting for scheduler to stop; continuing shutdown", "error", ctx.Err())
+		}
 	}
 
 	// Execute pre-stop hooks

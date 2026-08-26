@@ -94,7 +94,26 @@ type ScheduledJob struct {
 	executor    JobExecutor
 	logger      *slog.Logger
 	mu          sync.Mutex
-	executionMu sync.Mutex // Separate mutex for execution to allow state reads during execution
+	executionMu sync.Mutex      // Separate mutex for execution to allow state reads during execution
+	baseCtx     context.Context // Scheduler-lifetime context; cancelled on scheduler stop (nil => Background)
+}
+
+// SetBaseContext sets the context that cron-triggered executions derive from.
+// The scheduler cancels this context when it stops, so a job that is mid-run at
+// shutdown is cancelled (its command killed) instead of blocking shutdown.
+func (j *ScheduledJob) SetBaseContext(ctx context.Context) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.baseCtx = ctx
+}
+
+func (j *ScheduledJob) baseContext() context.Context {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.baseCtx != nil {
+		return j.baseCtx
+	}
+	return context.Background()
 }
 
 // JobOptions contains optional configuration for a scheduled job.
@@ -246,7 +265,10 @@ func (j *ScheduledJob) CanExecute() bool {
 // Run is called by the cron scheduler when the schedule triggers
 // It implements the cron.Job interface
 func (j *ScheduledJob) Run() {
-	j.execute(context.Background(), "schedule")
+	// Derive from the scheduler's lifetime context so a job still running when
+	// the scheduler stops is cancelled, rather than running under a Background
+	// context that shutdown cannot reach.
+	j.execute(j.baseContext(), "schedule")
 }
 
 // Trigger manually triggers execution (returns error if already running or paused)
@@ -259,7 +281,11 @@ func (j *ScheduledJob) Trigger(ctx context.Context) error {
 		return fmt.Errorf("job is already executing")
 	}
 
-	go j.execute(ctx, "manual")
+	// The async trigger outlives the request that started it: net/http cancels
+	// r.Context() as soon as the handler returns its 202, which would cancel
+	// (SIGKILL) the job mid-run. Detach from the caller's cancellation while
+	// keeping its values (tracing, etc.) so the job runs to completion.
+	go j.execute(context.WithoutCancel(ctx), "manual")
 	return nil
 }
 

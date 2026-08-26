@@ -34,6 +34,8 @@ type Scheduler struct {
 	logger      *slog.Logger
 	mu          sync.RWMutex
 	started     bool
+	runCtx      context.Context // cancelled on Stop so in-flight cron jobs are cancelled
+	runCancel   context.CancelFunc
 }
 
 // NewScheduler creates a new Scheduler
@@ -78,6 +80,11 @@ func (s *Scheduler) AddJobWithOptions(name, scheduleExpr, timezone string, opts 
 	}
 
 	job.SetCronID(entryID)
+	// If the scheduler is already running, hand the new job the live run context
+	// so it is cancellable on stop like the rest.
+	if s.started && s.runCtx != nil {
+		job.SetBaseContext(s.runCtx)
+	}
 	s.jobs[name] = job
 
 	// Update next run time from cron
@@ -150,6 +157,13 @@ func (s *Scheduler) Start() {
 		return
 	}
 
+	// A scheduler-lifetime context that cron-triggered jobs derive from, so Stop
+	// can cancel any that are still running.
+	s.runCtx, s.runCancel = context.WithCancel(context.Background())
+	for _, job := range s.jobs {
+		job.SetBaseContext(s.runCtx)
+	}
+
 	s.cron.Start()
 	s.started = true
 
@@ -176,6 +190,12 @@ func (s *Scheduler) Stop() context.Context {
 
 	s.started = false
 	s.logger.Info("scheduler stopping")
+
+	// Cancel the run context first so any job still executing is cancelled (its
+	// command killed) rather than blocking cron.Stop()'s wait indefinitely.
+	if s.runCancel != nil {
+		s.runCancel()
+	}
 
 	return s.cron.Stop()
 }
