@@ -1038,9 +1038,10 @@ func TestServer_StartSocketListener(t *testing.T) {
 					t.Fatalf("Socket file not created: %v", statErr)
 				}
 
-				// Check permissions (should be 0660 for owner + group access)
-				if info.Mode().Perm() != 0660 {
-					t.Errorf("Expected permissions 0660, got %o", info.Mode().Perm())
+				// The socket is an unauthenticated admin channel, so it must be
+				// owner-only (0600), not group-accessible.
+				if info.Mode().Perm() != 0600 {
+					t.Errorf("Expected permissions 0600, got %o", info.Mode().Perm())
 				}
 
 				// Clean up server
@@ -2844,7 +2845,7 @@ func TestRateLimiter_CleanupVisitors_ActualCleanup(t *testing.T) {
 	// Manually make the visitor stale by backdating lastSeen
 	rl.mu.Lock()
 	if v, exists := rl.visitors["192.168.1.1"]; exists {
-		v.lastSeen = time.Now().Add(-15 * time.Minute) // 15 minutes ago
+		v.lastSeen.Store(time.Now().Add(-15 * time.Minute).UnixNano()) // 15 minutes ago
 	}
 	rl.mu.Unlock()
 
