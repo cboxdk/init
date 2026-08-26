@@ -34,6 +34,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **cbox-init now behaves like an init on the signal plane.** Previously only
+  SIGTERM/SIGINT/SIGQUIT were handled (all as shutdown) and every other signal
+  was dropped, so `docker kill -s HUP` was a silent no-op. Now:
+  - **SIGHUP** reloads the configuration (works with or without `--watch`).
+  - **SIGUSR1 / SIGUSR2** are forwarded to every managed process group, so
+    operators can drive nginx reloads and php-fpm log reopen / graceful reload
+    with `docker kill -s USR1|USR2 <container>`.
+  - When cbox-init is **not PID 1** (a `docker run --init` wrapper, a shell
+    entrypoint, or a Kubernetes pod sharing the PID namespace with the pause
+    container), it now registers as a **child subreaper**
+    (`PR_SET_CHILD_SUBREAPER` on Linux) so orphaned grandchildren still
+    re-parent onto it and its zombie-reaping and restart guarantees keep
+    applying. The startup log states which mode it is running in.
+
+### Added
+
 - Global lifecycle hooks can be defined entirely via environment variables —
   `CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD>` (e.g. `CBOX_INIT_HOOK_PRE_START_0_COMMAND=php,please,stache:warm`)
   — so docker-compose/k8s deployments on prepared base images need no YAML
