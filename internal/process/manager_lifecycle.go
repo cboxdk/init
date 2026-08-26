@@ -205,7 +205,6 @@ func (m *Manager) registerScheduledProcess(name string, procCfg *config.Process)
 	return nil
 }
 
-// startRegularProcess starts a non-scheduled process.
 // newConfiguredSupervisor builds a Supervisor with every collaborator wired.
 // All supervisor construction MUST go through here. A supervisor created
 // without SetDeathNotifier never reports its death to the manager, so a process
@@ -223,6 +222,7 @@ func (m *Manager) newConfiguredSupervisor(name string, procCfg *config.Process) 
 	return sup
 }
 
+// startRegularProcess starts a non-scheduled process.
 func (m *Manager) startRegularProcess(ctx context.Context, name string, procCfg *config.Process) error {
 	m.logger.Info("Starting process",
 		"name", name,

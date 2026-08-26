@@ -2,6 +2,13 @@ module github.com/cboxdk/init
 
 go 1.26.0
 
+// Pinned to the patch the supply-chain gate requires: govulncheck flags
+// standard-library advisories fixed in 1.26.6, so a local build on an older
+// 1.26.x would fail `make check` where CI (which pins 1.26.6) passes. Bump this
+// in lockstep with the go-version in .github/workflows/ci.yml when the gate
+// next fails on the standard library.
+toolchain go1.26.6
+
 require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
