@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`schedule_max_concurrent` is documented honestly and warns when misused.** The
+  field advertised "> 1 allows parallel runs", but scheduled executions are always
+  serialized (an overlapping run is skipped), so a value above 1 never had any
+  effect. The comments now say so, and `check-config` emits a suggestion when a
+  process sets `schedule_max_concurrent > 1`. The field is retained (existing
+  configs keep loading) for a future parallel mode. (CONC-15)
+- **The manager start-time metric is emitted from `Start()`, not the constructor.**
+  `NewManager` wrote a global Prometheus gauge as a construction side effect, so
+  merely building a manager for a dry-run or config check mutated global metric
+  state. The write now happens when the manager actually starts. (ARCH-9)
 - **Internal cleanup: removed dead code and duplication (no behavior change).**
   Deleted `cmd/helpers.go` and its tests — ~170 lines of exported helpers with
   zero production callers (a `package main`, so nothing could import them), whose

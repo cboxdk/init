@@ -567,6 +567,9 @@ func (c *Config) lintConfiguration(result *ValidationResult) {
 		if !proc.Enabled {
 			result.AddSuggestion(name, "Process defined but disabled", "Remove from config or enable to reduce clutter")
 		}
+		if proc.ScheduleMaxConcurrent > 1 {
+			result.AddProcessSuggestion(name, "schedule_max_concurrent", fmt.Sprintf("schedule_max_concurrent=%d has no effect: overlapping scheduled runs are always skipped", proc.ScheduleMaxConcurrent), "Parallel scheduled executions are not supported yet; remove the setting or leave it at 1")
+		}
 	}
 }
 

@@ -26,6 +26,10 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Record the manager start time metric here, at actual start, rather than as
+	// a side effect of construction.
+	metrics.SetManagerStartTime(float64(m.startTime.Unix()))
+
 	// Execute pre-start hooks
 	if len(m.config.Hooks.PreStart) > 0 {
 		m.logger.Info("Executing pre-start hooks", "count", len(m.config.Hooks.PreStart))
