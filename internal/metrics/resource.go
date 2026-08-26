@@ -10,11 +10,10 @@ import (
 )
 
 // CollectProcessMetrics collects resource metrics for a single process using a
-// fresh gopsutil handle. NOTE: gopsutil computes CPUPercent as the busy time
-// since the handle was created, so a fresh handle every call yields the
-// process's *lifetime average* CPU, not the recent interval. For repeated
-// sampling use ResourceCollector.Collect, which reuses the handle across ticks
-// so CPUPercent reflects recent usage (PERF-3).
+// fresh gopsutil handle, reporting CPU as the process's lifetime average — the
+// only thing a one-off handle can report. For repeated sampling use
+// ResourceCollector.Collect, which reuses the handle and reports the CPU used
+// since the previous tick.
 func CollectProcessMetrics(pid int, processName, instanceID string) (*ResourceSample, error) {
 	// Validate PID is within int32 range (process IDs are always positive and fit in int32)
 	if pid <= 0 || pid > 0x7FFFFFFF {
@@ -24,18 +23,34 @@ func CollectProcessMetrics(pid int, processName, instanceID string) (*ResourceSa
 	if err != nil {
 		return nil, err
 	}
-	return sampleFromProc(proc)
+	return sampleFromProc(proc, false)
 }
 
 // sampleFromProc reads the resource sample from an existing gopsutil handle.
-func sampleFromProc(proc *process.Process) (*ResourceSample, error) {
+//
+// interval selects how CPU is measured:
+//   - false: proc.CPUPercent() — total CPU time over the process's LIFETIME,
+//     divided by its age. Correct for a one-off handle, but it barely moves once
+//     a process has been up a while, so it is useless for a live gauge.
+//   - true: proc.Percent(0) — CPU used since the previous call ON THIS HANDLE.
+//     This is what makes the handle cache worth having: gopsutil stores the
+//     previous sample on the handle itself. It returns 0 on the first call for a
+//     handle (no previous sample yet), i.e. the first tick after a process
+//     starts or restarts.
+//
+// Both are on the same scale (100 = one full core; a process using 2 cores
+// reports 200), so switching between them does not change the gauge's units.
+func sampleFromProc(proc *process.Process, interval bool) (*ResourceSample, error) {
 	sample := &ResourceSample{
 		Timestamp:       time.Now(),
 		FileDescriptors: -1, // Default for non-Linux
 	}
 
-	// CPU Percent (delta since the previous call on this handle)
-	if cpu, err := proc.CPUPercent(); err == nil {
+	if interval {
+		if cpu, err := proc.Percent(0); err == nil {
+			sample.CPUPercent = cpu
+		}
+	} else if cpu, err := proc.CPUPercent(); err == nil {
 		sample.CPUPercent = cpu
 	}
 
@@ -111,9 +126,13 @@ func NewResourceCollector(interval time.Duration, maxSamples int, logger *slog.L
 }
 
 // Collect samples a process's resources, reusing the gopsutil handle across
-// calls for the same instance so CPUPercent reflects usage since the previous
-// tick rather than the process's lifetime average. If the PID changed (the
-// instance restarted), the handle is recreated. (PERF-3)
+// calls for the same instance. The reuse is what makes the CPU figure meaningful:
+// gopsutil keeps the previous CPU sample on the handle, so Collect reports the
+// CPU used since the previous tick instead of the process's lifetime average
+// (which barely moves once a service has been up a while). The first tick after
+// a process starts or restarts reports 0, because there is no previous sample
+// yet. If the PID changed (the instance restarted), the handle is recreated.
+// (PERF-3)
 func (rc *ResourceCollector) Collect(pid int, processName, instanceID string) (*ResourceSample, error) {
 	if pid <= 0 || pid > 0x7FFFFFFF {
 		return nil, fmt.Errorf("invalid PID: %d", pid)
@@ -138,7 +157,7 @@ func (rc *ResourceCollector) Collect(pid int, processName, instanceID string) (*
 	// outside rc.mu so sampling one instance does not block collection of others.
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return sampleFromProc(h.proc)
+	return sampleFromProc(h.proc, true)
 }
 
 // GetHistory returns time series for a process instance

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,5 +73,42 @@ func TestSupervisor_LongrunNoHealthCheckReadyImmediately(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
 		t.Errorf("WaitForReadiness took %v for a running longrun; it should be ready immediately", elapsed)
+	}
+}
+
+// A oneshot that FAILS can never become ready, so its dependents must be told
+// immediately rather than waiting out the whole dependency timeout. Before this,
+// a failed migration blocked Manager.Start for the full 5-minute default with
+// the manager write-lock held — during which PID 1 also could not act on
+// SIGTERM. (PID1-9 follow-up)
+func TestSupervisor_FailedOneshotFailsWaitersFast(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	sup := NewSupervisor("migrate", &config.Process{
+		Enabled:      true,
+		Type:         "oneshot",
+		InitialState: "running",
+		Command:      []string{"sh", "-c", "exit 1"},
+		Restart:      "never",
+		Scale:        1,
+	}, &config.GlobalConfig{LogLevel: "error", MaxRestartAttempts: 1, RestartBackoff: 1},
+		logger, audit.NewLogger(logger, false), nil)
+
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	start := time.Now()
+	err := sup.WaitForReadiness(context.Background(), 5*time.Minute)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected an error when the oneshot exited non-zero")
+	}
+	if elapsed > 10*time.Second {
+		t.Errorf("WaitForReadiness took %v; a failed oneshot must fail waiters immediately, not after the dependency timeout", elapsed)
+	}
+	if !strings.Contains(err.Error(), "never become ready") {
+		t.Errorf("error = %q, want it to explain readiness is impossible", err)
 	}
 }

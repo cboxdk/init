@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -178,7 +179,9 @@ func (c *Client) do(ctx context.Context, method, path string, reqBody, out any) 
 		return parseAPIError(resp)
 	}
 	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		// A 2xx with an empty body (a 204, or a proxy that strips it) is not a
+		// decode failure — leave out at its zero value.
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}

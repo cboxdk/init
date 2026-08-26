@@ -3,6 +3,7 @@ package metrics
 import (
 	"log/slog"
 	"os"
+	"os/exec"
 	"sync"
 	"testing"
 	"time"
@@ -689,4 +690,59 @@ func TestResourceCollector_Collect_ConcurrentSameKey(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestResourceCollector_CPUPercentTracksRecentUsage proves the collector reports
+// CPU used since the previous tick, not the process's lifetime average. It burns
+// CPU, then idles: the reading must fall to ~0. With the lifetime average (which
+// is what a fresh gopsutil handle per tick can only ever give) an idle process
+// keeps reporting its historical burn, so the gauge never comes back down.
+// (PERF-3)
+func TestResourceCollector_CPUPercentTracksRecentUsage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("timing-based; skipped in -short")
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	rc := NewResourceCollector(time.Second, 10, logger)
+
+	// Pure shell-builtin busy loop (no forks), then a long sleep.
+	cmd := exec.Command("sh", "-c", "i=0; while [ $i -lt 3000000 ]; do i=$((i+1)); done; sleep 10")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start burner: %v", err)
+	}
+	defer func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	}()
+	pid := cmd.Process.Pid
+
+	if _, err := rc.Collect(pid, "burn", "0"); err != nil {
+		t.Fatalf("prime: %v", err)
+	}
+	time.Sleep(2 * time.Second)
+	busy, err := rc.Collect(pid, "burn", "0")
+	if err != nil {
+		t.Fatalf("busy sample: %v", err)
+	}
+
+	// Let the loop finish so the process is sleeping, then sample an interval
+	// that contains no work at all.
+	time.Sleep(6 * time.Second)
+	if _, err := rc.Collect(pid, "burn", "0"); err != nil {
+		t.Fatalf("re-prime: %v", err)
+	}
+	time.Sleep(2 * time.Second)
+	idle, err := rc.Collect(pid, "burn", "0")
+	if err != nil {
+		t.Fatalf("idle sample: %v", err)
+	}
+
+	t.Logf("busy=%.1f%% idle=%.1f%%", busy.CPUPercent, idle.CPUPercent)
+	if idle.CPUPercent >= busy.CPUPercent {
+		t.Errorf("CPU gauge did not fall when the process went idle (%.1f%% -> %.1f%%); it is reporting a lifetime average",
+			busy.CPUPercent, idle.CPUPercent)
+	}
+	if idle.CPUPercent > 10 {
+		t.Errorf("idle CPU reading %.1f%% should be near zero", idle.CPUPercent)
+	}
 }

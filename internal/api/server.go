@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"runtime/debug"
@@ -1061,9 +1062,74 @@ func (s *Server) handleGetProcess(w http.ResponseWriter, _ *http.Request, proces
 	s.respondJSON(w, http.StatusOK, apitypes.ProcessDetailResponse{Process: processName, Config: cfg})
 }
 
+// RedactedValue is the placeholder substituted for a secret env value in API
+// responses. It is also recognized on the way back in: an update that carries
+// this value for a variable means "keep whatever is already configured", so a
+// client that round-trips a redacted config (read it, change one field, PUT it
+// back) cannot overwrite the real secret with the placeholder.
+const RedactedValue = "***REDACTED***"
+
 // secretEnvKeyPattern matches environment-variable names that typically hold a
-// secret. Case-insensitive.
-var secretEnvKeyPattern = regexp.MustCompile(`(?i)(password|passwd|secret|token|credential|api[_-]?key|access[_-]?key|private[_-]?key|auth)`)
+// secret. The generic words are anchored on word boundaries (_ - or the ends of
+// the name) so ordinary settings like AUTH_DRIVER, OAUTH_ENABLED, AUTHOR or
+// TOKENIZER_PATH are not masked, while DB_PASSWORD, API_TOKEN, APP_KEY and
+// credential-bearing DSN/URL variables are. Case-insensitive.
+// Unambiguous secret words may appear anywhere in the name (DB_PASSWORD,
+// STRIPE_SECRET_KEY); the ambiguous ones (auth, key, pat) only count when they
+// END the name, so API_AUTH and APP_KEY are masked while AUTH_DRIVER,
+// AUTH_GUARD and KEYSPACE — ordinary settings — stay readable.
+var secretEnvKeyPattern = regexp.MustCompile(
+	`(?i)((^|[_-])(password|passwd|secret|secrets|token|credential|credentials|apikey|dsn)([_-]|$)|(^|[_-])(auth|key|pat)$)`)
+
+// credentialURLKeyPattern matches variables that commonly hold a connection URL
+// with embedded credentials (DATABASE_URL, REDIS_URL, MAIL_DSN, …). Their value
+// is only redacted when it actually contains userinfo, so a plain
+// `APP_URL=https://example.com` stays visible.
+var credentialURLKeyPattern = regexp.MustCompile(`(?i)(^|[_-])(url|uri|dsn)([_-]|$)`)
+
+// urlHasCredentials reports whether a value looks like a URL carrying userinfo
+// (scheme://user:pass@host).
+func urlHasCredentials(value string) bool {
+	u, err := url.Parse(value)
+	if err != nil || u.User == nil {
+		return false
+	}
+	return u.User.Username() != ""
+}
+
+// shouldRedactEnv decides whether an env var's value must be masked.
+func shouldRedactEnv(key, value string) bool {
+	if value == "" {
+		return false
+	}
+	if secretEnvKeyPattern.MatchString(key) {
+		return true
+	}
+	return credentialURLKeyPattern.MatchString(key) && urlHasCredentials(value)
+}
+
+// restoreRedactedEnv replaces any env value that is the redaction placeholder
+// with the value currently configured for that process, so a client that PUTs
+// back a config it read (with secrets masked) does not clobber the real values.
+// Placeholders for variables that no longer exist are dropped rather than
+// written through literally.
+func restoreRedactedEnv(incoming *config.Process, current *config.Process) {
+	if incoming == nil || len(incoming.Env) == 0 {
+		return
+	}
+	for k, v := range incoming.Env {
+		if v != RedactedValue {
+			continue
+		}
+		if current != nil {
+			if existing, ok := current.Env[k]; ok {
+				incoming.Env[k] = existing
+				continue
+			}
+		}
+		delete(incoming.Env, k)
+	}
+}
 
 // redactProcessEnv masks the values of secret-looking env vars on a *copy* of a
 // process config, in place. It expects a config the caller owns (e.g. from
@@ -1074,8 +1140,8 @@ func redactProcessEnv(cfg *config.Process) {
 	}
 	redacted := make(map[string]string, len(cfg.Env))
 	for k, v := range cfg.Env {
-		if v != "" && secretEnvKeyPattern.MatchString(k) {
-			redacted[k] = "***REDACTED***"
+		if shouldRedactEnv(k, v) {
+			redacted[k] = RedactedValue
 		} else {
 			redacted[k] = v
 		}
@@ -1088,8 +1154,7 @@ func redactProcessEnv(cfg *config.Process) {
 //   - process: filter by process name (optional, empty = all)
 func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		s.respondMethodNotAllowed(w, http.MethodGet)
 		return
 	}
 
@@ -1198,7 +1263,7 @@ func (s *Server) handleAddProcess(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := s.manager.AddProcess(ctx, req.Name, req.Process); err != nil {
-		s.respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to add process: %v", err))
+		s.respondError(w, httpStatusFromError(err), fmt.Sprintf("failed to add process: %v", err))
 		return
 	}
 
@@ -1223,6 +1288,16 @@ func (s *Server) handleUpdateProcess(w http.ResponseWriter, r *http.Request, pro
 	if req.Process == nil {
 		s.respondError(w, http.StatusBadRequest, "process configuration is required")
 		return
+	}
+
+	// A client that read this process (secrets masked), changed one field and
+	// PUT it back would otherwise write the placeholder over the real secret and
+	// restart the process with a broken environment. Restore any placeholder
+	// value from the running configuration. (SEC-4)
+	if current, err := s.manager.GetProcessConfig(processName); err == nil {
+		restoreRedactedEnv(req.Process, current)
+	} else {
+		restoreRedactedEnv(req.Process, nil)
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)

@@ -91,11 +91,19 @@ paths:
     put:
       tags: [processes]
       summary: Update a process definition
+      description: >
+        Env values sent as the redaction placeholder (`***REDACTED***`) are kept
+        at their currently-configured value, so a client can safely read a
+        process, change one field, and PUT the whole config back.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ProcessConfig" }
+            schema:
+              type: object
+              required: [process]
+              properties:
+                process: { $ref: "#/components/schemas/ProcessConfig" }
       responses:
         "200": { description: Updated }
         "400": { $ref: "#/components/responses/BadRequest" }
