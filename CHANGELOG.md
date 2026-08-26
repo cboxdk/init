@@ -37,6 +37,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Lifecycle hooks, exec health checks, and scheduled jobs no longer lose their
+  exit status to the PID-1 reaper.** As PID 1, cbox-init runs a wildcard reaper
+  (`Wait4(-1)`) that races the `Wait()` of any child it spawns directly. Only
+  supervised processes registered with it; hooks, exec health checks, and
+  scheduled jobs called `Run()`/`CombinedOutput()` unregistered, so if the reaper
+  won the race their `Wait()` returned `ECHILD` and the run was misread as a
+  failure — a *successful* pre-start hook could abort container startup, and a
+  *passing* exec health check could trigger a restart. All three now run through
+  a shared `signals.RunSupervised` that registers the child before waiting and
+  recovers the reaper-captured status (a clean exit stays a success). The common,
+  non-raced path is unchanged.
 - **API status codes are now correct and typed, not guessed from the message.**
   `httpStatusFromError` matched on message substrings, so rewording a manager
   error silently flipped a 404 to a 500, an unrelated `exec: … executable file

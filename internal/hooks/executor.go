@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/metrics"
+	"github.com/cboxdk/init/internal/signals"
 )
 
 // Executor executes lifecycle hooks with retry logic
@@ -134,16 +136,21 @@ func (e *Executor) executeOnce(ctx context.Context, hook *config.Hook) error {
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, e.buildEnv(hook)...)
 
-	// Capture output for logging
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("command failed: %w (output: %s)", err, string(output))
+	// Capture combined output for logging. Run under reaper coordination (rather
+	// than cmd.CombinedOutput/Run) so the PID-1 wildcard reaper can't collect the
+	// hook before our Wait() and make a successful hook look failed — which for a
+	// pre-start hook aborts container startup.
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := signals.RunSupervised(cmd); err != nil {
+		return fmt.Errorf("command failed: %w (output: %s)", err, output.String())
 	}
 
-	if len(output) > 0 {
+	if output.Len() > 0 {
 		e.logger.Debug("Hook output",
 			"name", hook.Name,
-			"output", string(output),
+			"output", output.String(),
 		)
 	}
 
