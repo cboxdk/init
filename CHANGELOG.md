@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Public keys are no longer masked as secrets.** `PUBLIC_KEY`,
+  `STRIPE_PUBLISHABLE_KEY`, `RECAPTCHA_SITE_KEY` and frontend-exposed variables
+  (`MIX_*`, `VITE_*`, `NEXT_PUBLIC_*`) are published by definition, so hiding
+  them in the API only cost the operator information.
+
+### Fixed
+
 - **Erlang/RabbitMQ cluster cookies are redacted** (`RABBITMQ_ERLANG_COOKIE`),
   while ordinary cookie settings (`COOKIE_DOMAIN`, `SESSION_COOKIE_NAME`) stay
   readable.
