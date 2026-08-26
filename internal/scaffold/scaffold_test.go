@@ -1178,7 +1178,7 @@ func TestGeneratedConfig_ValidYAML_AllPresets(t *testing.T) {
 			}
 
 			// Parse as generic YAML to ensure syntax is valid
-			var parsed map[string]interface{}
+			var parsed map[string]any
 			if err := yaml.Unmarshal([]byte(yamlContent), &parsed); err != nil {
 				t.Errorf("Generated YAML is invalid for preset %s: %v\nContent:\n%s", preset, err, yamlContent)
 			}
@@ -1297,7 +1297,7 @@ func TestGeneratedDockerCompose_ValidYAML(t *testing.T) {
 			}
 
 			// Parse as generic YAML
-			var parsed map[string]interface{}
+			var parsed map[string]any
 			if err := yaml.Unmarshal([]byte(content), &parsed); err != nil {
 				t.Errorf("Generated docker-compose is invalid YAML for %s: %v", preset, err)
 			}

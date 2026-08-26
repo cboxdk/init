@@ -120,7 +120,7 @@ func TestClient_getURL(t *testing.T) {
 func TestClient_ListProcesses(t *testing.T) {
 	tests := []struct {
 		name           string
-		serverResponse interface{}
+		serverResponse any
 		serverStatus   int
 		auth           string
 		wantErr        bool
@@ -128,16 +128,16 @@ func TestClient_ListProcesses(t *testing.T) {
 	}{
 		{
 			name: "successful list",
-			serverResponse: map[string]interface{}{
-				"processes": []interface{}{
-					map[string]interface{}{
+			serverResponse: map[string]any{
+				"processes": []any{
+					map[string]any{
 						"name":     "php-fpm",
 						"status":   "running",
 						"pid":      1234,
 						"uptime":   120,
 						"restarts": 0,
 					},
-					map[string]interface{}{
+					map[string]any{
 						"name":     "nginx",
 						"status":   "running",
 						"pid":      5678,
@@ -152,20 +152,20 @@ func TestClient_ListProcesses(t *testing.T) {
 		},
 		{
 			name:           "empty list",
-			serverResponse: map[string]interface{}{"processes": []interface{}{}},
+			serverResponse: map[string]any{"processes": []any{}},
 			serverStatus:   http.StatusOK,
 			wantErr:        false,
 			expectedCount:  0,
 		},
 		{
 			name:           "server error",
-			serverResponse: map[string]interface{}{"error": "internal error"},
+			serverResponse: map[string]any{"error": "internal error"},
 			serverStatus:   http.StatusInternalServerError,
 			wantErr:        true,
 		},
 		{
 			name:           "unauthorized",
-			serverResponse: map[string]interface{}{"error": "unauthorized"},
+			serverResponse: map[string]any{"error": "unauthorized"},
 			serverStatus:   http.StatusUnauthorized,
 			wantErr:        true,
 		},
@@ -236,7 +236,7 @@ func TestClient_GetLogs(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer token" {
 			t.Fatalf("expected auth header")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"process": "app",
 			"logs":    expectedLogs,
 		})
@@ -269,7 +269,7 @@ func TestClient_GetStackLogs(t *testing.T) {
 		if r.URL.Path != "/api/v1/logs" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"scope": "stack",
 			"logs":  expectedLogs,
 		})
@@ -344,9 +344,9 @@ func TestClient_GetProcessConfig(t *testing.T) {
 		if r.URL.Path != "/api/v1/processes/app" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"process": "app",
-			"config": map[string]interface{}{
+			"config": map[string]any{
 				"enabled": true,
 				"command": []string{"php"},
 				"scale":   3,
@@ -694,7 +694,7 @@ func TestClient_AddProcess(t *testing.T) {
 				}
 
 				// Decode and validate body
-				var body map[string]interface{}
+				var body map[string]any
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					t.Errorf("Failed to decode request body: %v", err)
 				}
@@ -739,7 +739,7 @@ func TestClient_ListProcesses_WithAuth(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"processes": []process.ProcessInfo{},
 		})
 	}))
@@ -798,9 +798,9 @@ func TestClient_ScaleProcessDelta(t *testing.T) {
 				if r.URL.Path == "/api/v1/processes" && r.Method == "GET" {
 					// Mock ListProcesses
 					w.WriteHeader(http.StatusOK)
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
-						"processes": []interface{}{
-							map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"processes": []any{
+							map[string]any{
 								"name":     tt.processName,
 								"scale":    tt.currentScale,
 								"desired":  tt.currentScale,

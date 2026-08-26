@@ -65,14 +65,14 @@ type Resource struct {
 
 // Event represents a single audit log entry
 type Event struct {
-	Timestamp time.Time              `json:"timestamp"`
-	EventType EventType              `json:"event_type"`
-	Actor     Actor                  `json:"actor"`
-	Action    string                 `json:"action"`
-	Resource  Resource               `json:"resource"`
-	Status    Status                 `json:"status"`
-	Message   string                 `json:"message"`
-	Context   map[string]interface{} `json:"context,omitempty"`
+	Timestamp time.Time      `json:"timestamp"`
+	EventType EventType      `json:"event_type"`
+	Actor     Actor          `json:"actor"`
+	Action    string         `json:"action"`
+	Resource  Resource       `json:"resource"`
+	Status    Status         `json:"status"`
+	Message   string         `json:"message"`
+	Context   map[string]any `json:"context,omitempty"`
 }
 
 // Logger provides structured audit logging
@@ -144,7 +144,7 @@ func (l *Logger) LogAPIRequest(ip, method, path, auth string) {
 		},
 		Status:  StatusSuccess,
 		Message: "API request received",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"method": method,
 			"path":   path,
 		},
@@ -171,7 +171,7 @@ func (l *Logger) LogAPIResponse(ip, method, path string, statusCode int, duratio
 		},
 		Status:  status,
 		Message: "API response sent",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"status_code":    statusCode,
 			"duration_ms":    duration.Milliseconds(),
 			"duration_human": duration.String(),
@@ -194,7 +194,7 @@ func (l *Logger) LogAuthFailure(ip, path, reason string) {
 		},
 		Status:  StatusFailure,
 		Message: "Authentication failed",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"reason": reason,
 		},
 	})
@@ -215,7 +215,7 @@ func (l *Logger) LogACLDeny(ip, path, reason string) {
 		},
 		Status:  StatusFailure,
 		Message: "Access denied by ACL",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"reason": reason,
 		},
 	})
@@ -255,7 +255,7 @@ func (l *Logger) LogProcessStart(processName string, pid int, scale int) {
 		},
 		Status:  StatusSuccess,
 		Message: "Process started",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"pid":   pid,
 			"scale": scale,
 		},
@@ -278,7 +278,7 @@ func (l *Logger) LogProcessStop(processName string, pid int, reason string) {
 		},
 		Status:  StatusSuccess,
 		Message: "Process stopped",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"pid":    pid,
 			"reason": reason,
 		},
@@ -301,7 +301,7 @@ func (l *Logger) LogProcessCrash(processName string, pid int, exitCode int, sign
 		},
 		Status:  StatusError,
 		Message: "Process crashed",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"pid":       pid,
 			"exit_code": exitCode,
 			"signal":    signal,
@@ -325,7 +325,7 @@ func (l *Logger) LogProcessRestart(processName string, oldPID int, newPID int, r
 		},
 		Status:  StatusSuccess,
 		Message: "Process restarted",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"old_pid": oldPID,
 			"new_pid": newPID,
 			"reason":  reason,
@@ -349,7 +349,7 @@ func (l *Logger) LogProcessScale(processName string, oldScale int, newScale int,
 		},
 		Status:  StatusSuccess,
 		Message: "Process scaled",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"old_scale": oldScale,
 			"new_scale": newScale,
 		},
@@ -371,7 +371,7 @@ func (l *Logger) LogConfigLoad(configFile string, processCount int) {
 		},
 		Status:  StatusSuccess,
 		Message: "Configuration loaded",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"process_count": processCount,
 		},
 	})
@@ -392,7 +392,7 @@ func (l *Logger) LogSystemStart(version string) {
 		},
 		Status:  StatusSuccess,
 		Message: "cbox-init started",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"version": version,
 		},
 	})
@@ -418,7 +418,7 @@ func (l *Logger) LogSystemShutdown(reason string, graceful bool) {
 		},
 		Status:  status,
 		Message: "cbox-init shutdown",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"reason":   reason,
 			"graceful": graceful,
 		},
@@ -458,7 +458,7 @@ func (l *Logger) LogProcessAdded(name string, command []string, scale int) {
 		},
 		Status:  StatusSuccess,
 		Message: fmt.Sprintf("Process %s added", name),
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"command": command,
 			"scale":   scale,
 		},
@@ -498,7 +498,7 @@ func (l *Logger) LogProcessUpdated(name string, command []string, scale int) {
 		},
 		Status:  StatusSuccess,
 		Message: fmt.Sprintf("Process %s updated", name),
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"command": command,
 			"scale":   scale,
 		},

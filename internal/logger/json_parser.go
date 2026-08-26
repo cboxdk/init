@@ -36,7 +36,7 @@ func NewJSONParser(cfg *config.JSONConfig) *JSONParser {
 // Returns (true, data) if successfully parsed as JSON
 // Returns (false, nil) if not JSON or parsing failed
 // Fast-path: if !enabled, returns (false, nil) immediately
-func (jp *JSONParser) Parse(input string) (isJSON bool, data map[string]interface{}) {
+func (jp *JSONParser) Parse(input string) (isJSON bool, data map[string]any) {
 	// Fast-path: disabled parser
 	if !jp.enabled {
 		return false, nil
@@ -56,7 +56,7 @@ func (jp *JSONParser) Parse(input string) (isJSON bool, data map[string]interfac
 	}
 
 	// Try to parse as JSON
-	data = make(map[string]interface{})
+	data = make(map[string]any)
 	if err := json.Unmarshal([]byte(input), &data); err != nil {
 		return false, nil
 	}
@@ -67,7 +67,7 @@ func (jp *JSONParser) Parse(input string) (isJSON bool, data map[string]interfac
 // ToLogAttrs converts parsed JSON data to slog attributes
 // Extracts level and message fields if configured
 // Returns (message, level, attrs)
-func (jp *JSONParser) ToLogAttrs(data map[string]interface{}) (message string, level slog.Level, attrs []slog.Attr) {
+func (jp *JSONParser) ToLogAttrs(data map[string]any) (message string, level slog.Level, attrs []slog.Attr) {
 	attrs = make([]slog.Attr, 0, len(data))
 
 	// Default level

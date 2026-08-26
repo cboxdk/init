@@ -199,12 +199,12 @@ func TestFormatValidationJSON(t *testing.T) {
 	tests := []struct {
 		name     string
 		result   *ValidationResult
-		validate func(*testing.T, map[string]interface{})
+		validate func(*testing.T, map[string]any)
 	}{
 		{
 			name:   "no issues",
 			result: NewValidationResult(),
-			validate: func(t *testing.T, json map[string]interface{}) {
+			validate: func(t *testing.T, json map[string]any) {
 				if passed, ok := json["passed"].(bool); !ok || !passed {
 					t.Error("Expected passed=true for no issues")
 				}
@@ -230,7 +230,7 @@ func TestFormatValidationJSON(t *testing.T) {
 				r.AddError("test.field", "error msg", "fix it")
 				return r
 			}(),
-			validate: func(t *testing.T, json map[string]interface{}) {
+			validate: func(t *testing.T, json map[string]any) {
 				if passed, ok := json["passed"].(bool); !ok || passed {
 					t.Error("Expected passed=false with errors")
 				}
@@ -267,7 +267,7 @@ func TestFormatValidationJSON(t *testing.T) {
 				r.AddProcessError("php-fpm", "command", "missing command", "add it")
 				return r
 			}(),
-			validate: func(t *testing.T, json map[string]interface{}) {
+			validate: func(t *testing.T, json map[string]any) {
 				errors := json["errors"].([]map[string]string)
 				if len(errors) != 1 {
 					t.Fatalf("Expected 1 error, got %d", len(errors))
@@ -286,7 +286,7 @@ func TestFormatValidationJSON(t *testing.T) {
 				r.AddSuggestion("s.field", "suggestion", "maybe")
 				return r
 			}(),
-			validate: func(t *testing.T, json map[string]interface{}) {
+			validate: func(t *testing.T, json map[string]any) {
 				summary := json["summary"].(map[string]int)
 				if summary["errors"] != 1 {
 					t.Errorf("Expected 1 error, got %d", summary["errors"])

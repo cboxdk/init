@@ -665,7 +665,7 @@ func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		// List all processes
 		processes := s.manager.ListProcesses()
-		s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		s.respondJSON(w, http.StatusOK, map[string]any{
 			"processes": processes,
 		})
 
@@ -888,7 +888,7 @@ func (s *Server) handleScale(w http.ResponseWriter, r *http.Request, processName
 			s.respondError(w, httpStatusFromError(err), fmt.Sprintf("scale failed: %v", err))
 			return
 		}
-		s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		s.respondJSON(w, http.StatusOK, map[string]any{
 			"status":  "scaled",
 			"process": processName,
 			"delta":   *req.Delta,
@@ -906,7 +906,7 @@ func (s *Server) handleScale(w http.ResponseWriter, r *http.Request, processName
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":  "scaled",
 		"process": processName,
 		"desired": req.Desired,
@@ -955,7 +955,7 @@ func (s *Server) handleScheduleTrigger(w http.ResponseWriter, r *http.Request, p
 			return
 		}
 
-		s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		s.respondJSON(w, http.StatusOK, map[string]any{
 			"status":    "completed",
 			"process":   processName,
 			"exit_code": exitCode,
@@ -984,7 +984,7 @@ func (s *Server) handleGetScheduleStatus(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"process":  processName,
 		"schedule": status,
 	})
@@ -1006,7 +1006,7 @@ func (s *Server) handleGetScheduleHistory(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"process": processName,
 		"limit":   limit,
 		"count":   len(history),
@@ -1033,7 +1033,7 @@ func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request, processNa
 	}
 
 	// Return logs as JSON array
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"process": processName,
 		"limit":   limit,
 		"count":   len(logs),
@@ -1049,7 +1049,7 @@ func (s *Server) handleGetProcess(w http.ResponseWriter, _ *http.Request, proces
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"process": processName,
 		"config":  cfg,
 	})
@@ -1098,7 +1098,7 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			data, err := json.Marshal(map[string]interface{}{
+			data, err := json.Marshal(map[string]any{
 				"timestamp": entry.Timestamp.Format(time.RFC3339Nano),
 				"process":   entry.ProcessName,
 				"instance":  entry.InstanceID,
@@ -1135,7 +1135,7 @@ func (s *Server) handleStackLogs(w http.ResponseWriter, r *http.Request) {
 
 	logs := s.manager.GetStackLogs(limit)
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"scope": "stack",
 		"limit": limit,
 		"count": len(logs),
@@ -1173,7 +1173,7 @@ func (s *Server) handleAddProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusCreated, map[string]interface{}{
+	s.respondJSON(w, http.StatusCreated, map[string]any{
 		"status":  "created",
 		"process": req.Name,
 		"message": "Process added successfully",
@@ -1204,7 +1204,7 @@ func (s *Server) handleUpdateProcess(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":  "updated",
 		"process": processName,
 		"message": "Process updated successfully",
@@ -1221,7 +1221,7 @@ func (s *Server) handleRemoveProcess(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":  "removed",
 		"process": processName,
 		"message": "Process removed successfully",
@@ -1240,7 +1240,7 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":  "saved",
 		"message": "Configuration saved successfully",
 	})
@@ -1261,14 +1261,14 @@ func (s *Server) handleConfigReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"status":  "reloaded",
 		"message": "Configuration reloaded successfully",
 	})
 }
 
 // respondJSON sends a JSON response
-func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
+func (s *Server) respondJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
@@ -1361,7 +1361,7 @@ func (s *Server) handleMetricsHistory(w http.ResponseWriter, r *http.Request) {
 	history := collector.GetHistory(processName, instanceID, since, limit)
 
 	// Build response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"process":  processName,
 		"instance": instanceID,
 		"since":    since.Format(time.RFC3339),
@@ -1401,7 +1401,7 @@ func (s *Server) handleOneshotHistory(w http.ResponseWriter, r *http.Request) {
 	executions := s.manager.GetAllOneshotExecutions(limit)
 
 	// Build response
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	s.respondJSON(w, http.StatusOK, map[string]any{
 		"executions": executions,
 		"count":      len(executions),
 		"limit":      limit,

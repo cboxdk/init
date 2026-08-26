@@ -130,7 +130,7 @@ func runCheckConfig(cmd *cobra.Command, args []string) {
 // printJSON marshals the validation result to indented JSON on stdout. The
 // result must round-trip through json.Unmarshal — this is the output the --json
 // flag exists to feed into CI/CD and jq pipelines.
-func printJSON(data map[string]interface{}) {
+func printJSON(data map[string]any) {
 	out, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		printJSONError(fmt.Sprintf("failed to render JSON output: %v", err))

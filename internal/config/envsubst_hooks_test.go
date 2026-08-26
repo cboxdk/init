@@ -12,25 +12,25 @@ func TestHookEnvOverrides_Basic(t *testing.T) {
 	t.Setenv("CBOX_INIT_HOOK_PRE_START_0_TIMEOUT", "300")
 	t.Setenv("CBOX_INIT_HOOK_PRE_START_0_ALLOW_FAILURE", "true")
 
-	raw := map[string]interface{}{}
+	raw := map[string]any{}
 	if err := applyEnvOverridesMap(raw); err != nil {
 		t.Fatalf("applyEnvOverridesMap() error = %v", err)
 	}
 
-	hooks, ok := raw["hooks"].(map[string]interface{})
+	hooks, ok := raw["hooks"].(map[string]any)
 	if !ok {
 		t.Fatal("hooks map not created")
 	}
-	preStart, ok := hooks["pre-start"].([]interface{})
+	preStart, ok := hooks["pre-start"].([]any)
 	if !ok || len(preStart) != 1 {
 		t.Fatalf("pre-start = %v, want 1 hook", hooks["pre-start"])
 	}
 
-	hook := preStart[0].(map[string]interface{})
+	hook := preStart[0].(map[string]any)
 	if hook["name"] != "stache-warm" {
 		t.Errorf("name = %v, want stache-warm", hook["name"])
 	}
-	command, ok := hook["command"].([]interface{})
+	command, ok := hook["command"].([]any)
 	if !ok || len(command) != 3 || command[0] != "php" || command[1] != "please" || command[2] != "stache:warm" {
 		t.Errorf("command = %v, want [php please stache:warm]", hook["command"])
 	}
@@ -50,19 +50,19 @@ func TestHookEnvOverrides_JSONCommandAndContinueOnError(t *testing.T) {
 	t.Setenv("CBOX_INIT_HOOK_POST_START_0_WORKING_DIR", "/var/www/html")
 	t.Setenv("CBOX_INIT_HOOK_POST_START_0_ENV_APP_ENV", "production")
 
-	raw := map[string]interface{}{}
+	raw := map[string]any{}
 	if err := applyEnvOverridesMap(raw); err != nil {
 		t.Fatalf("applyEnvOverridesMap() error = %v", err)
 	}
 
-	hooks := raw["hooks"].(map[string]interface{})
-	postStart, ok := hooks["post-start"].([]interface{})
+	hooks := raw["hooks"].(map[string]any)
+	postStart, ok := hooks["post-start"].([]any)
 	if !ok || len(postStart) != 1 {
 		t.Fatalf("post-start = %v, want 1 hook", hooks["post-start"])
 	}
 
-	hook := postStart[0].(map[string]interface{})
-	command, ok := hook["command"].([]interface{})
+	hook := postStart[0].(map[string]any)
+	command, ok := hook["command"].([]any)
 	if !ok || len(command) != 3 || command[2] != "queue:restart" {
 		t.Errorf("command = %v, want JSON array parsed", hook["command"])
 	}
@@ -78,7 +78,7 @@ func TestHookEnvOverrides_JSONCommandAndContinueOnError(t *testing.T) {
 	if hook["working_dir"] != "/var/www/html" {
 		t.Errorf("working_dir = %v, want /var/www/html", hook["working_dir"])
 	}
-	env, ok := hook["env"].(map[string]interface{})
+	env, ok := hook["env"].(map[string]any)
 	if !ok || env["APP_ENV"] != "production" {
 		t.Errorf("env = %v, want APP_ENV=production", hook["env"])
 	}
@@ -89,12 +89,12 @@ func TestHookEnvOverrides_AppendAfterYAMLAndIndexOrder(t *testing.T) {
 	t.Setenv("CBOX_INIT_HOOK_PRE_START_1_COMMAND", "php,artisan,event:cache")
 	t.Setenv("CBOX_INIT_HOOK_PRE_START_0_COMMAND", "php,artisan,config:cache")
 
-	raw := map[string]interface{}{
-		"hooks": map[string]interface{}{
-			"pre-start": []interface{}{
-				map[string]interface{}{
+	raw := map[string]any{
+		"hooks": map[string]any{
+			"pre-start": []any{
+				map[string]any{
 					"name":    "migrate",
-					"command": []interface{}{"php", "artisan", "migrate", "--force"},
+					"command": []any{"php", "artisan", "migrate", "--force"},
 				},
 			},
 		},
@@ -103,18 +103,18 @@ func TestHookEnvOverrides_AppendAfterYAMLAndIndexOrder(t *testing.T) {
 		t.Fatalf("applyEnvOverridesMap() error = %v", err)
 	}
 
-	preStart := raw["hooks"].(map[string]interface{})["pre-start"].([]interface{})
+	preStart := raw["hooks"].(map[string]any)["pre-start"].([]any)
 	if len(preStart) != 3 {
 		t.Fatalf("pre-start has %d hooks, want 3", len(preStart))
 	}
-	if name := preStart[0].(map[string]interface{})["name"]; name != "migrate" {
+	if name := preStart[0].(map[string]any)["name"]; name != "migrate" {
 		t.Errorf("first hook = %v, want YAML-defined migrate", name)
 	}
-	cmd1 := preStart[1].(map[string]interface{})["command"].([]interface{})
+	cmd1 := preStart[1].(map[string]any)["command"].([]any)
 	if cmd1[2] != "config:cache" {
 		t.Errorf("second hook command = %v, want env index 0 (config:cache)", cmd1)
 	}
-	cmd2 := preStart[2].(map[string]interface{})["command"].([]interface{})
+	cmd2 := preStart[2].(map[string]any)["command"].([]any)
 	if cmd2[2] != "event:cache" {
 		t.Errorf("third hook command = %v, want env index 1 (event:cache)", cmd2)
 	}
@@ -126,13 +126,13 @@ func TestHookEnvOverrides_IgnoresInvalidKeys(t *testing.T) {
 	t.Setenv("CBOX_INIT_HOOK_MID_FLIGHT_0_COMMAND", "echo,nope")   // unknown hook type
 	t.Setenv("CBOX_INIT_HOOK_NAME", "set-by-executor")             // executor-injected var
 
-	raw := map[string]interface{}{}
+	raw := map[string]any{}
 	if err := applyEnvOverridesMap(raw); err != nil {
 		t.Fatalf("applyEnvOverridesMap() error = %v", err)
 	}
 
-	if hooks, ok := raw["hooks"].(map[string]interface{}); ok {
-		if preStart, ok := hooks["pre-start"].([]interface{}); ok && len(preStart) > 0 {
+	if hooks, ok := raw["hooks"].(map[string]any); ok {
+		if preStart, ok := hooks["pre-start"].([]any); ok && len(preStart) > 0 {
 			t.Errorf("pre-start = %v, want no hooks from invalid keys", preStart)
 		}
 	}
@@ -182,13 +182,13 @@ processes:
 func TestProcessEnvOverride_CommaSeparatedCommand(t *testing.T) {
 	t.Setenv("CBOX_INIT_PROCESS_WORKER_COMMAND", "php, artisan, queue:work")
 
-	raw := map[string]interface{}{}
+	raw := map[string]any{}
 	if err := applyEnvOverridesMap(raw); err != nil {
 		t.Fatalf("applyEnvOverridesMap() error = %v", err)
 	}
 
-	worker := raw["processes"].(map[string]interface{})["worker"].(map[string]interface{})
-	command, ok := worker["command"].([]interface{})
+	worker := raw["processes"].(map[string]any)["worker"].(map[string]any)
+	command, ok := worker["command"].([]any)
 	if !ok || len(command) != 3 || command[0] != "php" || command[2] != "queue:work" {
 		t.Errorf("command = %v, want [php artisan queue:work]", worker["command"])
 	}
