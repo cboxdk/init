@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -707,7 +708,11 @@ func (p *Process) Equal(other *Process) bool {
 		return p == other
 	}
 
-	// Compare basic fields
+	// Compare basic fields. Every scalar/string field is listed here: a field
+	// omitted from this comparison makes a reload that changes only that field a
+	// silent no-op (the process keeps running under the old value). That is how
+	// a change to `user`/`group` — dropping a service's privileges — was being
+	// missed. Keep this list exhaustive against the Process struct.
 	if p.Enabled != other.Enabled ||
 		p.Type != other.Type ||
 		p.InitialState != other.InitialState ||
@@ -715,8 +720,19 @@ func (p *Process) Equal(other *Process) bool {
 		p.MaxScale != other.MaxScale ||
 		p.Restart != other.Restart ||
 		p.WorkingDir != other.WorkingDir ||
+		p.User != other.User ||
+		p.Group != other.Group ||
+		p.MaxMemoryMB != other.MaxMemoryMB ||
+		p.PortBase != other.PortBase ||
 		p.Schedule != other.Schedule ||
-		p.ScheduleTimezone != other.ScheduleTimezone {
+		p.ScheduleTimezone != other.ScheduleTimezone ||
+		p.ScheduleTimeout != other.ScheduleTimeout ||
+		p.ScheduleMaxConcurrent != other.ScheduleMaxConcurrent {
+		return false
+	}
+
+	// Legacy stdout/stderr shorthands (*bool).
+	if !boolPtrEqual(p.Stdout, other.Stdout) || !boolPtrEqual(p.Stderr, other.Stderr) {
 		return false
 	}
 
@@ -745,7 +761,27 @@ func (p *Process) Equal(other *Process) bool {
 		return false
 	}
 
+	// Compare the deep opt-in config trees structurally. Both sides come from
+	// the same YAML-load pipeline in every caller, so DeepEqual's nil-vs-empty
+	// strictness is not a concern, and it can never drift out of date the way a
+	// hand-written comparator for these large nested structs would.
+	if !reflect.DeepEqual(p.Logging, other.Logging) {
+		return false
+	}
+	if !reflect.DeepEqual(p.Heartbeat, other.Heartbeat) {
+		return false
+	}
+
 	return true
+}
+
+// boolPtrEqual compares two *bool values, treating nil (unset) distinctly from
+// an explicit true/false.
+func boolPtrEqual(a, b *bool) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // stringSliceEqual compares two string slices for equality

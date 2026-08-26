@@ -689,6 +689,69 @@ func TestProcess_Equal(t *testing.T) {
 			},
 			want: false,
 		},
+		// The following cases guard against Equal drifting back to omitting a
+		// field, which would make a reload changing only that field a silent
+		// no-op (CDX-9). user/group are the security-relevant ones.
+		{
+			name: "different user",
+			p1:   &Process{Enabled: true, Command: []string{"nginx"}, User: "root"},
+			p2:   &Process{Enabled: true, Command: []string{"nginx"}, User: "www-data"},
+			want: false,
+		},
+		{
+			name: "different group",
+			p1:   &Process{Enabled: true, Command: []string{"nginx"}, Group: "root"},
+			p2:   &Process{Enabled: true, Command: []string{"nginx"}, Group: "www-data"},
+			want: false,
+		},
+		{
+			name: "different max_memory_mb",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, MaxMemoryMB: 256},
+			p2:   &Process{Enabled: true, Command: []string{"php"}, MaxMemoryMB: 512},
+			want: false,
+		},
+		{
+			name: "different port_base",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, PortBase: 9000},
+			p2:   &Process{Enabled: true, Command: []string{"php"}, PortBase: 9100},
+			want: false,
+		},
+		{
+			name: "different schedule_timeout",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, ScheduleTimeout: "30s"},
+			p2:   &Process{Enabled: true, Command: []string{"php"}, ScheduleTimeout: "5m"},
+			want: false,
+		},
+		{
+			name: "different schedule_max_concurrent",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, ScheduleMaxConcurrent: 1},
+			p2:   &Process{Enabled: true, Command: []string{"php"}, ScheduleMaxConcurrent: 2},
+			want: false,
+		},
+		{
+			name: "different stdout shorthand",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, Stdout: boolPtr(true)},
+			p2:   &Process{Enabled: true, Command: []string{"php"}, Stdout: boolPtr(false)},
+			want: false,
+		},
+		{
+			name: "stdout set vs unset",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, Stdout: boolPtr(true)},
+			p2:   &Process{Enabled: true, Command: []string{"php"}},
+			want: false,
+		},
+		{
+			name: "different logging config",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, Logging: &LoggingConfig{MinLevel: "info"}},
+			p2:   &Process{Enabled: true, Command: []string{"php"}, Logging: &LoggingConfig{MinLevel: "debug"}},
+			want: false,
+		},
+		{
+			name: "different heartbeat config",
+			p1:   &Process{Enabled: true, Command: []string{"php"}, Heartbeat: &HeartbeatConfig{Enabled: true, Interval: 60}},
+			p2:   &Process{Enabled: true, Command: []string{"php"}, Heartbeat: &HeartbeatConfig{Enabled: true, Interval: 120}},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {

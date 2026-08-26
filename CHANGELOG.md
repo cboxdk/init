@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now detects both cases and refuses with an explanatory error, pointing the
   operator at the file instead. Configs with no templating or overrides save as
   before. (SEC-2)
+### Fixed
+
+- **Hot reload no longer silently ignores changes to `user`, `group`, logging,
+  memory limits, heartbeat, or scaled-port settings.** `Process.Equal` — which
+  the config reload uses to decide whether a process needs restarting — compared
+  only a subset of fields, so editing a service's `user:` (e.g. dropping it from
+  root to an unprivileged account) and issuing a reload left it running under the
+  old identity with no indication. `Equal` now covers every field of the process
+  definition, including the full `logging`/`heartbeat` trees, and a drift-guard
+  test asserts each field is compared. (CDX-9)
 
 ### Changed
 
