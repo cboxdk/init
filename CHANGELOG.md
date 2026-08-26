@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The live SSE log pipeline is now tested end to end.** `handleLogStream`,
+  `SubscribeLogs`, and the log broadcaster had almost no coverage — the SSE
+  endpoint had never served a request in a test. Added a test that connects to
+  the stream, broadcasts a log entry through the manager, and asserts it arrives
+  as an SSE data frame. (TEST-6)
 ### Changed
 
 - **Shared, typed DTOs for the API's data responses.** The server built the
