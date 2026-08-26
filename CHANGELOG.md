@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A oneshot now gates its dependents on completion, not on fork.** A oneshot
+  process with no health check was marked "ready" the instant it started, so a
+  process with `depends_on: [migrate]` began before the migration finished —
+  breaking the canonical migrate-then-serve ordering. A oneshot is now ready only
+  when it exits 0; its dependents wait for it (bounded by `dependency_timeout`),
+  and if it fails they do not start. Long-running processes with no health check
+  are unaffected (ready as soon as they run). This is a behavior change for
+  configs that depend on a oneshot. (PID1-9)
+
 ## [3.0.0] - 2026-08-26
 
 ### Added
