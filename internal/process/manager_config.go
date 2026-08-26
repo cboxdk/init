@@ -281,8 +281,12 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 	// rather than leaving changed/removed services stopped. (CDX-10)
 	oldCfg := m.config
 
-	// Stop removed and changed processes in old shutdown order.
-	m.stopReloadProcesses(ctx, stopSet)
+	// Stop removed and changed processes in old shutdown order. A process we
+	// cannot stop is still running the old definition, so abort before swapping
+	// the config rather than starting a second copy alongside it.
+	if failed := m.stopReloadProcesses(ctx, stopSet); len(failed) > 0 {
+		return fmt.Errorf("refusing to reload: could not stop %v (still running the previous configuration; running config unchanged)", failed)
+	}
 
 	// Update config
 	m.config = newCfg
@@ -431,8 +435,13 @@ func namesToSet(names []string) map[string]bool {
 	return set
 }
 
-// stopReloadProcesses stops removed and changed processes in reverse dependency order.
-func (m *Manager) stopReloadProcesses(ctx context.Context, names map[string]bool) {
+// stopReloadProcesses stops removed and changed processes in reverse dependency
+// order and returns the names it could NOT stop. A process that would not stop
+// is still running under the old definition, so the caller must not replace its
+// supervisor entry — doing so would leave the old process running with nothing
+// managing it.
+func (m *Manager) stopReloadProcesses(ctx context.Context, names map[string]bool) []string {
+	var failed []string
 	for _, name := range m.getShutdownOrder() {
 		if !names[name] {
 			continue
@@ -442,11 +451,13 @@ func (m *Manager) stopReloadProcesses(ctx context.Context, names map[string]bool
 			m.logger.Info("Stopping process during reload", "name", name)
 			if err := supervisor.Stop(ctx); err != nil {
 				m.logger.Error("Failed to stop process during reload", "name", name, "error", err)
+				failed = append(failed, name)
 				continue
 			}
 			delete(m.processes, name)
 		}
 	}
+	return failed
 }
 
 func (m *Manager) unregisterScheduledProcess(name string) {

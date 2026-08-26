@@ -4878,6 +4878,8 @@ func TestShouldRedactEnv(t *testing.T) {
 		"MYSQL_PWD": "x", "DB_PWD": "x", "SECRETKEY": "x",
 		"DOCKER_AUTH_CONFIG": "{}", "BASIC_AUTH_PASS": "x",
 		"RABBITMQ_ERLANG_COOKIE": "x", "ERLANG_COOKIE": "x",
+		// "public"/"site" must not exempt a name that also says secret.
+		"RECAPTCHA_SITE_SECRET": "x", "SITE_PRIVATE_KEY": "x", "PUBLIC_SECRET_KEY": "x",
 		"MAIL_DSN":     "smtp://u:p@mail",
 		"DATABASE_URL": "mysql://user:pw@db/app",
 		"REDIS_URL":    "redis://:supersecret@redis:6379/0",

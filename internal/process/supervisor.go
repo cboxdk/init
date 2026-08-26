@@ -370,6 +370,20 @@ func (s *Supervisor) readinessChannels() (ready, failed, rearmed <-chan struct{}
 	return s.readinessCh, s.readyFailedCh, s.readinessGenCh, s.readinessGen
 }
 
+// livenessGated reports whether the health check may restart the process. A
+// check configured as readiness-only gates dependents; it must not kill the
+// service. An unset mode means "both", which does gate liveness.
+func (s *Supervisor) livenessGated() bool {
+	return s.config.HealthCheck == nil || s.config.HealthCheck.Mode != "readiness"
+}
+
+// readyFailedChannel returns just the failure signal, for a non-blocking peek.
+func (s *Supervisor) readyFailedChannel() <-chan struct{} {
+	s.readinessMu.RLock()
+	defer s.readinessMu.RUnlock()
+	return s.readyFailedCh
+}
+
 // readinessGeneration returns the current run's readiness generation.
 func (s *Supervisor) readinessGeneration() uint64 {
 	s.readinessMu.RLock()
@@ -413,6 +427,15 @@ func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration
 		// A long-running process with no health check is ready as soon as it is
 		// running. (PID1-9)
 		if s.config.Type != "oneshot" {
+			// Ready as soon as it is running — but not if it is already dead:
+			// checkAllInstancesDead marks readiness impossible for a longrun whose
+			// instances have all exited, and a dependent must see that rather than
+			// launch against a service that is gone.
+			select {
+			case <-s.readyFailedChannel():
+				return fmt.Errorf("service can never become ready: %s", s.readinessFailure())
+			default:
+			}
 			s.logger.Debug("No health check configured, considering ready immediately")
 			return nil
 		}
@@ -1884,6 +1907,11 @@ func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCou
 		instance.mu.Lock()
 		instance.state = StateFailed
 		instance.mu.Unlock()
+		// The replacement never came up: tell anything waiting on readiness (it
+		// was re-armed above) and let the manager re-evaluate whether every
+		// process is now dead, instead of leaving both hanging.
+		s.markReadinessImpossible(fmt.Sprintf("restart of %q failed: %v", s.name, err))
+		s.checkAllInstancesDead()
 		return
 	}
 
@@ -1968,7 +1996,7 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 				if s.config.Type != "oneshot" {
 					s.markReady("health check passed")
 				}
-			} else if !status.Healthy {
+			} else if !status.Healthy && s.livenessGated() {
 				s.logger.Error("Process unhealthy, triggering restart",
 					"error", status.Error,
 				)
