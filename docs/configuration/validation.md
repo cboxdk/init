@@ -150,45 +150,59 @@ Machine-readable output for automation, scripting, and tooling integration.
 ./cbox-init check-config --json
 ```
 
+The output is indented JSON and parses cleanly with `jq` and any JSON library.
+
 **Output structure:**
 ```json
 {
-  "valid": true,
+  "config_path": "configs/examples/app.yaml",
+  "version": "1.0",
+  "process_count": 1,
+  "passed": true,
+  "summary": {
+    "errors": 0,
+    "warnings": 2,
+    "suggestions": 2,
+    "total": 4
+  },
   "errors": [],
   "warnings": [
     {
       "field": "global.api_auth",
       "message": "API running without authentication or ACL",
-      "recommendation": "Consider enabling API token auth or IP ACL for security",
+      "suggestion": "Consider enabling API token auth or IP ACL for security",
       "severity": "warning"
     }
   ],
   "suggestions": [
     {
-      "field": "global.log_format",
-      "message": "Text format is human-readable but not ideal for log aggregation",
-      "recommendation": "Use 'json' format for production with centralized logging",
+      "field": "global.api_tls",
+      "message": "API running without TLS/HTTPS",
+      "suggestion": "Enable TLS for production to encrypt API traffic",
       "severity": "suggestion"
     }
-  ],
-  "summary": {
-    "config_path": "configs/examples/app.yaml",
-    "version": "1.0",
-    "process_count": 5,
-    "log_level": "info",
-    "shutdown_timeout": "30s"
-  },
-  "counts": {
-    "errors": 0,
-    "warnings": 1,
-    "suggestions": 1
-  }
+  ]
 }
+```
+
+Each issue in `errors`/`warnings`/`suggestions` carries `field`, `message`,
+`suggestion`, and `severity`; process-scoped issues also include a `process`
+key. `passed` is `true` when there are no blocking errors. On a load failure the
+tool instead prints `{"error":"…"}` to stderr and exits non-zero.
+
+**Fields:**
+- `passed` (bool) — `true` when `summary.errors` is 0
+- `summary` (object) — counts of `errors`, `warnings`, `suggestions`, and `total`
+- `errors` / `warnings` / `suggestions` (arrays) — the issues at each severity
+
+**Example — fail CI on any warning:**
+```bash
+test "$(./cbox-init check-config --json | jq '.summary.warnings')" -eq 0
 ```
 
 **Exit codes:**
 - `0` - Valid (errors count is 0)
-- `1` - Invalid (errors count > 0)
+- `1` - Invalid (errors count > 0), or `--strict` with warnings present
 
 ## Validation Categories
 

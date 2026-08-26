@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -34,7 +35,7 @@ func runCheckConfig(cmd *cobra.Command, args []string) {
 	cfg, err := config.LoadWithEnvExpansion(cfgPath)
 	if err != nil {
 		if jsonOutput {
-			fmt.Fprintf(os.Stderr, `{"error":"Configuration load failed: %v"}`+"\n", err)
+			printJSONError(fmt.Sprintf("Configuration load failed: %v", err))
 		} else {
 			fmt.Fprintf(os.Stderr, "❌ Configuration load failed: %v\n", err)
 		}
@@ -51,7 +52,7 @@ func runCheckConfig(cmd *cobra.Command, args []string) {
 		if jsonOutput {
 			jsonData := config.FormatValidationJSON(result)
 			jsonData["config_path"] = cfgPath
-			fmt.Println(formatJSONOutput(jsonData))
+			printJSON(jsonData)
 		} else if quiet {
 			fmt.Printf("❌ %s\n", config.FormatValidationSummary(result))
 		} else {
@@ -66,7 +67,7 @@ func runCheckConfig(cmd *cobra.Command, args []string) {
 		profile := autotune.Profile(autotuneProfile)
 		if err := profile.Validate(); err != nil {
 			if jsonOutput {
-				fmt.Fprintf(os.Stderr, `{"error":"Invalid PHP-FPM profile: %v"}`+"\n", err)
+				printJSONError(fmt.Sprintf("Invalid PHP-FPM profile: %v", err))
 			} else {
 				fmt.Fprintf(os.Stderr, "❌ Invalid PHP-FPM profile: %v\n", err)
 			}
@@ -84,7 +85,7 @@ func runCheckConfig(cmd *cobra.Command, args []string) {
 		if autotuneProfile != "" {
 			jsonData["php_fpm_profile"] = autotuneProfile
 		}
-		fmt.Println(formatJSONOutput(jsonData))
+		printJSON(jsonData)
 	} else if quiet {
 		// Quiet mode - just summary
 		if result.TotalIssues() == 0 {
@@ -126,31 +127,28 @@ func runCheckConfig(cmd *cobra.Command, args []string) {
 	}
 }
 
-// formatJSONOutput formats data as JSON string
-func formatJSONOutput(data map[string]interface{}) string {
-	// Simple JSON formatting (could use json.Marshal for production)
-	var parts []string
-	parts = append(parts, "{")
-	i := 0
-	for k, v := range data {
-		if i > 0 {
-			parts[len(parts)-1] += ","
-		}
-		switch val := v.(type) {
-		case string:
-			parts = append(parts, fmt.Sprintf(`  "%s": "%s"`, k, val))
-		case int:
-			parts = append(parts, fmt.Sprintf(`  "%s": %d`, k, val))
-		case bool:
-			parts = append(parts, fmt.Sprintf(`  "%s": %v`, k, val))
-		default:
-			// For complex types, use fmt.Sprint (not production-grade)
-			parts = append(parts, fmt.Sprintf(`  "%s": %v`, k, val))
-		}
-		i++
+// printJSON marshals the validation result to indented JSON on stdout. The
+// result must round-trip through json.Unmarshal — this is the output the --json
+// flag exists to feed into CI/CD and jq pipelines.
+func printJSON(data map[string]interface{}) {
+	out, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		printJSONError(fmt.Sprintf("failed to render JSON output: %v", err))
+		os.Exit(1)
 	}
-	parts = append(parts, "}")
-	return fmt.Sprintf("%s\n", fmt.Sprint(parts))
+	fmt.Println(string(out))
+}
+
+// printJSONError writes a JSON error object to stderr with the message safely
+// escaped, so multi-line YAML/validation errors can't break the JSON.
+func printJSONError(message string) {
+	out, err := json.Marshal(map[string]string{"error": message})
+	if err != nil {
+		// map[string]string always marshals; fall back to a minimal literal.
+		fmt.Fprintln(os.Stderr, `{"error":"failed to render error output"}`)
+		return
+	}
+	fmt.Fprintln(os.Stderr, string(out))
 }
 
 // getConfigPath determines configuration file path with priority order
