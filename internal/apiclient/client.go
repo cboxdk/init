@@ -107,38 +107,91 @@ func (c *Client) getURL(path string) string {
 	return fmt.Sprintf("%s%s", c.baseURL, path)
 }
 
-// ListProcesses fetches process list from API
-func (c *Client) ListProcesses() ([]process.ProcessInfo, error) {
-	url := c.getURL("/api/v1/processes")
+// APIError is returned when the API responds with a non-2xx status. It carries
+// the HTTP status and the server's error message (extracted from the JSON
+// `{"error": …}` body), so callers get a clean message instead of a raw,
+// nested JSON dump. Callers can type-assert with errors.As to branch on
+// StatusCode.
+type APIError struct {
+	StatusCode int
+	Message    string
+}
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+func (e *APIError) Error() string {
+	if e.Message == "" {
+		return fmt.Sprintf("API error: HTTP %d", e.StatusCode)
+	}
+	return fmt.Sprintf("API error (HTTP %d): %s", e.StatusCode, e.Message)
+}
+
+// parseAPIError builds an *APIError from a non-2xx response, preferring the
+// server's JSON error message over the raw body.
+func parseAPIError(resp *http.Response) *APIError {
+	body, _ := io.ReadAll(resp.Body)
+	msg := strings.TrimSpace(string(body))
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(body, &payload) == nil && payload.Error != "" {
+		msg = payload.Error
+	}
+	return &APIError{StatusCode: resp.StatusCode, Message: msg}
+}
+
+// do performs a single API request: it marshals reqBody to JSON (when non-nil),
+// sets the auth header, executes, and — on any 2xx — decodes the response into
+// out (when non-nil). A non-2xx response is returned as an *APIError. This is
+// the single request path every client method goes through.
+func (c *Client) do(ctx context.Context, method, path string, reqBody, out any) error {
+	if c.client == nil {
+		return fmt.Errorf("API client not initialized")
 	}
 
+	var body io.Reader
+	if reqBody != nil {
+		b, err := json.Marshal(reqBody)
+		if err != nil {
+			return fmt.Errorf("failed to encode request: %w", err)
+		}
+		body = bytes.NewReader(b)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.getURL(path), body)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	if reqBody != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
+		req.Header.Set("Authorization", "Bearer "+c.auth)
 	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to API: %w", err)
+		return fmt.Errorf("failed to connect to API: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return parseAPIError(resp)
 	}
+	if out != nil {
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+	}
+	return nil
+}
 
+// ListProcesses fetches process list from API
+func (c *Client) ListProcesses() ([]process.ProcessInfo, error) {
 	var response struct {
 		Processes []process.ProcessInfo `json:"processes"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := c.do(context.Background(), http.MethodGet, "/api/v1/processes", nil, &response); err != nil {
+		return nil, err
 	}
-
 	return response.Processes, nil
 }
 
@@ -160,146 +213,35 @@ func (c *Client) RestartProcess(name string) error {
 // SignalProcess delivers an operational signal (e.g. SIGHUP, SIGUSR1, SIGUSR2)
 // to a single process's group.
 func (c *Client) SignalProcess(name, signal string) error {
-	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/signal", name))
-
-	body := fmt.Sprintf(`{"signal":%q}`, signal)
-
-	req, err := http.NewRequest("POST", url, strings.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("signal failed: %s", string(respBody))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodPost,
+		fmt.Sprintf("/api/v1/processes/%s/signal", name),
+		map[string]string{"signal": signal}, nil)
 }
 
-// ScaleProcess scales a process
+// ScaleProcess scales a process to an absolute count.
 func (c *Client) ScaleProcess(name string, desired int) error {
-	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/scale", name))
-
-	body := fmt.Sprintf(`{"desired":%d}`, desired)
-
-	req, err := http.NewRequest("POST", url, strings.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("scale failed: %s", string(respBody))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodPost,
+		fmt.Sprintf("/api/v1/processes/%s/scale", name),
+		map[string]int{"desired": desired}, nil)
 }
 
 // ScaleProcessDelta adjusts process scale by delta
 func (c *Client) ScaleProcessDelta(name string, delta int) error {
-	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/scale", name))
-
-	body := fmt.Sprintf(`{"delta":%d}`, delta)
-
-	req, err := http.NewRequest("POST", url, strings.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("scale failed: %s", string(respBody))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodPost,
+		fmt.Sprintf("/api/v1/processes/%s/scale", name),
+		map[string]int{"delta": delta}, nil)
 }
 
-// processAction performs a process action (start/stop/restart)
+// processAction performs a process action (start/stop/restart, schedule/*)
 func (c *Client) processAction(name, action string) error {
-	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/%s", name, action))
-
-	req, err := http.NewRequest("POST", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s failed: %s", action, string(body))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodPost,
+		fmt.Sprintf("/api/v1/processes/%s/%s", name, action), nil, nil)
 }
 
 // DeleteProcess removes a process via API
 func (c *Client) DeleteProcess(name string) error {
-	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s", name))
-
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("delete failed: %s", string(body))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodDelete,
+		fmt.Sprintf("/api/v1/processes/%s", name), nil, nil)
 }
 
 // UpdateProcess updates an existing process definition
@@ -307,65 +249,18 @@ func (c *Client) UpdateProcess(name string, proc *config.Process) error {
 	if proc == nil {
 		return fmt.Errorf("process configuration is required")
 	}
-
-	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s", name))
-	body, err := json.Marshal(map[string]*config.Process{
-		"process": proc,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to marshal process config: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update failed: %s", string(respBody))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodPut,
+		fmt.Sprintf("/api/v1/processes/%s", name),
+		map[string]*config.Process{"process": proc}, nil)
 }
 
 // HealthCheck checks if API is reachable
 func (c *Client) HealthCheck(ctx context.Context) error {
-	url := c.getURL("/api/v1/health")
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("API not reachable: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API unhealthy: status %d", resp.StatusCode)
-	}
-
-	return nil
+	return c.do(ctx, http.MethodGet, "/api/v1/health", nil, nil)
 }
 
 // AddProcess creates a new process via API
 func (c *Client) AddProcess(ctx context.Context, name string, command []string, scale int, restart string, enabled bool) error {
-	url := c.getURL("/api/v1/processes")
-
-	// Build request body matching API expectations
 	reqBody := map[string]any{
 		"name": name,
 		"process": map[string]any{
@@ -375,34 +270,7 @@ func (c *Client) AddProcess(ctx context.Context, name string, command []string, 
 			"restart": restart,
 		},
 	}
-
-	body, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(body)))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return c.do(ctx, http.MethodPost, "/api/v1/processes", reqBody, nil)
 }
 
 // GetLogs retrieves logs for a specific process
@@ -429,38 +297,12 @@ func (c *Client) GetStackLogs(limit int) ([]logger.LogEntry, error) {
 }
 
 func (c *Client) fetchLogs(path string) ([]logger.LogEntry, error) {
-	if c.client == nil {
-		return nil, fmt.Errorf("API client not initialized")
-	}
-
-	req, err := http.NewRequest("GET", c.getURL(path), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch logs: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("logs request failed (status %d): %s", resp.StatusCode, string(body))
-	}
-
 	var payload struct {
 		Logs []logger.LogEntry `json:"logs"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to decode logs response: %w", err)
+	if err := c.do(context.Background(), http.MethodGet, path, nil, &payload); err != nil {
+		return nil, err
 	}
-
 	return payload.Logs, nil
 }
 
@@ -469,38 +311,15 @@ func (c *Client) GetProcessConfig(name string) (*config.Process, error) {
 	if name == "" {
 		return nil, fmt.Errorf("process name is required")
 	}
-
-	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s", name))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch process: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("process request failed (status %d): %s", resp.StatusCode, string(body))
-	}
-
 	var payload struct {
 		Config *config.Process `json:"config"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to decode process response: %w", err)
+	if err := c.do(context.Background(), http.MethodGet, fmt.Sprintf("/api/v1/processes/%s", name), nil, &payload); err != nil {
+		return nil, err
 	}
-
 	if payload.Config == nil {
 		return nil, fmt.Errorf("process configuration missing in response")
 	}
-
 	return payload.Config, nil
 }
 
@@ -521,56 +340,12 @@ func (c *Client) TriggerSchedule(name string) error {
 
 // ReloadConfig reloads configuration from disk via API
 func (c *Client) ReloadConfig() error {
-	url := c.getURL("/api/v1/config/reload")
-
-	req, err := http.NewRequest(http.MethodPost, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("reload failed: %s", string(body))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodPost, "/api/v1/config/reload", nil, nil)
 }
 
 // SaveConfig saves running configuration to file via API
 func (c *Client) SaveConfig() error {
-	url := c.getURL("/api/v1/config/save")
-
-	req, err := http.NewRequest(http.MethodPost, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("save failed: %s", string(body))
-	}
-
-	return nil
+	return c.do(context.Background(), http.MethodPost, "/api/v1/config/save", nil, nil)
 }
 
 // GetOneshotHistory fetches oneshot execution history from API
@@ -579,34 +354,11 @@ func (c *Client) GetOneshotHistory(limit int) ([]process.OneshotExecution, error
 	if limit > 0 {
 		path = fmt.Sprintf("%s?limit=%d", path, limit)
 	}
-
-	req, err := http.NewRequest(http.MethodGet, c.getURL(path), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if c.auth != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get oneshot history failed: %s", string(body))
-	}
-
 	var response struct {
 		Executions []process.OneshotExecution `json:"executions"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := c.do(context.Background(), http.MethodGet, path, nil, &response); err != nil {
+		return nil, err
 	}
-
 	return response.Executions, nil
 }

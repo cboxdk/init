@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The API client is now SDK-quality.** `internal/apiclient` hand-rolled the
+  same request/response/error block in ~15 methods, with inconsistent error
+  messages that dumped raw JSON into CLI output. All methods now go through a
+  single `do()` helper, and a non-2xx response surfaces as a typed `*APIError`
+  carrying the HTTP status and the server's `error` message (matchable with
+  `errors.As`) instead of a raw body. Behavior is unchanged; the file shrank from
+  612 to 364 lines. (DX-7)
+
 ### Added
 
 - **An OpenAPI 3.0 spec for the management API.** Every endpoint — process
