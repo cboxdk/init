@@ -1769,6 +1769,14 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 					"error", status.Error,
 				)
 
+				// Re-arm the monitor: reset its failure history and start a fresh
+				// warmup grace window so the restarted instance is judged from a
+				// clean slate and gets time to boot, instead of being killed again
+				// on the next probe and abandoned once restarts run out.
+				if s.healthMonitor != nil {
+					s.healthMonitor.Rearm()
+				}
+
 				// Record health check restart
 				metrics.RecordProcessRestart(s.name, "health_check")
 

@@ -33,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Health checks no longer kill-loop a slow-starting service.** After a
+  health-triggered restart, the monitor kept its accumulated failure count and
+  gave the replacement no warmup grace, so a service that took longer than one
+  probe period to boot was killed on the very next check and abandoned once its
+  restarts ran out. The monitor is now re-armed on each health restart — failure
+  history reset and a fresh `initial_delay` grace window applied — so the
+  replacement is judged from a clean slate.
+- **The health-check monitor no longer leaks a goroutine on stop.** Its status
+  sends were not guarded by the context, so if the consumer had already exited
+  with a status buffered, the monitor blocked forever on the capacity-1 channel,
+  leaking the goroutine and its ticker on every supervisor stop. The sends now
+  select on the context.
 - **Editing one process no longer restarts the whole stack.** `UpdateProcess`
   already stops and restarts the edited process with its new config, then
   additionally called an internal `restartAllProcesses` that bounced *every*
