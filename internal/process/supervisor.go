@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -129,6 +130,7 @@ type Supervisor struct {
 	oneshotHistory         *OneshotHistory               // Shared oneshot history (can be nil)
 	deathNotifier          func(string)                  // Callback when all instances are dead
 	credentials            *Credentials                  // Resolved user/group credentials (nil = inherit)
+	credentialErr          error                         // user/group was configured but could not be resolved; fail closed at start
 	logBroadcaster         *logger.LogBroadcaster        // Shared broadcaster for real-time log subscriptions
 	fileTailers            map[string]context.CancelFunc // active file tailers, keyed by config name
 	healthCheckStrict      bool                          // Fail startup if health monitor creation fails
@@ -227,17 +229,22 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 
 	// Resolve user/group credentials at initialization
 	var creds *Credentials
+	var credErr error
 	if cfg.User != "" || cfg.Group != "" {
 		var err error
 		creds, err = ResolveCredentials(cfg.User, cfg.Group)
 		if err != nil {
-			logger.Error("Failed to resolve credentials",
+			logger.Error("Failed to resolve configured user/group; process will not be started as root",
 				"process", name,
 				"user", cfg.User,
 				"group", cfg.Group,
 				"error", err,
 			)
-			// Continue without credentials - will run as parent process user
+			// Fail closed. Previously this logged and continued with no
+			// credentials, so a typo in `user:` silently ran the workload as
+			// PID 1's uid (root). Remember the error and refuse to start the
+			// instance instead of dropping the privilege drop.
+			credErr = fmt.Errorf("failed to resolve user/group (user=%q group=%q): %w", cfg.User, cfg.Group, err)
 		} else if creds != nil {
 			logger.Info("Resolved process credentials",
 				"process", name,
@@ -258,6 +265,7 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 		restartStabilityWindow: stabilityWindow,
 		resourceCollector:      resourceCollector,
 		credentials:            creds,
+		credentialErr:          credErr,
 		healthCheckStrict:      globalCfg.HealthCheckStrict,
 		readinessCh:            make(chan struct{}),
 		isReady:                false,
@@ -449,6 +457,13 @@ func (s *Supervisor) Start(ctx context.Context) error {
 // startInstance starts a single process instance
 // instanceIndex is used for port assignment (PORT = port_base + instanceIndex)
 func (s *Supervisor) startInstance(ctx context.Context, instanceID string, instanceIndex int) (*Instance, error) {
+	// Fail closed on an unresolved credential: the operator asked to run this
+	// process as a specific user/group, and running it as root instead would be
+	// a silent privilege escalation.
+	if s.credentialErr != nil {
+		return nil, fmt.Errorf("refusing to start %s: %w", instanceID, s.credentialErr)
+	}
+
 	s.logger.Info("Starting process instance",
 		"instance_id", instanceID,
 		"instance_index", instanceIndex,
@@ -1393,12 +1408,14 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 		return nil
 
 	case <-time.After(timeout):
+		killSig := s.killSignal()
 		s.logger.Warn("Process instance did not stop gracefully, force killing",
 			"instance_id", instance.id,
 			"timeout", timeout,
+			"kill_signal", killSig,
 		)
 
-		if err := s.signalProcessGroup(instance, syscall.SIGKILL, "force kill"); err != nil {
+		if err := s.signalProcessGroup(instance, killSig, "force kill"); err != nil {
 			return fmt.Errorf("failed to force kill process group: %w", err)
 		}
 
@@ -1431,6 +1448,34 @@ func (s *Supervisor) executePreStopHook(ctx context.Context, instance *Instance)
 	}
 }
 
+// ForwardSignal delivers sig to every running instance's process group. It is
+// how operational signals received by cbox-init as PID 1 (SIGHUP, SIGUSR1,
+// SIGUSR2) reach the workload — e.g. an nginx config reload or php-fpm log
+// rotation — without being treated as a stop. Instances that are not running
+// are skipped, and a per-instance failure is logged, not fatal.
+func (s *Supervisor) ForwardSignal(sig syscall.Signal) {
+	s.mu.RLock()
+	instances := make([]*Instance, len(s.instances))
+	copy(instances, s.instances)
+	s.mu.RUnlock()
+
+	for _, inst := range instances {
+		inst.mu.RLock()
+		running := inst.state == StateRunning
+		inst.mu.RUnlock()
+		if !running {
+			continue
+		}
+		if err := s.signalProcessGroup(inst, sig, "forwarded signal"); err != nil {
+			s.logger.Warn("Failed to forward signal to instance",
+				"instance_id", inst.id,
+				"signal", sig,
+				"error", err,
+			)
+		}
+	}
+}
+
 // sendShutdownSignal sends the configured shutdown signal to the process
 func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 	sig := syscall.SIGTERM
@@ -1439,6 +1484,17 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 	}
 
 	return s.signalProcessGroup(instance, sig, "shutdown")
+}
+
+// killSignal returns the signal used to force-kill an instance that did not
+// stop within its graceful timeout. Honors the per-process shutdown.kill_signal
+// (defaulted to SIGKILL by config.SetDefaults); falls back to SIGKILL so a
+// process can always be stopped even if the field is somehow empty.
+func (s *Supervisor) killSignal() syscall.Signal {
+	if s.config.Shutdown != nil && s.config.Shutdown.KillSignal != "" {
+		return parseSignal(s.config.Shutdown.KillSignal)
+	}
+	return syscall.SIGKILL
 }
 
 // signalMoot reports whether a signal failed only because the process had
@@ -1739,19 +1795,51 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 }
 
 // parseSignal converts signal name to syscall.Signal
-func parseSignal(name string) syscall.Signal {
-	switch name {
-	case "SIGTERM":
-		return syscall.SIGTERM
-	case "SIGQUIT":
-		return syscall.SIGQUIT
-	case "SIGINT":
-		return syscall.SIGINT
-	case "SIGKILL":
-		return syscall.SIGKILL
-	default:
-		return syscall.SIGTERM
+// signalsByName maps the signal names cbox-init accepts in configuration to
+// their syscall value. Both the "SIGTERM" and bare "TERM" spellings are
+// accepted. Kept to signals that are meaningful to send to a supervised
+// workload; parseSignalStrict rejects anything outside this set.
+var signalsByName = map[string]syscall.Signal{
+	"SIGTERM":  syscall.SIGTERM,
+	"SIGINT":   syscall.SIGINT,
+	"SIGQUIT":  syscall.SIGQUIT,
+	"SIGKILL":  syscall.SIGKILL,
+	"SIGHUP":   syscall.SIGHUP,
+	"SIGUSR1":  syscall.SIGUSR1,
+	"SIGUSR2":  syscall.SIGUSR2,
+	"SIGWINCH": syscall.SIGWINCH,
+	"SIGCONT":  syscall.SIGCONT,
+	"SIGSTOP":  syscall.SIGSTOP,
+	"SIGTSTP":  syscall.SIGTSTP,
+	"SIGABRT":  syscall.SIGABRT,
+}
+
+// parseSignalStrict resolves a configured signal name (case-insensitive, with
+// or without the "SIG" prefix) to its syscall value, returning an error for an
+// unknown name so configuration can be rejected at load time rather than
+// silently coerced.
+func parseSignalStrict(name string) (syscall.Signal, error) {
+	key := strings.ToUpper(strings.TrimSpace(name))
+	if key == "" {
+		return 0, fmt.Errorf("empty signal name")
 	}
+	if !strings.HasPrefix(key, "SIG") {
+		key = "SIG" + key
+	}
+	if sig, ok := signalsByName[key]; ok {
+		return sig, nil
+	}
+	return 0, fmt.Errorf("unknown signal %q", name)
+}
+
+// parseSignal resolves a signal name for runtime use. Unknown names fall back to
+// SIGTERM — configuration is validated with parseSignalStrict at load, so this
+// path should only see valid names; the fallback is defense in depth.
+func parseSignal(name string) syscall.Signal {
+	if sig, err := parseSignalStrict(name); err == nil {
+		return sig
+	}
+	return syscall.SIGTERM
 }
 
 // GetState returns the current supervisor state

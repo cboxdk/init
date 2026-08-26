@@ -351,13 +351,6 @@ scheduler:
 - Laravel's internal scheduler handles task timing
 - Replaces cron in containers
 
-**Heartbeat monitoring:**
-```yaml
-scheduler:
-  heartbeat:
-    failure_url: https://hc-ping.com/uuid/fail
-```
-
 ## Startup Sequence
 
 ```
@@ -741,7 +734,7 @@ curl http://localhost:9090/metrics
 # Key metrics:
 # - cbox_init_process_up{process="php-fpm"}
 # - cbox_init_process_restarts_total{process="nginx"}
-# - cbox_init_process_health_status{process="horizon"}
+# - cbox_init_health_check_status{process="horizon"}
 ```
 
 ### Health Status

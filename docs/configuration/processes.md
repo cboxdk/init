@@ -404,39 +404,19 @@ processes:
     command: ["nginx", "-g", "daemon off;"]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
-      interval: 10
+      url: "http://127.0.0.1:80/health"
+      period: 10
       timeout: 5
-      retries: 3
+      failure_threshold: 3
       success_threshold: 2
 ```
 
 **Health Check Types:**
-- `tcp` - TCP port connection
-- `http` - HTTP endpoint check
-- `exec` - Execute command
+- `tcp` - TCP port connection (uses `address`)
+- `http` - HTTP endpoint check (uses `url`)
+- `exec` - Execute command (uses `command`)
 
 See [Health Checks Configuration](health-checks) for complete reference.
-
-## Heartbeat Monitoring
-
-```yaml
-processes:
-  critical-backup:
-    command: ["php", "artisan", "backup:critical"]
-    schedule: "0 3 * * *"
-    heartbeat:
-      url: "https://hc-ping.com/your-uuid-here"
-      timeout: 10
-```
-
-**Supported Services:**
-- healthchecks.io
-- Cronitor
-- Better Uptime
-- Custom endpoints
-
-See [Heartbeat Monitoring](../observability/heartbeat-monitoring) for complete guide.
 
 ## Complete Example
 
@@ -452,7 +432,7 @@ processes:
     health_check:
       type: tcp
       address: "127.0.0.1:9000"
-      interval: 10
+      period: 10
 
   # Web Server
   nginx:
@@ -463,7 +443,7 @@ processes:
     depends_on: [php-fpm]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
+      url: "http://127.0.0.1:80/health"
 
   # Application Services
   horizon:
@@ -495,8 +475,6 @@ processes:
     command: ["php", "artisan", "backup:run"]
     schedule: "0 2 * * *"
     restart: never
-    heartbeat:
-      url: "https://hc-ping.com/backup-job-uuid"
 ```
 
 ## Environment Variable Overrides

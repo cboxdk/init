@@ -86,7 +86,7 @@ processes:
     depends_on: [php-fpm]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
+      url: "http://127.0.0.1:80/health"
 
   horizon:
     enabled: true
@@ -748,7 +748,7 @@ processes:
 processes:
   nginx:
     health_check:
-      address: "http://127.0.0.1:80/api/health"  # Custom endpoint
+      url: "http://127.0.0.1:80/api/health"  # Custom endpoint
 ```
 
 **Change log levels:**
@@ -1047,10 +1047,10 @@ processes:
 processes:
   nginx:
     health_check:
-      interval: 10      # Check every 10s
-      timeout: 5        # Fail after 5s
-      retries: 3        # Retry 3 times before unhealthy
-      success_threshold: 2  # 2 successes to mark healthy
+      period: 10             # Check every 10s
+      timeout: 5             # Fail after 5s
+      failure_threshold: 3   # 3 failures before unhealthy
+      success_threshold: 2   # 2 successes to mark healthy
 ```
 
 ### 7. Scale Appropriately

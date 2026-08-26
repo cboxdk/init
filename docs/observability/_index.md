@@ -14,7 +14,7 @@ Cbox Init provides comprehensive observability features for monitoring, debuggin
 - [Distributed Tracing](tracing) - OpenTelemetry integration for request tracing
 - [Resource Monitoring](resource-monitoring) - CPU, memory, and process resource tracking
 - [Management API](api) - REST API for programmatic access and automation
-- [Heartbeat Monitoring](heartbeat-monitoring) - External uptime/monitoring integration (push heartbeats)
+- [Heartbeat Monitoring](heartbeat-monitoring) - Planned / not yet implemented
 
 ## Quick Overview
 
@@ -24,7 +24,10 @@ Cbox Init exposes Prometheus-compatible metrics for:
 - Process state and health
 - Resource usage (CPU, memory, file descriptors)
 - Restart counts and failure rates
-- Scheduled task execution statistics
+- Health-check status, duration, and consecutive failures
+
+Scheduled-task execution history and statistics are not exported as Prometheus
+metrics; query them through the [schedule status API](../features/scheduled-tasks) instead.
 
 ### Tracing
 

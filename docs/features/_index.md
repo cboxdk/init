@@ -30,9 +30,9 @@ processes:
     health_check:
       type: tcp
       address: "127.0.0.1:80"
-      interval: 10
+      period: 10
       timeout: 5
-      retries: 3
+      failure_threshold: 3
 ```
 
 ### Scheduled Tasks

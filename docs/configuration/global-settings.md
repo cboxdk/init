@@ -78,49 +78,30 @@ global:
 
 ### Advanced Logging
 
-#### Multiline Log Handling
+Global logging is limited to the three fields above (`log_format`, `log_level`,
+`log_timestamps`). Level detection, multiline reassembly, JSON parsing,
+filtering, and redaction are configured **per process** under
+`processes.<name>.logging`, not globally:
 
 ```yaml
-global:
-  log_multiline_enabled: true
-  log_multiline_pattern: '^\\[|^\\d{4}-|^{"'  # Regex for line starts
-  log_multiline_timeout: 500  # milliseconds
-  log_multiline_max_lines: 100
+processes:
+  php-fpm:
+    command: ["php-fpm", "-F", "-R"]
+    logging:
+      min_level: info
+      multiline:
+        enabled: true
+        pattern: '^\[|^\d{4}-|^\{'
+      redaction:
+        enabled: true
+        patterns:
+          - name: password
+            pattern: 'password=\S+'
+            replacement: 'password=***'
 ```
 
-**Use cases:**
-- PHP stack traces
-- Multi-line error messages
-- Formatted JSON logs
-
-#### Sensitive Data Redaction
-
-```yaml
-global:
-  log_redaction_enabled: true
-  log_redaction_patterns:
-    - "password"
-    - "api_key"
-    - "secret"
-    - "token"
-  log_redaction_placeholder: "***REDACTED***"
-```
-
-**Compliance:**
-- GDPR: Automatic PII redaction
-- PCI DSS: Credit card masking
-- HIPAA: PHI protection patterns
-
-#### Log Filtering
-
-```yaml
-global:
-  log_filter_enabled: true
-  log_filter_level: "info"  # Only INFO and above
-  log_filter_patterns:
-    - "health_check"  # Exclude health check logs
-    - "metrics_export"  # Exclude metrics logs
-```
+See [Advanced Logging](../features/advanced-logging) for the full per-process
+schema.
 
 ### Restart Configuration
 
@@ -250,14 +231,10 @@ global:
   # Shutdown
   shutdown_timeout: 60
 
-  # Logging
+  # Logging (global). Advanced per-process logging lives under processes.<name>.logging
   log_format: json
   log_level: info
-  log_multiline_enabled: true
-  log_redaction_enabled: true
-  log_redaction_patterns:
-    - "password"
-    - "token"
+  log_timestamps: true
 
   # Observability
   metrics_enabled: true
