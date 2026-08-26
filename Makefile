@@ -1,5 +1,5 @@
 .PHONY: build build-all clean test test-all test-integration bench coverage lint deps install dev help \
-	check check-configs fmt fmt-check vet vulncheck sbom sbom-check license-check
+	check check-configs cover-check fmt fmt-check vet vulncheck sbom sbom-check license-check
 
 # Build variables
 BINARY_NAME=cbox-init
@@ -89,8 +89,23 @@ coverage:
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Coverage report: coverage.html"
 
+# Minimum total statement coverage the gate enforces. This is a regression
+# backstop, not the target — the goal is >80% (see CLAUDE.md); the floor sits
+# a little below so ordinary fluctuation does not fail the build, while a real
+# drop does. Raise it as coverage climbs.
+COVERAGE_FLOOR ?= 78.0
+
+# cover-check reads the coverage.out written by `test` and fails if total
+# statement coverage fell below the floor. Run `test` first (the `check` target
+# does).
+cover-check:
+	@echo "📊 Enforcing coverage floor ($(COVERAGE_FLOOR)%)..."
+	@test -f coverage.out || { echo "❌ coverage.out not found; run 'make test' first"; exit 1; }
+	@total=$$(go tool cover -func=coverage.out | awk '/^total:/{gsub(/%/,"",$$NF); print $$NF}'); \
+	awk -v t="$$total" -v f="$(COVERAGE_FLOOR)" 'BEGIN{ if (t+0 < f+0) { printf "❌ total coverage %.1f%% is below the %.1f%% floor\n", t, f; exit 1 } printf "✅ total coverage %.1f%% meets the %.1f%% floor\n", t, f }'
+
 # The full gate, matching CI. Run this before pushing.
-check: fmt-check vet lint test vulncheck sbom-check license-check check-configs
+check: fmt-check vet lint test cover-check vulncheck sbom-check license-check check-configs
 	@echo "✅ All checks passed"
 
 fmt:

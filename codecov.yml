@@ -1,0 +1,21 @@
+# Codecov configuration for cbox-init.
+# The Makefile `cover-check` target enforces a hard floor locally and in CI;
+# this governs the Codecov PR status/comment. Keep the project target roughly in
+# step with the Makefile COVERAGE_FLOOR.
+coverage:
+  status:
+    project:
+      default:
+        target: 78%
+        # Allow small, noisy fluctuations without failing the check.
+        threshold: 1%
+    patch:
+      default:
+        # New/changed lines should be reasonably covered, but do not block on a
+        # few uncovered lines in an otherwise good PR.
+        target: 70%
+        threshold: 5%
+
+comment:
+  layout: "reach, diff, flags, files"
+  require_changes: true

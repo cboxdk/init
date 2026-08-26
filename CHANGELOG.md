@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The coverage claim is now enforced.** CLAUDE.md states the project targets
+  >80% coverage, but nothing checked it and the Codecov upload had no
+  configuration or threshold. `make check` (and CI) now runs a `cover-check`
+  step that fails if total statement coverage drops below a floor
+  (`COVERAGE_FLOOR`, currently 78% — a regression backstop below the 80%+ goal),
+  and a `codecov.yml` sets the project/patch targets. (TEST-9)
+
 ### Security
 
 - **`trust_proxy` no longer lets any client spoof its source IP.** With
