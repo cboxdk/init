@@ -130,6 +130,7 @@ type Supervisor struct {
 	oneshotHistory         *OneshotHistory               // Shared oneshot history (can be nil)
 	deathNotifier          func(string)                  // Callback when all instances are dead
 	credentials            *Credentials                  // Resolved user/group credentials (nil = inherit)
+	credentialErr          error                         // user/group was configured but could not be resolved; fail closed at start
 	logBroadcaster         *logger.LogBroadcaster        // Shared broadcaster for real-time log subscriptions
 	fileTailers            map[string]context.CancelFunc // active file tailers, keyed by config name
 	healthCheckStrict      bool                          // Fail startup if health monitor creation fails
@@ -228,17 +229,22 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 
 	// Resolve user/group credentials at initialization
 	var creds *Credentials
+	var credErr error
 	if cfg.User != "" || cfg.Group != "" {
 		var err error
 		creds, err = ResolveCredentials(cfg.User, cfg.Group)
 		if err != nil {
-			logger.Error("Failed to resolve credentials",
+			logger.Error("Failed to resolve configured user/group; process will not be started as root",
 				"process", name,
 				"user", cfg.User,
 				"group", cfg.Group,
 				"error", err,
 			)
-			// Continue without credentials - will run as parent process user
+			// Fail closed. Previously this logged and continued with no
+			// credentials, so a typo in `user:` silently ran the workload as
+			// PID 1's uid (root). Remember the error and refuse to start the
+			// instance instead of dropping the privilege drop.
+			credErr = fmt.Errorf("failed to resolve user/group (user=%q group=%q): %w", cfg.User, cfg.Group, err)
 		} else if creds != nil {
 			logger.Info("Resolved process credentials",
 				"process", name,
@@ -259,6 +265,7 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 		restartStabilityWindow: stabilityWindow,
 		resourceCollector:      resourceCollector,
 		credentials:            creds,
+		credentialErr:          credErr,
 		healthCheckStrict:      globalCfg.HealthCheckStrict,
 		readinessCh:            make(chan struct{}),
 		isReady:                false,
@@ -450,6 +457,13 @@ func (s *Supervisor) Start(ctx context.Context) error {
 // startInstance starts a single process instance
 // instanceIndex is used for port assignment (PORT = port_base + instanceIndex)
 func (s *Supervisor) startInstance(ctx context.Context, instanceID string, instanceIndex int) (*Instance, error) {
+	// Fail closed on an unresolved credential: the operator asked to run this
+	// process as a specific user/group, and running it as root instead would be
+	// a silent privilege escalation.
+	if s.credentialErr != nil {
+		return nil, fmt.Errorf("refusing to start %s: %w", instanceID, s.credentialErr)
+	}
+
 	s.logger.Info("Starting process instance",
 		"instance_id", instanceID,
 		"instance_index", instanceIndex,

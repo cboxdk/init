@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The management API and process credentials now fail closed.** Two paths
+  failed *open* — proceeding in a less-secure state after a configuration error:
+  - An **invalid but enabled ACL** (e.g. a malformed CIDR) logged the error and
+    then served the endpoint with **no ACL at all** — exposing exactly what the
+    operator was trying to lock down. The server now refuses to start.
+  - A **user/group that could not be resolved** (a typo in `user:`) logged the
+    error and ran the process as PID 1's uid — i.e. **as root**. The process now
+    refuses to start instead of silently dropping the privilege drop.
+
 ### Fixed
 
 - **`shutdown.kill_signal` is now honored, and signal names are validated.**
