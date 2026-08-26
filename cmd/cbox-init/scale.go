@@ -35,8 +35,7 @@ func runScale(cmd *cobra.Command, args []string) {
 	}
 	client := newClient(scaleURL)
 	if err := client.ScaleProcess(name, count); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to scale %s: %v\n", name, err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to scale %s", name)
 	}
 	fmt.Printf("✓ %s scaled to %d instances\n", name, count)
 }

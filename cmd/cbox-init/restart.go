@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -24,8 +23,7 @@ func runRestart(cmd *cobra.Command, args []string) {
 	name := args[0]
 	client := newClient(restartURL)
 	if err := client.RestartProcess(name); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to restart %s: %v\n", name, err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to restart %s", name)
 	}
 	fmt.Printf("✓ %s restarted\n", name)
 }

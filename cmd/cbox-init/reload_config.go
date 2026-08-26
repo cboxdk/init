@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -24,8 +23,7 @@ func init() {
 func runReloadConfig(cmd *cobra.Command, args []string) {
 	client := newClient(reloadConfigURL)
 	if err := client.ReloadConfig(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to reload config: %v\n", err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to reload config")
 	}
 	fmt.Println("✓ Configuration reloaded")
 }

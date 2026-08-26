@@ -29,8 +29,7 @@ func runList(cmd *cobra.Command, args []string) {
 
 	processes, err := client.ListProcesses()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to list processes: %v\n", err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to list processes")
 	}
 
 	if len(processes) == 0 {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -34,8 +33,7 @@ func runSignal(cmd *cobra.Command, args []string) {
 	name, sig := args[0], args[1]
 	client := newClient(signalURL)
 	if err := client.SignalProcess(name, sig); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to signal %s with %s: %v\n", name, sig, err)
-		os.Exit(1)
+		exitAPIError(err, "Failed to signal %s with %s", name, sig)
 	}
 	fmt.Printf("✓ sent %s to %s\n", sig, name)
 }

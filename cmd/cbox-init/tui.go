@@ -37,6 +37,9 @@ var (
 
 func init() {
 	tuiCmd.Flags().StringVar(&tuiRemote, "remote", "", "API endpoint to connect to (auto-discovers Unix socket by default)")
+	// --url alias so the endpoint flag is spelled the same as every other
+	// client command (list/status/restart/…), which all use --url.
+	tuiCmd.Flags().StringVar(&tuiRemote, "url", "", "Alias for --remote")
 }
 
 func runTUI(cmd *cobra.Command, args []string) {
