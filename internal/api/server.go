@@ -460,11 +460,12 @@ func (s *Server) startSocketListener(handler http.Handler) error {
 	return nil
 }
 
-// Stop gracefully stops the API server (both TCP and socket)
+// Stop gracefully stops the API server (both TCP and socket). It is bounded by
+// ctx: a server that does not drain its connections within the deadline is
+// force-closed, so Stop always returns promptly. The server is stopped either
+// way, so Stop reports success.
 func (s *Server) Stop(ctx context.Context) error {
 	s.logger.Info("Stopping API server")
-
-	var errors []error
 
 	// Stop rate limiter cleanup goroutine
 	if s.rateLimiter != nil {
@@ -476,21 +477,9 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.tlsManager.Stop()
 	}
 
-	// Stop TCP server
-	if s.server != nil {
-		if err := s.server.Shutdown(ctx); err != nil {
-			s.logger.Error("Failed to stop API server (TCP) gracefully", "error", err)
-			errors = append(errors, fmt.Errorf("TCP: %w", err))
-		}
-	}
-
-	// Stop Unix socket server and listener
-	if s.socketServer != nil {
-		if err := s.socketServer.Shutdown(ctx); err != nil {
-			s.logger.Error("Failed to stop API server (socket) gracefully", "error", err)
-			errors = append(errors, fmt.Errorf("socket: %w", err))
-		}
-	}
+	// Stop TCP and Unix-socket servers.
+	shutdownHTTPServer(ctx, s.server, "TCP", s.logger)
+	shutdownHTTPServer(ctx, s.socketServer, "socket", s.logger)
 
 	// Explicitly close socket listener (belt and suspenders with Shutdown)
 	if s.socketListener != nil {
@@ -506,12 +495,27 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 	}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("errors during shutdown: %v", errors)
-	}
-
 	s.logger.Info("API server stopped")
 	return nil
+}
+
+// shutdownHTTPServer gracefully shuts down srv, bounded by ctx. If the graceful
+// drain does not finish within the deadline it forces the connections closed
+// with Close, so shutdown cannot hang past ctx (previously a lingering
+// keep-alive connection made Stop block until the caller's deadline and report
+// a "context deadline exceeded" error, which also made the API stop tests flake
+// on loaded CI runners). A forced close still means the server is stopped.
+func shutdownHTTPServer(ctx context.Context, srv *http.Server, name string, logger *slog.Logger) {
+	if srv == nil {
+		return
+	}
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Warn("Graceful shutdown did not finish in time; forcing close",
+			"server", name,
+			"error", err,
+		)
+		_ = srv.Close()
+	}
 }
 
 // aclMiddleware wraps ACL checking with audit logging
