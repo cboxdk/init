@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`check-config --json` now emits real JSON.** The flag advertised for CI/CD
+  hand-rolled its serialization and printed Go syntax instead — a `[{ … map[errors:0 …] }]`
+  dump that no `jq` pipeline or JSON parser could read, and the error path
+  interpolated unescaped error text so a multi-line YAML error produced broken
+  JSON too. Output now goes through `json.MarshalIndent`, round-trips through any
+  JSON parser, and load/validation failures print a properly-escaped
+  `{"error":"…"}`. The documented schema in `configuration/validation.md` was
+  fictional (`valid`/`recommendation`/`counts`); it now matches the real output.
+
 ### Added
 
 - Global lifecycle hooks can be defined entirely via environment variables —
