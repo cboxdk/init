@@ -182,12 +182,14 @@ func TestExtractIP_RemoteAddr(t *testing.T) {
 	}
 }
 
-// TestExtractIP_XForwardedFor tests X-Forwarded-For header handling
+// TestExtractIP_XForwardedFor tests X-Forwarded-For header handling when the
+// direct peer is a configured trusted proxy.
 func TestExtractIP_XForwardedFor(t *testing.T) {
 	cfg := &config.ACLConfig{
-		Enabled:    true,
-		Mode:       "allow",
-		TrustProxy: true,
+		Enabled:        true,
+		Mode:           "allow",
+		TrustProxy:     true,
+		TrustedProxies: []string{"10.0.0.0/8"}, // the proxy peers below
 	}
 
 	checker, err := NewChecker(cfg)
@@ -223,6 +225,58 @@ func TestExtractIP_XForwardedFor(t *testing.T) {
 				t.Errorf("ExtractIP() = %v, want %v", ip, tt.wantIP)
 			}
 		})
+	}
+}
+
+// TestExtractIP_UntrustedPeerCannotSpoofXFF verifies that X-Forwarded-For is
+// NOT honored when the direct peer is not a configured trusted proxy, even with
+// trust_proxy enabled — otherwise any client could forge an allowed source IP
+// (CDX-7).
+func TestExtractIP_UntrustedPeerCannotSpoofXFF(t *testing.T) {
+	tests := []struct {
+		name    string
+		trusted []string
+	}{
+		{"peer not in trusted list", []string{"10.0.0.0/8"}},
+		{"no trusted proxies at all", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checker, err := NewChecker(&config.ACLConfig{
+				Enabled:        true,
+				Mode:           "allow",
+				TrustProxy:     true,
+				TrustedProxies: tt.trusted,
+			})
+			if err != nil {
+				t.Fatalf("NewChecker: %v", err)
+			}
+			req := httptest.NewRequest("GET", "/", nil)
+			// The direct peer 203.0.113.7 is NOT a trusted proxy.
+			req.RemoteAddr = "203.0.113.7:5555"
+			req.Header.Set("X-Forwarded-For", "10.0.0.1") // spoof an allowed IP
+
+			ip, err := checker.ExtractIP(req)
+			if err != nil {
+				t.Fatalf("ExtractIP: %v", err)
+			}
+			if ip.String() != "203.0.113.7" {
+				t.Errorf("ExtractIP() = %v, want 203.0.113.7 (spoofed XFF must be ignored)", ip)
+			}
+		})
+	}
+}
+
+// TestNewChecker_InvalidTrustedProxy rejects a malformed trusted_proxies entry.
+func TestNewChecker_InvalidTrustedProxy(t *testing.T) {
+	_, err := NewChecker(&config.ACLConfig{
+		Enabled:        true,
+		Mode:           "allow",
+		TrustProxy:     true,
+		TrustedProxies: []string{"not-an-ip"},
+	})
+	if err == nil {
+		t.Error("expected error for invalid trusted_proxies entry")
 	}
 }
 

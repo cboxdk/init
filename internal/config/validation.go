@@ -301,6 +301,9 @@ func (c *Config) validateGlobalAPISettings(result *ValidationResult) {
 	if c.Global.APITLS == nil {
 		result.AddSuggestion("global.api_tls", "API running without TLS/HTTPS", "Enable TLS for production to encrypt API traffic")
 	}
+	if c.Global.APIACL != nil && c.Global.APIACL.TrustProxy && len(c.Global.APIACL.TrustedProxies) == 0 {
+		result.AddWarning("global.api_acl.trust_proxy", "trust_proxy is enabled but trusted_proxies is empty, so X-Forwarded-For is ignored", "List your reverse proxy's IP/CIDR in api_acl.trusted_proxies, or disable trust_proxy")
+	}
 }
 
 // validateGlobalMetricsSettings validates metrics configuration
