@@ -698,10 +698,11 @@ func TestACLMiddleware(t *testing.T) {
 		{
 			name: "X-Forwarded-For allowed",
 			aclConfig: &config.ACLConfig{
-				Enabled:    true,
-				Mode:       "allow",
-				AllowList:  []string{"203.0.113.0/24"},
-				TrustProxy: true,
+				Enabled:        true,
+				Mode:           "allow",
+				AllowList:      []string{"203.0.113.0/24"},
+				TrustProxy:     true,
+				TrustedProxies: []string{"192.168.1.1"}, // the direct peer is a trusted proxy
 			},
 			remoteAddr:     "192.168.1.1:12345",
 			forwardedFor:   "203.0.113.50",
@@ -2161,6 +2162,10 @@ func TestSecurityStack_XForwardedFor(t *testing.T) {
 				Mode:       "allow",
 				AllowList:  []string{"10.0.0.0/8"},
 				TrustProxy: tt.trustProxy,
+				// The direct peers in these cases (127.0.0.1, 10.0.0.1) are the
+				// trusted proxies whose X-Forwarded-For we honor. Ignored when
+				// trustProxy is false.
+				TrustedProxies: []string{"127.0.0.1/32", "10.0.0.0/8"},
 			}
 
 			server := createTestServer(t, "test-token", aclConfig)

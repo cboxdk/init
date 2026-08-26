@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stopping the management API is now bounded and never hangs.** `Server.Stop`
+  called `http.Server.Shutdown(ctx)` and surfaced any error, so a lingering
+  keep-alive connection made it block until the caller's deadline and then report
+  "context deadline exceeded" (which also made the API stop tests flake on loaded
+  CI runners). Stop now forces the connections closed if the graceful drain does
+  not finish within the context, so it always returns promptly and cleanly.
+  (TEST-8)
+
 ### Changed
 
 - **The coverage claim is now enforced.** CLAUDE.md states the project targets
