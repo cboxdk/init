@@ -7,56 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **The live SSE log pipeline is now tested end to end.** `handleLogStream`,
-  `SubscribeLogs`, and the log broadcaster had almost no coverage — the SSE
-  endpoint had never served a request in a test. Added a test that connects to
-  the stream, broadcasts a log entry through the manager, and asserts it arrives
-  as an SSE data frame. (TEST-6)
-### Changed
-
-- **Shared, typed DTOs for the API's data responses.** The server built the
-  process-list, process-detail, logs, and oneshot-history responses as ad-hoc
-  `map[string]any`, and the client decoded each into a separate anonymous struct
-  — no compile-time link between the two, so a field rename could silently break
-  the client. These four shapes now live once in a new `internal/apitypes`
-  package that both the server and the client import. Wire format unchanged.
-  (STYLE-3, STYLE-5)
-### Fixed
-
-- **Clearer CLI errors when the daemon is not reachable, and a `--url` alias on
-  `tui`.** A control command that could not reach the API printed only a raw
-  `dial tcp … connection refused`. All the client commands now share one error
-  renderer that appends a hint ("The daemon may not be running. Start it with
-  'cbox-init serve', or point --url …") on a connection failure. `tui` also
-  accepts `--url` as an alias for `--remote`, so the endpoint flag is spelled the
-  same everywhere. (DX-8)
-### Fixed
-
-- **The CLI control commands are now actually tested.** The `list`/`restart`/…
-  subprocess tests asserted nothing (only `t.Logf`), so any regression in the
-  client commands passed green. Added tests that run the CLI against an httptest
-  server and assert on real output and exit codes: `list` prints the process rows
-  and exits non-zero when a process is unhealthy; `restart` confirms on success
-  and exits non-zero (with an error message) on a 404. (TEST-4)
-### Fixed
-
-- **Fixed a data race in resource sampling introduced by the CPU% handle
-  cache.** Caching the gopsutil process handle (PERF-3) meant a handle could be
-  read by two goroutines at once, and gopsutil's `Process` caches internal state
-  and is not concurrency-safe. Each cached handle now carries a mutex that
-  serializes samples taken through it (held outside the collector lock so one
-  instance's sampling does not block others). Caught by the `-race` gate.
-### Changed
-
-- **The API client is now SDK-quality.** `internal/apiclient` hand-rolled the
-  same request/response/error block in ~15 methods, with inconsistent error
-  messages that dumped raw JSON into CLI output. All methods now go through a
-  single `do()` helper, and a non-2xx response surfaces as a typed `*APIError`
-  carrying the HTTP status and the server's `error` message (matchable with
-  `errors.As`) instead of a raw body. Behavior is unchanged; the file shrank from
-  612 to 364 lines. (DX-7)
+## [3.0.0] - 2026-08-26
 
 ### Added
 
@@ -66,53 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/observability/openapi.yaml`, with auth, parameters, request bodies and
   status codes. Load it into Swagger UI/Postman or generate a client from it.
   (DX-6)
-
-### Security
-
-- **The process-detail API redacts secret-looking environment variables.**
-  `GET /api/v1/processes/{name}` returned the process's full `env` in cleartext,
-  so an authenticated operator (or anything with API access) saw values like
-  `DB_PASSWORD`, `API_TOKEN`, or `AWS_SECRET_KEY`. Values whose variable name
-  matches a secret pattern (password/secret/token/credential/api-key/access-key/
-  private-key/auth) are now masked as `***REDACTED***` in the response;
-  non-secret vars and the running configuration are unaffected. (SEC-4)
-
-### Fixed
-
-- **Per-process CPU% is now the recent usage, not a lifetime average.** The
-  resource sampler created a fresh gopsutil handle every tick, and gopsutil
-  computes `CPUPercent` as busy-time since the handle was created — so the
-  `cbox_init_process_cpu_percent` gauge reported each process's lifetime-average
-  CPU and sat nearly flat instead of tracking load. The collector now reuses the
-  handle across ticks (recreating it if the instance restarts with a new PID and
-  evicting it when the instance stops), so the gauge reflects usage since the
-  previous sample. (PERF-3)
-
-### Fixed
-
-- **A failed reload no longer leaves services down — it rolls back.** Hot reload
-  stopped the removed/changed processes and swapped the config *before* the new
-  configuration was proven to start. If a new or changed process then failed to
-  start (e.g. a bad command), the reload returned an error with services left
-  stopped. The manager now snapshots the running configuration, and on a start
-  failure tears down whatever the failed reload brought up and restores the
-  previously-running processes on their old definitions (best-effort), returning
-  an error that says it rolled back. (CDX-10)
-
-### Changed
-
-- **A oneshot now gates its dependents on completion, not on fork.** A oneshot
-  process with no health check was marked "ready" the instant it started, so a
-  process with `depends_on: [migrate]` began before the migration finished —
-  breaking the canonical migrate-then-serve ordering. A oneshot is now ready only
-  when it exits 0; its dependents wait for it (bounded by `dependency_timeout`),
-  and if it fails they do not start. Long-running processes with no health check
-  are unaffected (ready as soon as they run). This is a behavior change for
-  configs that depend on a oneshot. (PID1-9)
-
-## [3.0.0] - 2026-08-26
-
-### Added
 
 - **Benchmarks for the hot paths.** The repo had a `make bench` target but no
   benchmarks, so there was no baseline to catch a performance regression.
@@ -172,6 +76,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Shared, typed DTOs for the API's data responses.** The server built the
+  process-list, process-detail, logs, and oneshot-history responses as ad-hoc
+  `map[string]any`, and the client decoded each into a separate anonymous struct
+  — no compile-time link between the two, so a field rename could silently break
+  the client. These four shapes now live once in a new `internal/apitypes`
+  package that both the server and the client import. Wire format unchanged.
+  (STYLE-3, STYLE-5)
+
+- **The API client is now SDK-quality.** `internal/apiclient` hand-rolled the
+  same request/response/error block in ~15 methods, with inconsistent error
+  messages that dumped raw JSON into CLI output. All methods now go through a
+  single `do()` helper, and a non-2xx response surfaces as a typed `*APIError`
+  carrying the HTTP status and the server's `error` message (matchable with
+  `errors.As`) instead of a raw body. Behavior is unchanged; the file shrank from
+  612 to 364 lines. (DX-7)
+
+- **A oneshot now gates its dependents on completion, not on fork.** A oneshot
+  process with no health check was marked "ready" the instant it started, so a
+  process with `depends_on: [migrate]` began before the migration finished —
+  breaking the canonical migrate-then-serve ordering. A oneshot is now ready only
+  when it exits 0; its dependents wait for it (bounded by `dependency_timeout`),
+  and if it fails they do not start. Long-running processes with no health check
+  are unaffected (ready as soon as they run). This is a behavior change for
+  configs that depend on a oneshot. (PID1-9)
+
 - **The coverage claim is now enforced.** CLAUDE.md states the project targets
   >80% coverage, but nothing checked it and the Codecov upload had no
   configuration or threshold. `make check` (and CI) now runs a `cover-check`
@@ -224,6 +153,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have made the drift gate above either wrong or littered with special cases.
 
 ### Fixed
+
+- **The live SSE log pipeline is now tested end to end.** `handleLogStream`,
+  `SubscribeLogs`, and the log broadcaster had almost no coverage — the SSE
+  endpoint had never served a request in a test. Added a test that connects to
+  the stream, broadcasts a log entry through the manager, and asserts it arrives
+  as an SSE data frame. (TEST-6)
+
+- **Clearer CLI errors when the daemon is not reachable, and a `--url` alias on
+  `tui`.** A control command that could not reach the API printed only a raw
+  `dial tcp … connection refused`. All the client commands now share one error
+  renderer that appends a hint ("The daemon may not be running. Start it with
+  'cbox-init serve', or point --url …") on a connection failure. `tui` also
+  accepts `--url` as an alias for `--remote`, so the endpoint flag is spelled the
+  same everywhere. (DX-8)
+
+- **The CLI control commands are now actually tested.** The `list`/`restart`/…
+  subprocess tests asserted nothing (only `t.Logf`), so any regression in the
+  client commands passed green. Added tests that run the CLI against an httptest
+  server and assert on real output and exit codes: `list` prints the process rows
+  and exits non-zero when a process is unhealthy; `restart` confirms on success
+  and exits non-zero (with an error message) on a 404. (TEST-4)
+
+- **Fixed a data race in resource sampling introduced by the CPU% handle
+  cache.** Caching the gopsutil process handle (PERF-3) meant a handle could be
+  read by two goroutines at once, and gopsutil's `Process` caches internal state
+  and is not concurrency-safe. Each cached handle now carries a mutex that
+  serializes samples taken through it (held outside the collector lock so one
+  instance's sampling does not block others). Caught by the `-race` gate.
+
+- **Per-process CPU% is now the recent usage, not a lifetime average.** The
+  resource sampler created a fresh gopsutil handle every tick, and gopsutil
+  computes `CPUPercent` as busy-time since the handle was created — so the
+  `cbox_init_process_cpu_percent` gauge reported each process's lifetime-average
+  CPU and sat nearly flat instead of tracking load. The collector now reuses the
+  handle across ticks (recreating it if the instance restarts with a new PID and
+  evicting it when the instance stops), so the gauge reflects usage since the
+  previous sample. (PERF-3)
+
+- **A failed reload no longer leaves services down — it rolls back.** Hot reload
+  stopped the removed/changed processes and swapped the config *before* the new
+  configuration was proven to start. If a new or changed process then failed to
+  start (e.g. a bad command), the reload returned an error with services left
+  stopped. The manager now snapshots the running configuration, and on a start
+  failure tears down whatever the failed reload brought up and restores the
+  previously-running processes on their old definitions (best-effort), returning
+  an error that says it rolled back. (CDX-10)
 
 - **405 responses now include an `Allow` header, and a doubled word in
   `check-config` is gone.** Every `405 Method Not Allowed` from the management
@@ -487,6 +462,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a configuration warning.
 
 ### Security
+
+- **The process-detail API redacts secret-looking environment variables.**
+  `GET /api/v1/processes/{name}` returned the process's full `env` in cleartext,
+  so an authenticated operator (or anything with API access) saw values like
+  `DB_PASSWORD`, `API_TOKEN`, or `AWS_SECRET_KEY`. Values whose variable name
+  matches a secret pattern (password/secret/token/credential/api-key/access-key/
+  private-key/auth) are now masked as `***REDACTED***` in the response;
+  non-secret vars and the running configuration are unaffected. (SEC-4)
 
 - **`trust_proxy` no longer lets any client spoof its source IP.** With
   `api_acl.trust_proxy` enabled, the `X-Forwarded-For` header was trusted from
