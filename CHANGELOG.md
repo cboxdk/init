@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failed reload no longer leaves services down — it rolls back.** Hot reload
+  stopped the removed/changed processes and swapped the config *before* the new
+  configuration was proven to start. If a new or changed process then failed to
+  start (e.g. a bad command), the reload returned an error with services left
+  stopped. The manager now snapshots the running configuration, and on a start
+  failure tears down whatever the failed reload brought up and restores the
+  previously-running processes on their old definitions (best-effort), returning
+  an error that says it rolled back. (CDX-10)
+
 ### Changed
 
 - **A oneshot now gates its dependents on completion, not on fork.** A oneshot

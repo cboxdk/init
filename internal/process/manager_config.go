@@ -272,6 +272,13 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 
 	stopSet := namesToSet(append(toStop, toUpdate...))
 	startSet := namesToSet(append(toStart, toUpdate...))
+	// Every process the reload touches — used to roll back to the old state if a
+	// start fails partway through.
+	touched := namesToSet(append(append(append([]string{}, toStop...), toStart...), toUpdate...))
+
+	// Snapshot the running configuration so a partial failure can be undone
+	// rather than leaving changed/removed services stopped. (CDX-10)
+	oldCfg := m.config
 
 	// Stop removed and changed processes in old shutdown order.
 	m.stopReloadProcesses(ctx, stopSet)
@@ -280,7 +287,12 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 	m.config = newCfg
 
 	if err := m.startReloadProcesses(ctx, newCfg, startSet); err != nil {
-		return err
+		// The new config could not be brought up (e.g. a new/changed process has
+		// a bad command). Roll back to the previous configuration so a failed
+		// reload does not leave services down. Best-effort.
+		m.logger.Error("Reload failed to start the new configuration; rolling back", "error", err)
+		m.rollbackReload(ctx, oldCfg, touched)
+		return fmt.Errorf("reload failed and was rolled back to the previous configuration: %w", err)
 	}
 
 	m.logger.Info("Configuration reloaded successfully")
@@ -289,6 +301,54 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 	m.auditLogger.LogConfigReloaded(m.configPath)
 
 	return nil
+}
+
+// rollbackReload restores the previous configuration after a reload failed
+// partway through. It stops whatever the failed reload left running for the
+// touched processes, then restores the old config and restarts the processes
+// that were running before (removed and changed ones); processes that the
+// reload had only newly added are left absent. Best-effort: individual
+// stop/start errors are logged, not returned, because the reload has already
+// failed and the goal is to get as close to the prior state as possible.
+func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, touched map[string]bool) {
+	// Tear down whatever is currently running for the touched processes.
+	for name := range touched {
+		m.unregisterScheduledProcess(name)
+		if sup, ok := m.processes[name]; ok {
+			if err := sup.Stop(ctx); err != nil {
+				m.logger.Error("Rollback: failed to stop process", "name", name, "error", err)
+			}
+			delete(m.processes, name)
+		}
+	}
+
+	// Restore the previous configuration and bring the touched processes that
+	// existed before back up on their old definitions, in dependency order.
+	m.config = oldCfg
+	order, err := m.getStartupOrder()
+	if err != nil {
+		m.logger.Error("Rollback: could not determine startup order", "error", err)
+		return
+	}
+	for _, name := range order {
+		if !touched[name] {
+			continue
+		}
+		procCfg, ok := oldCfg.Processes[name]
+		if !ok || !procCfg.Enabled {
+			continue // newly-added process — nothing to restore
+		}
+		if procCfg.Schedule != "" {
+			if err := m.registerScheduledProcess(name, procCfg); err != nil {
+				m.logger.Error("Rollback: failed to re-register scheduled process", "name", name, "error", err)
+			}
+			continue
+		}
+		if err := m.startRegularProcess(ctx, name, procCfg); err != nil {
+			m.logger.Error("Rollback: failed to restart process", "name", name, "error", err)
+		}
+	}
+	m.logger.Warn("Reload rolled back to the previous configuration")
 }
 
 func namesToSet(names []string) map[string]bool {
