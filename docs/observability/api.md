@@ -8,6 +8,10 @@ weight: 42
 
 REST API for managing and inspecting processes at runtime.
 
+> **OpenAPI spec:** a machine-readable OpenAPI 3.0 definition of every endpoint
+> lives at [`openapi.yaml`](openapi.yaml) — load it into Swagger UI, Postman, or
+> an SDK generator.
+
 ## Configuration
 
 Enable the API in your `cbox-init.yaml`:

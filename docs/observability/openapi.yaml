@@ -1,0 +1,369 @@
+openapi: 3.0.3
+info:
+  title: Cbox Init Management API
+  description: >
+    REST API for controlling and observing a Cbox Init (cbox-init) PID-1 process
+    manager. The API binds loopback (127.0.0.1) by default; to expose it on
+    another interface set `api_host` and configure `api_auth` (bearer token) or
+    `api_acl`, or cbox-init refuses to start. A local Unix socket
+    (`api_socket`, owner-only 0600) exposes the same routes without bearer auth.
+  version: "1.0"
+  license:
+    name: See repository
+servers:
+  - url: http://127.0.0.1:9180
+    description: Default loopback bind
+security:
+  - bearerAuth: []
+tags:
+  - name: health
+  - name: processes
+  - name: logs
+  - name: schedule
+  - name: config
+  - name: metrics
+paths:
+  /api/v1/health:
+    get:
+      tags: [health]
+      summary: Liveness/health of the API server
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: healthy }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+  /api/v1/processes:
+    get:
+      tags: [processes]
+      summary: List all processes and their runtime status
+      responses:
+        "200":
+          description: Process list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  processes:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProcessInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [processes]
+      summary: Add a new process at runtime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, process]
+              properties:
+                name: { type: string }
+                process: { $ref: "#/components/schemas/ProcessConfig" }
+      responses:
+        "201": { description: Created }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/processes/{name}:
+    parameters:
+      - $ref: "#/components/parameters/Name"
+    get:
+      tags: [processes]
+      summary: Get a process's configuration (secret env vars are redacted)
+      responses:
+        "200":
+          description: Process config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  process: { type: string }
+                  config: { $ref: "#/components/schemas/ProcessConfig" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [processes]
+      summary: Update a process definition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProcessConfig" }
+      responses:
+        "200": { description: Updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [processes]
+      summary: Remove a process
+      responses:
+        "200": { description: Removed }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/logs:
+    get:
+      tags: [logs]
+      summary: Recent logs for one process
+      parameters:
+        - $ref: "#/components/parameters/Name"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": { $ref: "#/components/responses/Logs" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/restart:
+    post:
+      tags: [processes]
+      summary: Restart a process
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      responses:
+        "200": { description: Restarted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/processes/{name}/start:
+    post:
+      tags: [processes]
+      summary: Start a stopped process
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      responses:
+        "200": { description: Started }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/processes/{name}/stop:
+    post:
+      tags: [processes]
+      summary: Stop a running process
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      responses:
+        "200": { description: Stopped }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/processes/{name}/scale:
+    post:
+      tags: [processes]
+      summary: Scale a process to an absolute count or by a delta
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                desired: { type: integer, description: Absolute target instance count }
+                delta: { type: integer, description: Relative change (overrides desired when present) }
+      responses:
+        "200": { description: Scaled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/signal:
+    post:
+      tags: [processes]
+      summary: Send an operational signal to one process group
+      description: >
+        Delivers a signal (e.g. SIGHUP for an nginx config reload, SIGUSR1/2 for
+        php-fpm) to a single service without touching the rest of the stack.
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signal]
+              properties:
+                signal: { type: string, example: SIGHUP, description: "Signal name; SIGHUP or bare HUP" }
+      responses:
+        "200": { description: Signal delivered }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/schedule:
+    get:
+      tags: [schedule]
+      summary: Schedule status for a scheduled process
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      responses:
+        "200": { description: Schedule status }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/schedule/history:
+    get:
+      tags: [schedule]
+      summary: Execution history for a scheduled process
+      parameters:
+        - $ref: "#/components/parameters/Name"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": { description: Execution history }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/schedule/pause:
+    post:
+      tags: [schedule]
+      summary: Pause a scheduled process
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      responses:
+        "200": { description: Paused }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/schedule/resume:
+    post:
+      tags: [schedule]
+      summary: Resume a paused scheduled process
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      responses:
+        "200": { description: Resumed }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/processes/{name}/schedule/trigger:
+    post:
+      tags: [schedule]
+      summary: Trigger a scheduled process now (async)
+      description: Returns 202; the job runs to completion detached from the request.
+      parameters: [{ $ref: "#/components/parameters/Name" }]
+      responses:
+        "202": { description: Trigger accepted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/logs:
+    get:
+      tags: [logs]
+      summary: Recent logs across the whole stack
+      parameters: [{ $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { $ref: "#/components/responses/Logs" }
+  /api/v1/logs/stream:
+    get:
+      tags: [logs]
+      summary: Live log stream (Server-Sent Events)
+      description: "text/event-stream of `event: log` messages with snake_case fields."
+      parameters:
+        - in: query
+          name: process
+          schema: { type: string }
+          description: Filter by process name (empty = all)
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+  /api/v1/config/save:
+    post:
+      tags: [config]
+      summary: Persist the running configuration to the config file
+      description: >
+        Refused when the config was assembled from `${VAR}` templating or
+        `CBOX_INIT_*` overrides, to avoid writing resolved secrets to disk.
+      responses:
+        "200": { description: Saved }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /api/v1/config/reload:
+    post:
+      tags: [config]
+      summary: Reload configuration from disk
+      description: >
+        Validates first; on a start failure the previous configuration is rolled
+        back. Bounded by a server-side timeout.
+      responses:
+        "200": { description: Reloaded }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /api/v1/metrics/history:
+    get:
+      tags: [metrics]
+      summary: Resource-metrics history for an instance
+      parameters:
+        - in: query
+          name: process
+          schema: { type: string }
+        - in: query
+          name: instance
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": { description: Time series of resource samples }
+  /api/v1/oneshot/history:
+    get:
+      tags: [processes]
+      summary: Completion history for oneshot processes
+      parameters: [{ $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: Oneshot execution history }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Set `api_auth`; send `Authorization: Bearer <token>`. Not required on the Unix socket."
+  parameters:
+    Name:
+      in: path
+      name: name
+      required: true
+      schema: { type: string }
+      description: Process name
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, maximum: 10000 }
+      description: Max entries (clamped to 10000)
+  responses:
+    Logs:
+      description: Log entries
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              logs:
+                type: array
+                items: { type: object }
+    BadRequest:
+      description: Invalid request
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: Process/resource not found
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Conflict:
+      description: Wrong state (e.g. starting an already-running process) or already exists
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    ServerError:
+      description: Internal error
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    MethodNotAllowed:
+      description: Method not allowed (response carries an Allow header)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+    ProcessInfo:
+      type: object
+      description: Runtime status of a process (fields as serialized by the manager)
+      properties:
+        name: { type: string }
+        state: { type: string, description: "running | stopped | completed | failed | checkpointed | …" }
+        scale: { type: integer }
+        desired_scale: { type: integer }
+        instances:
+          type: array
+          items: { type: object }
+    ProcessConfig:
+      type: object
+      description: A process definition. See docs/configuration for the full schema.
+      properties:
+        enabled: { type: boolean }
+        type: { type: string, enum: [longrun, oneshot] }
+        command: { type: array, items: { type: string } }
+        restart: { type: string, enum: [always, on-failure, never] }
+        scale: { type: integer }
+        depends_on: { type: array, items: { type: string } }
+        env:
+          type: object
+          additionalProperties: { type: string }
+          description: Secret-looking values are redacted in GET responses.

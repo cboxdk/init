@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An OpenAPI 3.0 spec for the management API.** Every endpoint — process
+  lifecycle, scaling, per-process signal, logs (incl. the SSE stream), schedule
+  control, config save/reload, metrics and oneshot history — is now described in
+  `docs/observability/openapi.yaml`, with auth, parameters, request bodies and
+  status codes. Load it into Swagger UI/Postman or generate a client from it.
+  (DX-6)
+
 ### Security
 
 - **The process-detail API redacts secret-looking environment variables.**
