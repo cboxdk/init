@@ -4877,6 +4877,7 @@ func TestShouldRedactEnv(t *testing.T) {
 		"DB_PASS": "x", "MYSQL_PASS": "x", "REDIS_PASS": "x", "SMTP_PASS": "x",
 		"MYSQL_PWD": "x", "DB_PWD": "x", "SECRETKEY": "x",
 		"DOCKER_AUTH_CONFIG": "{}", "BASIC_AUTH_PASS": "x",
+		"RABBITMQ_ERLANG_COOKIE": "x", "ERLANG_COOKIE": "x",
 		"MAIL_DSN":     "smtp://u:p@mail",
 		"DATABASE_URL": "mysql://user:pw@db/app",
 		"REDIS_URL":    "redis://:supersecret@redis:6379/0",
@@ -4889,6 +4890,7 @@ func TestShouldRedactEnv(t *testing.T) {
 		"LOG_LEVEL": "info", "PORT": "9000", "APP_URL": "https://example.com",
 		"SESSION_DRIVER": "redis", "APP_ENV": "prod", "EMPTY_TOKEN": "",
 		"COMPASS_DIR": "/c", "PASSENGER_ROOT": "/p",
+		"COOKIE_DOMAIN": "example.com", "SESSION_COOKIE_NAME": "sid",
 	}
 	for k, v := range secret {
 		if !shouldRedactEnv(k, v) {

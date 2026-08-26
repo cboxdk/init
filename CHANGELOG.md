@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Erlang/RabbitMQ cluster cookies are redacted** (`RABBITMQ_ERLANG_COOKIE`),
+  while ordinary cookie settings (`COOKIE_DOMAIN`, `SESSION_COOKIE_NAME`) stay
+  readable.
+- **A long-running process that has died stops advertising itself as ready.**
+  Readiness was only re-armed when a process started or auto-restarted, so one
+  that exited without a restart (`restart: never`, or an exhausted restart
+  budget) kept its previous run's readiness — a dependent started later saw a
+  dead service as ready. A oneshot is unaffected: for it, finishing IS the
+  success condition.
+
+### Fixed
+
 - **More secret env vars are redacted.** The abbreviated forms (`DB_PASS`,
   `MYSQL_PWD`), separator-less compounds (`SECRETKEY`) and registry credentials
   (`DOCKER_AUTH_CONFIG`) were still returned in cleartext. The short forms
