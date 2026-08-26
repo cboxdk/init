@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The quick-start guide now actually builds and runs.** Its Dockerfile
+  `COPY nginx.conf` referenced a file the guide never created, so `docker build`
+  failed on the first step, and the Nginx `/health` check pointed at a route no
+  config served. The guide now includes a minimal working `nginx.conf` (health
+  endpoint plus a PHP-FPM `fastcgi_pass`), points readers at `scaffold` and
+  `check-config`, drops a reference to a non-existent `priority` field, and notes
+  the loopback-by-default API binding. The `api_host` field comment in the config
+  schema, which still described the old all-interfaces default, is corrected to
+  match. (DX-12)
+
 ### Security
 
 - **TLS `min_version` is now floored at 1.2.** A configured `min_version` of

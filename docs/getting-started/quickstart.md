@@ -49,7 +49,53 @@ processes:
       failure_threshold: 3
 ```
 
-## Step 2: Create Dockerfile
+> **In a hurry?** `cbox-init scaffold laravel` (or `symfony`, `wordpress`, …)
+> generates a ready-to-use config for you, and `cbox-init check-config` validates
+> any config before you build. This guide writes the files by hand so you can see
+> every moving part.
+
+## Step 2: Create nginx.conf
+
+The Nginx health check below probes `http://127.0.0.1:80/health`, and Nginx needs
+to know how to reach PHP-FPM — so create a minimal `nginx.conf` next to your
+config:
+
+```nginx
+worker_processes auto;
+events { worker_connections 1024; }
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    server {
+        listen 80;
+        root /var/www/html/public;
+        index index.php index.html;
+
+        # Answers the HTTP health check in cbox-init.yaml.
+        location = /health {
+            access_log off;
+            add_header Content-Type text/plain;
+            return 200 "ok\n";
+        }
+
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        # Hand .php requests to PHP-FPM on 127.0.0.1:9000.
+        location ~ \.php$ {
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            include /etc/nginx/fastcgi.conf;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        }
+    }
+}
+```
+
+## Step 3: Create Dockerfile
 
 ```dockerfile
 FROM php:8.3-fpm-alpine
@@ -65,7 +111,7 @@ COPY --from=cboxdk/init:latest \
 # Copy configuration
 COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
-# Copy Nginx config
+# Copy Nginx config (created in Step 2)
 COPY nginx.conf /etc/nginx/nginx.conf
 
 # Copy application
@@ -76,7 +122,9 @@ WORKDIR /var/www/html
 ENTRYPOINT ["/usr/local/bin/cbox-init"]
 ```
 
-## Step 3: Build and Run
+> Validate the config before building: `cbox-init check-config --config cbox-init.yaml`.
+
+## Step 4: Build and Run
 
 ```bash
 # Build image
@@ -92,7 +140,7 @@ docker run -d \
 docker logs -f php-app
 ```
 
-## Step 4: Verify Processes
+## Step 5: Verify Processes
 
 Check that both processes are running:
 
@@ -110,7 +158,7 @@ docker exec php-app ps aux
 #  21   nginx    nginx: worker process
 ```
 
-## Step 5: Test Health Checks
+## Step 6: Test Health Checks
 
 Health checks run automatically:
 
@@ -123,7 +171,7 @@ docker logs php-app 2>&1 | grep "health check"
 # {"level":"INFO","msg":"Health check passed","process":"nginx","type":"http"}
 ```
 
-## Step 6: Test Graceful Shutdown
+## Step 7: Test Graceful Shutdown
 
 ```bash
 # Send SIGTERM to container
@@ -141,10 +189,9 @@ docker stop php-app
 Cbox Init orchestrated:
 
 1. **Startup Order**
-   - Started PHP-FPM first (priority 10)
-   - Waited for PHP-FPM health check
-   - Started Nginx second (priority 20)
-   - Honored `depends_on` relationship
+   - Started PHP-FPM first — Nginx declares `depends_on: [php-fpm]`
+   - Waited for PHP-FPM's health check to pass before starting Nginx
+   - Started Nginx once its dependency was ready
 
 2. **Health Monitoring**
    - TCP check on PHP-FPM port 9000
@@ -232,9 +279,12 @@ global:
   metrics_enabled: true
   metrics_port: 9090
 
-  # Enable management API
+  # Enable management API. It binds 127.0.0.1 (loopback) by default; to reach it
+  # from outside the container set api_host: 0.0.0.0 — which requires api_auth
+  # (a bearer token) or api_acl, or cbox-init refuses to start.
   api_enabled: true
   api_port: 9180
+  api_host: 0.0.0.0
   api_auth: "your-secret-token"
 
 processes:
