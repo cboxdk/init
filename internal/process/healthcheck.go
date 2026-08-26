@@ -12,6 +12,7 @@ import (
 
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/metrics"
+	"github.com/cboxdk/init/internal/signals"
 )
 
 // HealthChecker defines the interface for health checks.
@@ -115,7 +116,10 @@ func (e *ExecHealthChecker) Check(ctx context.Context) error {
 	}
 
 	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
-	if err := cmd.Run(); err != nil {
+	// Run under reaper coordination: as PID 1 the wildcard reaper can collect
+	// this probe before our Wait(), which would otherwise report a passing check
+	// as failed and trigger a spurious restart.
+	if err := signals.RunSupervised(cmd); err != nil {
 		return fmt.Errorf("health check command failed: %w", err)
 	}
 
