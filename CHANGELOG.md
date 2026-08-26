@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The local management socket is now owner-only (`0600`).** It was `0660`, so
+  any process in the socket's group could drive the full, unauthenticated
+  control plane (add/stop processes, save/reload config). It is an admin channel
+  and is now restricted to its owner.
 - **The management API and process credentials now fail closed.** Two paths
   failed *open* — proceeding in a less-secure state after a configuration error:
   - An **invalid but enabled ACL** (e.g. a malformed CIDR) logged the error and
@@ -43,6 +47,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ran the job under the HTTP request's context, which net/http cancels the moment
   the handler returns its `202` — so the job was cancelled right after being
   accepted. The async trigger now detaches from the request's cancellation.
+- **Resource-metrics history is no longer O(n²) to read.** `TimeSeriesBuffer.GetRange`
+  prepended each sample to a growing slice, reallocating and copying the whole
+  result every iteration (~260k element copies for a full 720-sample read). It now
+  appends newest-first and reverses once.
+- **Fixed a data race in the API rate limiter.** A visitor's `lastSeen` was
+  written on every request without the limiter lock while the cleanup goroutine
+  read it under the lock. It is now an atomic value.
+- **The API route table is defined once.** `Start` and `StartSocketOnly` each
+  hand-maintained an identical list of routes differing only by the auth flag, so
+  a new endpoint added to one and forgotten in the other would silently 404 in
+  that mode. Both now build their mux from a single `buildMux` helper.
+- **Misspelled config keys are now rejected instead of silently ignored.** A
+  mistyped `health_chek:` used to turn off health checking with no warning, and a
+  fabricated key like `scale_locked:` did nothing. Config loading now rejects any
+  key that is not a real field, reporting the offending key with the file's own
+  line number. (This surfaced a dead `scale_locked` key in the development
+  example, now removed.)
+- **`check-config` reports the same error every run.** The fail-fast validator
+  iterated processes in map order, so a config with several problems surfaced a
+  different error each run — whack-a-mole to fix and non-deterministic in CI. It
+  now iterates in name order.
+
 - **Health checks no longer kill-loop a slow-starting service.** After a
   health-triggered restart, the monitor kept its accumulated failure count and
   gave the replacement no warmup grace, so a service that took longer than one

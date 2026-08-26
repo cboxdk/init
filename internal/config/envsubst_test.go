@@ -90,7 +90,6 @@ processes:
     enabled: true
     command: ["${TEST_COMMAND:-sleep}", "1"]
     scale: 1
-    priority: 10
 `
 
 	configPath := filepath.Join(tmpDir, "test-config.yaml")
@@ -149,7 +148,6 @@ processes:
     enabled: true
     command: ["sleep", "1"]
     scale: 1
-    priority: 10
 `
 
 	configPath := filepath.Join(tmpDir, "test-config.yaml")

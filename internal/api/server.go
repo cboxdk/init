@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cboxdk/init/internal/acl"
@@ -53,10 +54,13 @@ type rateLimiter struct {
 	wg              sync.WaitGroup // Tracks cleanup goroutine lifecycle
 }
 
-// visitor tracks rate limit state for a single IP
+// visitor tracks rate limit state for a single IP. lastSeen is atomic (unix
+// nanos) because allow() updates it on every request without the limiter mutex,
+// while cleanupVisitors reads it under the mutex — writing a plain time.Time
+// there was a data race.
 type visitor struct {
 	limiter  *tokenBucket
-	lastSeen time.Time
+	lastSeen atomic.Int64
 }
 
 // tokenBucket implements token bucket algorithm for rate limiting
@@ -104,15 +108,15 @@ func (rl *rateLimiter) allow(ip string) bool {
 		v, exists = rl.visitors[ip]
 		if !exists {
 			v = &visitor{
-				limiter:  newTokenBucket(float64(rl.rate), rl.burst),
-				lastSeen: time.Now(),
+				limiter: newTokenBucket(float64(rl.rate), rl.burst),
 			}
+			v.lastSeen.Store(time.Now().UnixNano())
 			rl.visitors[ip] = v
 		}
 		rl.mu.Unlock()
 	}
 
-	v.lastSeen = time.Now()
+	v.lastSeen.Store(time.Now().UnixNano())
 	return v.limiter.allow()
 }
 
@@ -130,7 +134,7 @@ func (rl *rateLimiter) cleanupVisitors() {
 		case <-ticker.C:
 			rl.mu.Lock()
 			for ip, v := range rl.visitors {
-				if time.Since(v.lastSeen) > 10*time.Minute {
+				if time.Since(time.Unix(0, v.lastSeen.Load())) > 10*time.Minute {
 					delete(rl.visitors, ip)
 				}
 			}
@@ -299,23 +303,7 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.aclInitErr
 	}
 
-	mux := http.NewServeMux()
-
-	// API routes with full middleware stack: panicRecovery -> bodyLimit -> rateLimit -> auth -> handler
-	// Health endpoint: rate limited but no auth required
-	mux.HandleFunc("/api/v1/health", s.wrapHandler(s.handleHealth, false))
-	// Protected endpoints: full middleware stack with auth
-	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, true))
-	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, true))
-	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, true))
-	mux.HandleFunc("/api/v1/logs/stream", s.wrapHandler(s.handleLogStream, true))
-	// Config management endpoints
-	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, true))
-	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, true))
-	// Metrics endpoints
-	mux.HandleFunc("/api/v1/metrics/history", s.wrapHandler(s.handleMetricsHistory, true))
-	// Oneshot history endpoint
-	mux.HandleFunc("/api/v1/oneshot/history", s.wrapHandler(s.handleOneshotHistory, true))
+	mux := s.buildMux(true)
 
 	// Wrap mux with ACL middleware if enabled (applied to all routes, TCP only)
 	var tcpHandler http.Handler = mux
@@ -397,20 +385,30 @@ func (s *Server) StartSocketOnly(ctx context.Context) error {
 		return fmt.Errorf("no socket path configured")
 	}
 
+	// Socket-only mode serves the same routes without auth (the socket's file
+	// permissions are the access control).
+	return s.startSocketListener(s.buildMux(false))
+}
+
+// buildMux registers the API routes on a fresh mux. authRequired makes the
+// protected endpoints require the bearer token; the health endpoint is always
+// unauthenticated. Both Start (TCP + socket) and StartSocketOnly build their mux
+// here, so a route added to one path can't be forgotten in the other — the bug
+// this replaces was two hand-maintained route tables that could silently drift.
+func (s *Server) buildMux(authRequired bool) *http.ServeMux {
 	mux := http.NewServeMux()
-
-	// Same routes as Start() but without rate limiting or ACL
+	// Health: rate limited but never authenticated.
 	mux.HandleFunc("/api/v1/health", s.wrapHandler(s.handleHealth, false))
-	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, false))
-	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, false))
-	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, false))
-	mux.HandleFunc("/api/v1/logs/stream", s.wrapHandler(s.handleLogStream, false))
-	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, false))
-	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, false))
-	mux.HandleFunc("/api/v1/metrics/history", s.wrapHandler(s.handleMetricsHistory, false))
-	mux.HandleFunc("/api/v1/oneshot/history", s.wrapHandler(s.handleOneshotHistory, false))
-
-	return s.startSocketListener(mux)
+	// Protected endpoints.
+	mux.HandleFunc("/api/v1/processes", s.wrapHandler(s.handleProcesses, authRequired))
+	mux.HandleFunc("/api/v1/processes/", s.wrapHandler(s.handleProcessAction, authRequired))
+	mux.HandleFunc("/api/v1/logs", s.wrapHandler(s.handleStackLogs, authRequired))
+	mux.HandleFunc("/api/v1/logs/stream", s.wrapHandler(s.handleLogStream, authRequired))
+	mux.HandleFunc("/api/v1/config/save", s.wrapHandler(s.handleConfigSave, authRequired))
+	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, authRequired))
+	mux.HandleFunc("/api/v1/metrics/history", s.wrapHandler(s.handleMetricsHistory, authRequired))
+	mux.HandleFunc("/api/v1/oneshot/history", s.wrapHandler(s.handleOneshotHistory, authRequired))
+	return mux
 }
 
 // startSocketListener starts the Unix socket listener
@@ -426,8 +424,11 @@ func (s *Server) startSocketListener(handler http.Handler) error {
 		return fmt.Errorf("failed to create socket listener: %w", err)
 	}
 
-	// Set socket permissions (0660 = owner + group)
-	if err := os.Chmod(s.socketPath, 0660); err != nil {
+	// Restrict the socket to its owner (0600). The socket is an unauthenticated
+	// admin channel — anyone who can connect gets full control (add/stop
+	// processes, save/reload config) with no bearer token — so it must not be
+	// reachable by the whole owning group. 0660 previously granted the group.
+	if err := os.Chmod(s.socketPath, 0600); err != nil {
 		listener.Close()
 		return fmt.Errorf("failed to set socket permissions: %w", err)
 	}
