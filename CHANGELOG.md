@@ -33,6 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Shutdown no longer hangs behind a running scheduled job.** The manager
+  waited unboundedly for the scheduler to stop while holding its write lock, and
+  cron jobs ran under `context.Background()` so shutdown couldn't cancel them — a
+  wedged job (a hung migration) froze shutdown and the API indefinitely. The
+  scheduler now runs jobs under a lifetime context it cancels on stop, and the
+  manager bounds the stop wait with the shutdown timeout.
+- **Async job triggers now run to completion.** `POST /processes/{name}/schedule/trigger`
+  ran the job under the HTTP request's context, which net/http cancels the moment
+  the handler returns its `202` — so the job was cancelled right after being
+  accepted. The async trigger now detaches from the request's cancellation.
 - **Health checks no longer kill-loop a slow-starting service.** After a
   health-triggered restart, the monitor kept its accumulated failure count and
   gave the replacement no warmup grace, so a service that took longer than one
