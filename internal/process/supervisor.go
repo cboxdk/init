@@ -1924,7 +1924,10 @@ func (s *Supervisor) checkAllInstancesDead() {
 	allDead := true
 	for _, inst := range s.instances {
 		inst.mu.RLock()
-		if inst.state == StateRunning {
+		// A checkpointed instance is alive-on-purpose, not dead — see
+		// StateCheckpointed. Treating it as dead would trip the manager's
+		// all-processes-dead shutdown while the workload is merely snapshotted.
+		if inst.state == StateRunning || inst.state == StateCheckpointed {
 			allDead = false
 		}
 		inst.mu.RUnlock()

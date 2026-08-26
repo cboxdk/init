@@ -29,12 +29,12 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 		return fmt.Errorf("process %q: %w", name, ErrProcessExists)
 	}
 
-	// Basic validation
-	if len(procCfg.Command) == 0 {
-		return fmt.Errorf("process command cannot be empty: %w", ErrInvalidArgument)
-	}
-	if procCfg.Scale < 1 {
-		return fmt.Errorf("process scale must be at least 1")
+	// Apply defaults and validate the full definition — command, scale, and the
+	// enum fields (type, initial_state, restart). Previously only command and
+	// scale were checked, so a typo'd restart policy was accepted and silently
+	// degraded to "never".
+	if err := m.config.ValidateProcessDefinition(name, procCfg); err != nil {
+		return fmt.Errorf("invalid process %q: %w: %w", name, err, ErrInvalidArgument)
 	}
 
 	// Add to config
@@ -115,12 +115,10 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
 
-	// Basic validation
-	if len(procCfg.Command) == 0 {
-		return fmt.Errorf("process command cannot be empty: %w", ErrInvalidArgument)
-	}
-	if procCfg.Scale < 1 {
-		return fmt.Errorf("process scale must be at least 1")
+	// Apply defaults and validate the full definition, including the enum fields
+	// (type, initial_state, restart) that the ad-hoc check here used to skip.
+	if err := m.config.ValidateProcessDefinition(name, procCfg); err != nil {
+		return fmt.Errorf("invalid process %q: %w: %w", name, err, ErrInvalidArgument)
 	}
 
 	// Update config

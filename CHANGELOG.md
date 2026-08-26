@@ -37,6 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Processes added or updated via the API are now fully validated.** Only the
+  command and scale were checked, so a `POST /processes` with a typo'd restart
+  policy (`on_failure`) or an invalid `type`/`initial_state` was accepted with
+  201 and silently degraded — an unknown restart policy became "never", so the
+  service crashed once and stayed down. The manager now applies defaults and
+  validates the whole definition (rejected with 400).
+- **A checkpointed process is no longer counted as dead.** The all-processes-dead
+  sweep treated a warm-tier checkpointed instance as not-running, so a container
+  whose workload was snapshotted could trip the "all dead → shut down" path and
+  discard the checkpoint. Checkpointed instances now count as alive.
+- **Fixed a data race on the process scale config.** `scaleFromZero` wrote the
+  process's `Scale` without the manager lock, racing config reads and the locked
+  scale updater; it now routes through the locked path.
 - **API status codes are now correct and typed, not guessed from the message.**
   `httpStatusFromError` matched on message substrings, so rewording a manager
   error silently flipped a 404 to a 500, an unrelated `exec: … executable file

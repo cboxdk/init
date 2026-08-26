@@ -236,6 +236,17 @@ func (c *Config) validateProcessShutdown(name string, proc *Process) error {
 	return nil
 }
 
+// ValidateProcessDefinition applies per-process defaults to proc and then
+// validates its enum fields (type, initial_state, restart) and scale. The
+// manager calls it before adding or updating a process at runtime: without it,
+// a POST /processes with a typo'd restart policy ("on_failure") was accepted and
+// silently treated as "never" — the service crashed once and stayed down. It
+// mutates proc so the stored definition carries the applied defaults.
+func (c *Config) ValidateProcessDefinition(name string, proc *Process) error {
+	c.setProcessDefaults(name, proc)
+	return c.validateProcess(name, proc)
+}
+
 // validateProcessBasics validates basic process properties
 func (c *Config) validateProcessBasics(name string, proc *Process) error {
 	if len(proc.Command) == 0 {
