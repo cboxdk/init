@@ -334,26 +334,30 @@ func (s *Supervisor) markReady(reason string) {
 // WaitForReadiness waits for the service to become ready (health check passes)
 // Returns nil when ready, error on timeout or context cancellation
 func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration) error {
-	// If no health check configured, consider immediately ready
 	if s.config.HealthCheck == nil {
-		s.logger.Debug("No health check configured, considering ready immediately")
-		return nil
-	}
-
-	// Check health check mode - only wait if readiness or both
-	mode := s.config.HealthCheck.Mode
-	if mode != "readiness" && mode != "both" && mode != "" {
-		// mode is "liveness" or unset (defaults to "both")
+		// A oneshot with no health check is ready only when it completes
+		// successfully — so a dependent (depends_on) waits for it to finish (the
+		// canonical migrate-then-serve pattern) instead of treating it as ready
+		// the instant it forks. handleOneshotExit closes readinessCh on exit 0.
+		// A long-running process with no health check is ready as soon as it is
+		// running. (PID1-9)
+		if s.config.Type != "oneshot" {
+			s.logger.Debug("No health check configured, considering ready immediately")
+			return nil
+		}
+		s.logger.Info("Waiting for oneshot to complete before dependents start", "timeout", timeout)
+	} else {
+		// Check health check mode - only wait if readiness or both
+		mode := s.config.HealthCheck.Mode
 		if mode == "liveness" {
 			s.logger.Debug("Health check mode is liveness-only, not waiting for readiness")
 			return nil
 		}
+		s.logger.Info("Waiting for service readiness",
+			"timeout", timeout,
+			"health_check_type", s.config.HealthCheck.Type,
+		)
 	}
-
-	s.logger.Info("Waiting for service readiness",
-		"timeout", timeout,
-		"health_check_type", s.config.HealthCheck.Type,
-	)
 
 	// Wait for readiness with timeout
 	timeoutCh := time.After(timeout)
@@ -451,8 +455,13 @@ func (s *Supervisor) Start(ctx context.Context) error {
 				s.handleHealthStatus(s.ctx)
 			}()
 		}
+	} else if s.config.Type == "oneshot" {
+		// A oneshot with no health check becomes ready when it completes
+		// successfully (handleOneshotExit), NOT at fork — otherwise a dependent
+		// would start before the oneshot (e.g. a migration) finished. (PID1-9)
+		s.logger.Debug("Oneshot readiness gated on successful completion")
 	} else {
-		// No health check configured - consider ready immediately
+		// Long-running process with no health check - ready as soon as running.
 		s.markReady("no health check configured")
 	}
 
