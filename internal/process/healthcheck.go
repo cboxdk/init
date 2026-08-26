@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/cboxdk/init/internal/config"
@@ -132,13 +133,19 @@ func (e *ExecHealthChecker) Check(ctx context.Context) error {
 // The monitor emits health status updates through a channel that the Supervisor
 // uses to trigger restarts or mark services as ready.
 type HealthMonitor struct {
-	processName        string
-	checker            HealthChecker
-	config             *config.HealthCheck
+	processName string
+	checker     HealthChecker
+	config      *config.HealthCheck
+	logger      *slog.Logger
+
+	// mu guards the counters and grace window, which the monitor goroutine
+	// mutates during checks and Rearm mutates from the supervisor goroutine
+	// after a health-triggered restart.
+	mu                 sync.Mutex
 	consecutiveFails   int
 	consecutiveSuccess int
 	currentlyHealthy   bool
-	logger             *slog.Logger
+	graceUntil         time.Time // checks are skipped until this time (warmup after (re)start)
 }
 
 // NewHealthMonitor creates a new health monitor
@@ -174,7 +181,14 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 		}
 
 		status := hm.performCheck(ctx)
-		statusCh <- status
+		// Guard the send on ctx: if the consumer has already exited (its own ctx
+		// cancelled) with a status buffered, an unguarded send on the
+		// capacity-1 channel blocks this goroutine — and its ticker — forever.
+		select {
+		case statusCh <- status:
+		case <-ctx.Done():
+			return
+		}
 
 		ticker := time.NewTicker(time.Duration(hm.config.Period) * time.Second)
 		defer ticker.Stop()
@@ -182,8 +196,18 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 		for {
 			select {
 			case <-ticker.C:
+				// Skip checks during a warmup grace window (initial start or a
+				// re-arm after a health-triggered restart), so a slow-booting
+				// replacement isn't killed before it can come up.
+				if hm.inGrace() {
+					continue
+				}
 				status := hm.performCheck(ctx)
-				statusCh <- status
+				select {
+				case statusCh <- status:
+				case <-ctx.Done():
+					return
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -191,6 +215,31 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 	}()
 
 	return statusCh
+}
+
+// Rearm resets the monitor's failure/success history and starts a fresh warmup
+// grace window (the configured initial_delay). The supervisor calls it after a
+// health-triggered restart so the booting replacement instance is not judged
+// against the failures that killed its predecessor and gets the same warmup the
+// first instance got — without this, a service slower than one probe period is
+// killed on the very next check and abandoned once restarts are exhausted.
+func (hm *HealthMonitor) Rearm() {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.consecutiveFails = 0
+	hm.consecutiveSuccess = 0
+	hm.currentlyHealthy = true
+	if hm.config != nil && hm.config.InitialDelay > 0 {
+		hm.graceUntil = time.Now().Add(time.Duration(hm.config.InitialDelay) * time.Second)
+	}
+}
+
+// inGrace reports whether the monitor is inside a warmup grace window, during
+// which checks are skipped.
+func (hm *HealthMonitor) inGrace() bool {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	return !hm.graceUntil.IsZero() && time.Now().Before(hm.graceUntil)
 }
 
 func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
@@ -201,6 +250,9 @@ func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
 	startTime := time.Now()
 	err := hm.checker.Check(checkCtx)
 	duration := time.Since(startTime).Seconds()
+
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
 
 	// Determine success threshold (default 1 if not configured)
 	successThreshold := hm.config.SuccessThreshold

@@ -37,6 +37,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prepended each sample to a growing slice, reallocating and copying the whole
   result every iteration (~260k element copies for a full 720-sample read). It now
   appends newest-first and reverses once.
+- **Health checks no longer kill-loop a slow-starting service.** After a
+  health-triggered restart, the monitor kept its accumulated failure count and
+  gave the replacement no warmup grace, so a service that took longer than one
+  probe period to boot was killed on the very next check and abandoned once its
+  restarts ran out. The monitor is now re-armed on each health restart — failure
+  history reset and a fresh `initial_delay` grace window applied — so the
+  replacement is judged from a clean slate.
+- **The health-check monitor no longer leaks a goroutine on stop.** Its status
+  sends were not guarded by the context, so if the consumer had already exited
+  with a status buffered, the monitor blocked forever on the capacity-1 channel,
+  leaking the goroutine and its ticker on every supervisor stop. The sends now
+  select on the context.
+- **Editing one process no longer restarts the whole stack.** `UpdateProcess`
+  already stops and restarts the edited process with its new config, then
+  additionally called an internal `restartAllProcesses` that bounced *every*
+  running process (nginx, php-fpm, every sibling) in map order, ignoring the
+  dependency DAG and restarting the just-edited process a second time. The
+  redundant call is gone; a one-process edit now touches only that process.
+- **Processes added or updated at runtime are now wired for death detection.**
+  Supervisors created by `AddProcess`/`UpdateProcess` skipped
+  `SetDeathNotifier`, so if such a process crashed with its restarts exhausted,
+  the manager's "all processes dead → shut down" detection never heard about it
+  and the container ran on as an empty shell. All four supervisor-construction
+  sites now go through one helper, so the wiring can't drift.
+- **Concurrent starts no longer multiply instances.** The manager checked a
+  process's state before starting it, but outside any lock, so two callers
+  (API + TUI + watcher) could both pass the check and each start `Scale`
+  instances. `Supervisor.Start` is now idempotent for an already-running
+  supervisor.
 - **The log writer is now thread-safe, and partial lines are assembled
   correctly.** `ProcessWriter.Write` mutated an unsynchronized buffer, so the
   scheduled-job path — which hands the *same* writer to both `cmd.Stdout` and

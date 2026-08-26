@@ -3,7 +3,6 @@ package process
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/cboxdk/init/internal/config"
 )
@@ -45,10 +44,7 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 	if procCfg.Enabled {
 		m.logger.Info("Starting new process", "name", name, "command", procCfg.Command, "scale", procCfg.Scale)
 
-		supervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
-		supervisor.SetSnapshotStreams(m.snapshotStreams)
-		supervisor.SetOneshotHistory(m.oneshotHistory)
-		supervisor.SetLogBroadcaster(m.logBroadcaster)
+		supervisor := m.newConfiguredSupervisor(name, procCfg)
 		// Use background context for supervisor lifetime (independent of API request)
 		if err := m.startSupervisor(ctx, supervisor); err != nil {
 			// Remove from config on failure
@@ -103,18 +99,13 @@ func (m *Manager) RemoveProcess(ctx context.Context, name string) error {
 // UpdateProcess updates an existing process configuration.
 func (m *Manager) UpdateProcess(ctx context.Context, name string, procCfg *config.Process) error {
 	m.mu.Lock()
-	err := m.updateProcessLocked(ctx, name, procCfg)
-	m.mu.Unlock()
-	if err != nil {
-		return err
-	}
-
-	// Restart all running processes to ensure consistent state
-	if err := m.restartAllProcesses(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	defer m.mu.Unlock()
+	// updateProcessLocked already stops the target and restarts it with the new
+	// config. It must NOT be followed by a restart of every other process: that
+	// bounced the whole stack (nginx, php-fpm, every sibling) in map-iteration
+	// order — ignoring the dependency DAG — for a one-process edit, and restarted
+	// the just-updated target a second time.
+	return m.updateProcessLocked(ctx, name, procCfg)
 }
 
 func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg *config.Process) error {
@@ -148,10 +139,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 
 		// If new config is enabled, start with new config
 		if procCfg.Enabled {
-			newSupervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
-			newSupervisor.SetSnapshotStreams(m.snapshotStreams)
-			newSupervisor.SetOneshotHistory(m.oneshotHistory)
-			newSupervisor.SetLogBroadcaster(m.logBroadcaster)
+			newSupervisor := m.newConfiguredSupervisor(name, procCfg)
 			// Use background context for supervisor lifetime (independent of API request)
 			if err := m.startSupervisor(ctx, newSupervisor); err != nil {
 				// Rollback config change on error
@@ -170,10 +158,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 		// Process wasn't running but new config enables it
 		m.logger.Info("Starting previously disabled process", "name", name)
 
-		supervisor := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
-		supervisor.SetSnapshotStreams(m.snapshotStreams)
-		supervisor.SetOneshotHistory(m.oneshotHistory)
-		supervisor.SetLogBroadcaster(m.logBroadcaster)
+		supervisor := m.newConfiguredSupervisor(name, procCfg)
 		// Use background context for supervisor lifetime (independent of API request)
 		if err := m.startSupervisor(ctx, supervisor); err != nil {
 			// Rollback config change on error
@@ -187,29 +172,6 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 
 	// Audit log
 	m.auditLogger.LogProcessUpdated(name, procCfg.Command, procCfg.Scale)
-
-	return nil
-}
-
-// restartAllProcesses restarts every running process sequentially.
-func (m *Manager) restartAllProcesses(ctx context.Context) error {
-	m.mu.RLock()
-	names := make([]string, 0, len(m.processes))
-	for name := range m.processes {
-		names = append(names, name)
-	}
-	m.mu.RUnlock()
-
-	var errs []string
-	for _, name := range names {
-		if err := m.RestartProcess(ctx, name); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", name, err))
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to restart processes: %s", strings.Join(errs, "; "))
-	}
 
 	return nil
 }
