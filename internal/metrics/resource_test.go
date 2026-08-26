@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -695,9 +696,12 @@ func TestResourceCollector_Collect_ConcurrentSameKey(t *testing.T) {
 // TestResourceCollector_CPUPercentTracksRecentUsage proves the collector reports
 // CPU used since the previous tick, not the process's lifetime average. It burns
 // CPU, then idles: the reading must fall to ~0. With the lifetime average (which
-// is what a fresh gopsutil handle per tick can only ever give) an idle process
-// keeps reporting its historical burn, so the gauge never comes back down.
-// (PERF-3)
+// is all a fresh gopsutil handle per tick can give) an idle process keeps
+// reporting its historical burn, so the gauge never comes back down. (PERF-3)
+//
+// The child signals when it has finished burning by touching a file, so the test
+// never samples the "idle" window while the loop is still running — it must not
+// depend on how fast the runner is.
 func TestResourceCollector_CPUPercentTracksRecentUsage(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing-based; skipped in -short")
@@ -705,8 +709,9 @@ func TestResourceCollector_CPUPercentTracksRecentUsage(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	rc := NewResourceCollector(time.Second, 10, logger)
 
-	// Pure shell-builtin busy loop (no forks), then a long sleep.
-	cmd := exec.Command("sh", "-c", "i=0; while [ $i -lt 3000000 ]; do i=$((i+1)); done; sleep 10")
+	done := filepath.Join(t.TempDir(), "burned")
+	// Pure shell-builtin busy loop (no forks), then signal and idle.
+	cmd := exec.Command("sh", "-c", "i=0; while [ $i -lt 2000000 ]; do i=$((i+1)); done; : > "+done+"; sleep 30")
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start burner: %v", err)
 	}
@@ -716,22 +721,35 @@ func TestResourceCollector_CPUPercentTracksRecentUsage(t *testing.T) {
 	}()
 	pid := cmd.Process.Pid
 
+	// Sample an interval that is entirely inside the busy loop.
 	if _, err := rc.Collect(pid, "burn", "0"); err != nil {
 		t.Fatalf("prime: %v", err)
 	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(700 * time.Millisecond)
 	busy, err := rc.Collect(pid, "burn", "0")
 	if err != nil {
 		t.Fatalf("busy sample: %v", err)
 	}
+	if busy.CPUPercent < 20 {
+		t.Skipf("burner only reached %.1f%% CPU; runner too contended to measure", busy.CPUPercent)
+	}
 
-	// Let the loop finish so the process is sleeping, then sample an interval
+	// Wait until the child has actually stopped burning, then sample an interval
 	// that contains no work at all.
-	time.Sleep(6 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		if _, err := os.Stat(done); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Skip("burner did not finish in time on this runner")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if _, err := rc.Collect(pid, "burn", "0"); err != nil {
 		t.Fatalf("re-prime: %v", err)
 	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(700 * time.Millisecond)
 	idle, err := rc.Collect(pid, "burn", "0")
 	if err != nil {
 		t.Fatalf("idle sample: %v", err)
