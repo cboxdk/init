@@ -77,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-process signal action.** `cbox-init signal <process> <signal>` (and
+  `POST /api/v1/processes/{name}/signal` with `{"signal":"SIGHUP"}`) delivers an
+  operational signal to a single service's process group — an nginx config
+  reload (`SIGHUP`), php-fpm log reopen (`SIGUSR1`) or graceful reload
+  (`SIGUSR2`) — without touching the rest of the stack. The signal accepts the
+  `SIGHUP` or bare `HUP` spelling; an unknown name is rejected with 400.
 - **cbox-init now behaves like an init on the signal plane.** Previously only
   SIGTERM/SIGINT/SIGQUIT were handled (all as shutdown) and every other signal
   was dropped, so `docker kill -s HUP` was a silent no-op. Now:

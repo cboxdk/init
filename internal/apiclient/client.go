@@ -157,6 +157,37 @@ func (c *Client) RestartProcess(name string) error {
 	return c.processAction(name, "restart")
 }
 
+// SignalProcess delivers an operational signal (e.g. SIGHUP, SIGUSR1, SIGUSR2)
+// to a single process's group.
+func (c *Client) SignalProcess(name, signal string) error {
+	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/signal", name))
+
+	body := fmt.Sprintf(`{"signal":%q}`, signal)
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.auth != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("signal failed: %s", string(respBody))
+	}
+
+	return nil
+}
+
 // ScaleProcess scales a process
 func (c *Client) ScaleProcess(name string, desired int) error {
 	url := c.getURL(fmt.Sprintf("/api/v1/processes/%s/scale", name))

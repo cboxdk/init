@@ -770,6 +770,8 @@ func (s *Server) routePostRequest(w http.ResponseWriter, r *http.Request, proces
 		s.handleStart(w, r, processName)
 	case "scale":
 		s.handleScale(w, r, processName)
+	case "signal":
+		s.handleSignal(w, r, processName)
 	case "schedule/pause":
 		s.handleSchedulePause(w, r, processName)
 	case "schedule/resume":
@@ -777,8 +779,41 @@ func (s *Server) routePostRequest(w http.ResponseWriter, r *http.Request, proces
 	case "schedule/trigger":
 		s.handleScheduleTrigger(w, r, processName)
 	default:
-		s.respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown action: %s (valid: start|stop|restart|scale|schedule/pause|schedule/resume|schedule/trigger)", action))
+		s.respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown action: %s (valid: start|stop|restart|scale|signal|schedule/pause|schedule/resume|schedule/trigger)", action))
 	}
+}
+
+// handleSignal delivers an operational signal to a single process's group.
+// Body: {"signal":"SIGHUP"}. Use it to target one service — nginx -s reload
+// (SIGHUP), php-fpm log reopen (SIGUSR1) / graceful reload (SIGUSR2) — without
+// touching the rest of the stack.
+func (s *Server) handleSignal(w http.ResponseWriter, r *http.Request, processName string) {
+	var req struct {
+		Signal string `json:"signal"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Signal == "" {
+		s.respondError(w, http.StatusBadRequest, "signal is required (e.g. {\"signal\":\"SIGHUP\"})")
+		return
+	}
+	if !config.IsValidSignalName(req.Signal) {
+		s.respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid signal %q", req.Signal))
+		return
+	}
+
+	if err := s.manager.SignalProcess(processName, req.Signal); err != nil {
+		s.respondError(w, httpStatusFromError(err), fmt.Sprintf("signal failed: %v", err))
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"status":  "signalled",
+		"process": processName,
+		"signal":  req.Signal,
+	})
 }
 
 // handleRestart restarts a process

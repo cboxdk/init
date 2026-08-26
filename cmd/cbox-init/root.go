@@ -76,6 +76,7 @@ func init() {
 	rootCmd.AddCommand(startProcessCmd)
 	rootCmd.AddCommand(stopProcessCmd)
 	rootCmd.AddCommand(restartCmd)
+	rootCmd.AddCommand(signalCmd)
 	rootCmd.AddCommand(scaleCmd)
 	rootCmd.AddCommand(reloadConfigCmd)
 }

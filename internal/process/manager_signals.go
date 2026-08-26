@@ -1,6 +1,9 @@
 package process
 
-import "syscall"
+import (
+	"fmt"
+	"syscall"
+)
 
 // ForwardSignal relays an operational signal to every managed process group.
 //
@@ -27,4 +30,32 @@ func (m *Manager) ForwardSignal(sig syscall.Signal) {
 	for _, sup := range sups {
 		sup.ForwardSignal(sig)
 	}
+}
+
+// SignalProcess delivers a named signal to a single process's group, for
+// targeting one service (e.g. `nginx -s reload` via SIGHUP, php-fpm SIGUSR2)
+// without touching the rest of the stack. signalName accepts the same spellings
+// as shutdown.signal ("SIGHUP" or "HUP", case-insensitive). Returns an error if
+// the signal name is unknown or the process is not found.
+func (m *Manager) SignalProcess(name string, signalName string) error {
+	if name == "" {
+		return fmt.Errorf("process name cannot be empty")
+	}
+
+	sig, err := parseSignalStrict(signalName)
+	if err != nil {
+		return err
+	}
+
+	m.mu.RLock()
+	sup, ok := m.processes[name]
+	m.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("process %s not found", name)
+	}
+
+	m.logger.Info("Signalling process", "process", name, "signal", sig)
+	sup.ForwardSignal(sig)
+	return nil
 }
