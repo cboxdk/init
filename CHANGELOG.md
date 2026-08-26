@@ -82,8 +82,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bodyclose`, `errorlint` and `misspell`, added one at a time per this repo's
   own linter policy after fixing everything they surfaced.
 
+- A documentation config drift gate: `tools/check-doc-configs.sh` (and
+  `make check-configs`, wired into CI as the "Config examples" job) validates
+  every `configs/examples/*.yaml` with `check-config`. Those files back the
+  examples throughout `docs/`, so a config that references a removed or
+  misspelled key now fails CI instead of silently misleading a reader.
+
+### Changed
+
+- Moved `docker-compose.yaml` and `kubernetes-deployment.yaml` out of
+  `configs/examples/` into a new `deploy/` directory. They are deployment
+  manifests, not cbox-init configs, so keeping them in the examples glob would
+  have made the drift gate above either wrong or littered with special cases.
+
 ### Fixed
 
+- **Documentation described several subsystems that do not exist.** Removed or
+  corrected against the actual Go source (reviewer notes DOC-1/DOC-2, P0):
+  - **Heartbeat monitoring** was documented as a full feature
+    (`url`/`success_url`/`failure_url`/`method`/`headers`/`retry_count`, plus
+    `cbox_init_heartbeat_*` metrics). None of it exists: `HeartbeatConfig`
+    (`internal/config/types.go`) has only `enabled`/`interval`/`grace` and is
+    read by no runtime code. The page is now an honest "planned / not yet
+    implemented" stub, and the dead `heartbeat:` blocks were stripped from
+    `configs/examples/scheduled-tasks.yaml`, `laravel-full.yaml`,
+    `tui-test.yaml`, and the docs.
+  - **Fabricated scheduled-task Prometheus metrics**
+    (`cbox_init_scheduled_task_last_run_timestamp`/`next_run_timestamp`/
+    `last_exit_code`/`duration_seconds`/`total`) and the alert rules built on
+    them were removed — `internal/schedule` exports no metrics. The scheduler
+    docs now point at the real status API
+    (`GET /api/v1/processes/{name}/schedule` and `.../schedule/history`).
+  - **Playwright / "Cbox Init Web UI" test suite** (`docs/development/testing.md`
+    described 35 Playwright tests, a `web/` directory, WCAG 2.1, "100%
+    coverage"). None of it exists; the page now documents the real Go test
+    story (`make test`, race + coverage, Docker integration suite).
+- **Documented configuration schemas did not match the code:**
+  - Health-check docs used `interval`, `retries`, `expected_body`, and
+    `address` for HTTP. The real `HealthCheck` struct uses `period` (10),
+    `failure_threshold` (3), `initial_delay` (5), `url` for HTTP, and
+    `mode: liveness|readiness|both`; there is no body matching. Fixed across
+    the health-check, processes, container-readiness, scaffolding, dev-mode,
+    validation, and feature-index docs.
+  - The health metric was documented as `cbox_init_process_health_status`; the
+    real name is `cbox_init_health_check_status{name,type}`
+    (`internal/metrics/collector.go`).
+  - Advanced-logging docs described a flat global schema
+    (`log_multiline_enabled`, `log_redaction_patterns`, `log_filter_*`) that
+    does not exist. Rewrote around the real per-process `logging:` block
+    (`multiline` / `redaction` as `{name,pattern,replacement}` rules /
+    `filters` / `min_level`), and dropped the GDPR/PCI/HIPAA compliance
+    claims (redaction is a best-effort feature, not a certification).
 - 26 files were not gofmt-clean; CI had no formatting gate to notice.
 - `handleExecutionError` used a type assertion on the error, and two comparisons
   used `==`/`!=`, all of which stop matching once an error is wrapped.

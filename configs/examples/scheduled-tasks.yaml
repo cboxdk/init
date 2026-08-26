@@ -29,16 +29,6 @@ processes:
       labels:
         service: backup
         type: database
-    heartbeat:
-      success_url: https://hc-ping.com/your-uuid-here
-      failure_url: https://hc-ping.com/your-uuid-here/fail
-      timeout: 30       # Optional: HTTP timeout in seconds (default: 30)
-      retry_count: 3    # Optional: Number of retries (default: 3)
-      retry_delay: 5    # Optional: Delay between retries in seconds (default: 5)
-      method: POST      # Optional: HTTP method (default: POST)
-      headers:          # Optional: Custom headers for authentication
-        Authorization: Bearer your-token-here
-        X-Service: cbox-init
 
   # Cache warming - runs every 15 minutes
   cache-warmer:
@@ -70,10 +60,6 @@ processes:
       labels:
         service: reports
         type: hourly
-    heartbeat:
-      success_url: https://hc-ping.com/reports-uuid
-      failure_url: https://hc-ping.com/reports-uuid/fail
-      timeout: 60
 
   # Log rotation - runs daily at midnight
   log-rotation:
@@ -104,9 +90,6 @@ processes:
       labels:
         service: monitoring
         type: health-check
-    heartbeat:
-      failure_url: https://hc-ping.com/health-check-uuid/fail  # Only ping on failures
-      timeout: 10
 
   # Data sync - runs every 30 minutes
   data-sync:
@@ -123,12 +106,6 @@ processes:
       labels:
         service: sync
         type: data
-    heartbeat:
-      success_url: https://hc-ping.com/sync-uuid
-      failure_url: https://hc-ping.com/sync-uuid/fail
-      timeout: 120
-      retry_count: 5
-      retry_delay: 10
 
   # Weekly maintenance - runs every Sunday at 3 AM
   weekly-maintenance:
@@ -146,10 +123,6 @@ processes:
       labels:
         service: maintenance
         type: weekly
-    heartbeat:
-      success_url: https://hc-ping.com/weekly-uuid
-      failure_url: https://hc-ping.com/weekly-uuid/fail
-      timeout: 300
 
 # Note: Cron schedule format
 # ┌───────────── minute (0 - 59)

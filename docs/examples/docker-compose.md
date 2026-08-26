@@ -583,9 +583,6 @@ DB_ROOT_PASSWORD=root-password
 
 # Monitoring
 GRAFANA_PASSWORD=admin-password
-
-# Heartbeats
-BACKUP_HEARTBEAT_URL=https://hc-ping.com/uuid
 ```
 
 ### .env.development

@@ -1,5 +1,5 @@
 .PHONY: build build-all clean test test-all test-integration bench coverage lint deps install dev help \
-	check fmt fmt-check vet vulncheck sbom sbom-check license-check
+	check check-configs fmt fmt-check vet vulncheck sbom sbom-check license-check
 
 # Build variables
 BINARY_NAME=cbox-init
@@ -61,6 +61,12 @@ test-all:
 	@chmod +x tests/run-all-tests.sh
 	@./tests/run-all-tests.sh
 
+# Validate the shipped example configs against the real schema, so documented
+# configuration cannot drift from what the binary accepts. Builds if needed.
+check-configs: build
+	@echo "🧾 Validating example configs..."
+	@BIN=$(BUILD_DIR)/$(BINARY_NAME) ./tools/check-doc-configs.sh
+
 # Run integration tests
 test-integration:
 	@echo "🧪 Running integration tests..."
@@ -84,7 +90,7 @@ coverage:
 	@echo "✅ Coverage report: coverage.html"
 
 # The full gate, matching CI. Run this before pushing.
-check: fmt-check vet lint test vulncheck sbom-check license-check
+check: fmt-check vet lint test vulncheck sbom-check license-check check-configs
 	@echo "✅ All checks passed"
 
 fmt:
@@ -160,6 +166,7 @@ help:
 	@echo "  test             - Run unit tests (race + coverage)"
 	@echo "  test-all         - Run full suite (unit + functional/API, needs Docker)"
 	@echo "  test-integration - Run integration tests on alpine/debian/ubuntu (needs Docker)"
+	@echo "  check-configs    - Validate configs/examples/*.yaml against the real schema"
 	@echo "  bench            - Run benchmarks"
 	@echo "  coverage         - Generate HTML coverage report"
 	@echo "  lint             - Run golangci-lint (matches CI)"

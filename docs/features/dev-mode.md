@@ -306,11 +306,11 @@ processes:
 ```bash
 # Initial config
 health_check:
-  interval: 30
+  period: 30
   timeout: 5
 
 # Too slow, adjust
-# Edit: interval: 30 → interval: 10
+# Edit: period: 30 → period: 10
 # Save → Auto-reload
 
 # Observe health check behavior
@@ -648,20 +648,20 @@ vim dev.yaml
 ```bash
 # Start with conservative settings
 health_check:
-  interval: 30
+  period: 30
   timeout: 10
-  retries: 5
+  failure_threshold: 5
 
-# Edit: Reduce interval for faster detection
-# Change interval: 30 → interval: 10
+# Edit: Reduce period for faster detection
+# Change period: 30 → period: 10
 # Save, restart, observe
 
 # Edit: Reduce timeout
 # Change timeout: 10 → timeout: 5
 # Save, restart, observe
 
-# Edit: Reduce retries
-# Change retries: 5 → retries: 3
+# Edit: Reduce failure_threshold
+# Change failure_threshold: 5 → failure_threshold: 3
 # Save, restart, test
 
 # Final tuned config based on observations

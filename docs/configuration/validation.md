@@ -455,12 +455,12 @@ processes:
 # 🚨 Error: Invalid URL
 health_check:
   type: http
-  address: "not-a-url"
+  url: "not-a-url"
 
 # ✅ Valid HTTP URL
 health_check:
   type: http
-  address: "http://127.0.0.1:80/health"
+  url: "http://127.0.0.1:80/health"
 ```
 
 **Command existence:**

@@ -40,7 +40,7 @@ processes:
     depends_on: [php-fpm]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
+      url: "http://127.0.0.1:80/health"
 ```
 
 ## Configuration Reference
@@ -214,7 +214,7 @@ processes:
     command: ["nginx", "-g", "daemon off;"]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
+      url: "http://127.0.0.1:80/health"
 
   horizon:
     command: ["php", "artisan", "horizon"]
@@ -286,9 +286,9 @@ processes:
     health_check:
       type: tcp
       address: "127.0.0.1:9000"
-      interval: 10
+      period: 10
       timeout: 5
-      retries: 3
+      failure_threshold: 3
 
   nginx:
     enabled: true
@@ -297,10 +297,10 @@ processes:
     depends_on: [php-fpm]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
-      interval: 10
+      url: "http://127.0.0.1:80/health"
+      period: 10
       timeout: 5
-      retries: 3
+      failure_threshold: 3
 
   horizon:
     enabled: true

@@ -208,6 +208,3 @@ processes:
       labels:
         service: scheduler
         tier: cron
-    heartbeat:
-      failure_url: https://hc-ping.com/scheduler-uuid/fail  # Optional: Ping only on failures
-      timeout: 30

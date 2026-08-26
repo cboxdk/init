@@ -111,6 +111,27 @@ jobs:
           # .golangci.yml (v2 format).
           version: v2.12.2
 
+  config-examples:
+    name: Config examples
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+
+      # Validates configs/examples/*.yaml against the real schema with
+      # `check-config`. These files back the documented examples, so a config
+      # that references a removed or misspelled key fails here instead of
+      # silently misleading a reader. Deployment manifests (docker-compose,
+      # k8s) live under deploy/ and are intentionally not matched.
+      - name: Validate example configs
+        run: make check-configs
+
   build:
     name: Build
     runs-on: ubuntu-latest

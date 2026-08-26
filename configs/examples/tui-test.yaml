@@ -78,7 +78,6 @@ processes:
         schedule_timezone: Local
         schedule_timeout: 30s
         schedule_max_concurrent: 1
-        heartbeat: null
     test-oneshot:
         enabled: true
         type: oneshot
@@ -121,7 +120,6 @@ processes:
             filters: null
         schedule: ""
         schedule_timezone: ""
-        heartbeat: null
     test-process-1:
         enabled: true
         type: longrun
@@ -152,7 +150,6 @@ processes:
             filters: null
         schedule: ""
         schedule_timezone: ""
-        heartbeat: null
     test-process-2:
         enabled: true
         type: longrun
@@ -184,7 +181,6 @@ processes:
             filters: null
         schedule: ""
         schedule_timezone: ""
-        heartbeat: null
     test-queue:
         enabled: true
         type: longrun
@@ -216,4 +212,3 @@ processes:
             filters: null
         schedule: ""
         schedule_timezone: ""
-        heartbeat: null

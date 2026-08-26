@@ -1,6 +1,6 @@
 ---
 title: "Health Checks Configuration"
-description: "Configure TCP, HTTP, and exec health checks with intervals, timeouts, retries, and success thresholds"
+description: "Configure TCP, HTTP, and exec health checks with period, timeout, failure_threshold, and success_threshold"
 weight: 14
 ---
 
@@ -11,8 +11,8 @@ Configure health monitoring for your processes to ensure reliability and enable 
 ## Overview
 
 Health checks monitor process health and enable:
-- ✅ Automatic restart on failure
-- ✅ Dependency waiting (processes wait for healthy dependencies)
+- ✅ Automatic restart on failure (liveness)
+- ✅ Dependency waiting (processes wait for healthy dependencies) (readiness)
 - ✅ Health status reporting via metrics and API
 - ✅ Graceful degradation patterns
 
@@ -24,10 +24,10 @@ processes:
     command: ["nginx", "-g", "daemon off;"]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
-      interval: 10
+      url: "http://127.0.0.1:80/health"
+      period: 10
       timeout: 5
-      retries: 3
+      failure_threshold: 3
       success_threshold: 2
 ```
 
@@ -38,19 +38,20 @@ processes:
 ```yaml
 health_check:
   type: http
-  address: "http://127.0.0.1:80/health"
-  interval: 10
+  url: "http://127.0.0.1:80/health"
+  period: 10
   timeout: 5
-  retries: 3
+  failure_threshold: 3
   success_threshold: 2
   expected_status: 200
-  expected_body: "OK"
 ```
 
 **Settings:**
-- `address` - Full HTTP URL to check
+- `url` - Full HTTP URL to check (HTTP only)
 - `expected_status` - Expected HTTP status code (default: `200`)
-- `expected_body` - Optional body content match
+
+The check performs an HTTP `GET` and passes only when the response status code
+equals `expected_status`. There is no response-body matching.
 
 **Best for:**
 - Web servers (Nginx, Apache)
@@ -72,13 +73,13 @@ echo json_encode(['status' => 'healthy']);
 health_check:
   type: tcp
   address: "127.0.0.1:9000"
-  interval: 10
+  period: 10
   timeout: 3
-  retries: 3
+  failure_threshold: 3
 ```
 
 **Settings:**
-- `address` - TCP address in format `host:port`
+- `address` - TCP address in format `host:port` (TCP only)
 
 **Best for:**
 - PHP-FPM (port 9000)
@@ -94,7 +95,7 @@ processes:
     health_check:
       type: tcp
       address: "127.0.0.1:9000"
-      interval: 5
+      period: 5
 ```
 
 ### Exec Health Check
@@ -103,13 +104,13 @@ processes:
 health_check:
   type: exec
   command: ["php", "artisan", "health:check"]
-  interval: 30
+  period: 30
   timeout: 10
-  retries: 2
+  failure_threshold: 2
 ```
 
 **Settings:**
-- `command` - Command to execute (array format)
+- `command` - Command to execute (array format, exec only)
 - Process is healthy if exit code is `0`
 
 **Best for:**
@@ -132,108 +133,102 @@ try {
     exit(1);
 }
 
-// Check Redis (if using)
-$redis = new Redis();
-if (!$redis->connect('localhost')) {
-    echo "Redis connection failed\n";
-    exit(1);
-}
-
 echo "All systems healthy\n";
 exit(0);  // Success
 ```
 
 ## Common Settings
 
-### interval
+All health check types share these fields. Defaults are applied automatically.
 
-**Type:** `integer` (seconds)
-**Default:** `10`
-**Description:** Time between health checks.
+| Field | Type | Default | Applies to | Description |
+|-------|------|---------|------------|-------------|
+| `type` | string | — (required) | all | `tcp`, `http`, or `exec` |
+| `url` | string | — | http | Full HTTP URL to GET |
+| `address` | string | — | tcp | `host:port` to dial |
+| `command` | list | — | exec | Command + args; healthy on exit code 0 |
+| `initial_delay` | int (s) | `5` | all | Grace period before the first check runs |
+| `period` | int (s) | `10` | all | Time between checks |
+| `timeout` | int (s) | `3` | all | Max wait per check |
+| `failure_threshold` | int | `3` | all | Consecutive failures before unhealthy |
+| `success_threshold` | int | `1` | all | Consecutive successes before healthy |
+| `expected_status` | int | `200` | http | Required HTTP status code |
+| `mode` | string | `both` | all | `liveness`, `readiness`, or `both` |
+
+### initial_delay
+
+**Type:** `integer` (seconds) · **Default:** `5`
+
+Time to wait after the process starts before running the first health check.
+Give slow-starting services enough time to bind their ports.
+
+### period
+
+**Type:** `integer` (seconds) · **Default:** `10`
+
+Time between health checks.
 
 ```yaml
 health_check:
-  interval: 30  # Check every 30 seconds
+  period: 30  # Check every 30 seconds
 ```
 
 **Recommendations:**
 - **Critical services:** 5-10 seconds
 - **Standard services:** 10-30 seconds
 - **Heavy checks:** 30-60 seconds
-- **Exec commands:** 30-120 seconds (depending on execution time)
 
 ### timeout
 
-**Type:** `integer` (seconds)
-**Default:** `5`
-**Description:** Maximum time to wait for health check response.
+**Type:** `integer` (seconds) · **Default:** `3`
+
+Maximum time to wait for a health check response. Should be less than `period`.
+
+### failure_threshold
+
+**Type:** `integer` · **Default:** `3`
+
+Number of consecutive failures before the process is marked unhealthy.
 
 ```yaml
 health_check:
-  timeout: 10  # Wait up to 10 seconds
+  failure_threshold: 5  # Allow 5 failures before marking unhealthy
 ```
-
-**Guidelines:**
-- Should be less than `interval`
-- HTTP checks: 3-10 seconds
-- TCP checks: 1-5 seconds
-- Exec checks: 5-30 seconds (match command execution time)
-
-### retries
-
-**Type:** `integer`
-**Default:** `3`
-**Description:** Number of consecutive failures before marking unhealthy.
-
-```yaml
-health_check:
-  retries: 5  # Allow 5 failures before marking unhealthy
-```
-
-**Recommendations:**
-- **Stable services:** 2-3 retries
-- **Flaky services:** 5-10 retries
-- **Critical services:** 1-2 retries (fail fast)
 
 ### success_threshold
 
-**Type:** `integer`
-**Default:** `1`
-**Description:** Number of consecutive successes before marking healthy.
+**Type:** `integer` · **Default:** `1`
 
-```yaml
-health_check:
-  success_threshold: 3  # Require 3 successes to become healthy
-```
+Number of consecutive successes before the process is marked healthy. Useful
+for services with a slow warm-up to prevent flapping.
 
-**Use cases:**
-- **Services with slow startup:** Require multiple successes (2-5)
-- **Fast services:** Single success (1)
-- **Flaky services:** Require sustained success (3-5)
+### mode
+
+**Type:** `string` · **Default:** `both`
+
+Controls how the check result is used:
+
+- `liveness` - failures trigger a restart (per the restart policy)
+- `readiness` - result gates dependents (`depends_on`) but does not restart
+- `both` - used for both liveness and readiness
 
 ## Health Check Lifecycle
 
 ```
 [Process Starts]
       ↓
-  [Starting] ← Health checks not yet running
+  [initial_delay] ← no checks yet
       ↓
   [Healthy] ← success_threshold consecutive successes
       ↓
-  [Unhealthy] ← retries consecutive failures
+  [Unhealthy] ← failure_threshold consecutive failures
       ↓
-  [Restart] ← If restart policy allows
+  [Restart] ← if mode includes liveness and restart policy allows
 ```
-
-**State Transitions:**
-1. Process starts → `Starting` state
-2. After `success_threshold` successes → `Healthy`
-3. After `retries` failures → `Unhealthy`
-4. Unhealthy process restarts (if `restart: always`)
 
 ## Advanced Patterns
 
-### Dependency Waiting
+### Dependency Waiting (readiness)
 
 ```yaml
 processes:
@@ -241,18 +236,15 @@ processes:
     health_check:
       type: tcp
       address: "127.0.0.1:9000"
+      mode: both
 
   nginx:
-    depends_on: [php-fpm]  # Waits for PHP-FPM to be healthy
+    depends_on: [php-fpm]  # Waits for PHP-FPM readiness before starting
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
+      url: "http://127.0.0.1:80/health"
+      mode: both
 ```
-
-**Behavior:**
-- Nginx waits for PHP-FPM to reach `Healthy` state
-- If PHP-FPM becomes unhealthy, Nginx continues running
-- On restart, Nginx waits again for PHP-FPM
 
 ### Multi-Layer Health Checks
 
@@ -263,7 +255,7 @@ processes:
     health_check:
       type: exec
       command: ["/health-check.sh"]
-      interval: 30
+      period: 30
 ```
 
 **health-check.sh:**
@@ -277,28 +269,8 @@ curl -f http://localhost:9180/health || exit 1
 # Check database
 psql -U user -d db -c "SELECT 1" || exit 1
 
-# Check disk space
-df -h / | awk 'NR==2 {if ($5+0 > 90) exit 1}'
-
 echo "Health check passed"
 exit 0
-```
-
-### Graceful Degradation
-
-```yaml
-processes:
-  primary-service:
-    command: ["./primary"]
-    health_check:
-      type: http
-      address: "http://127.0.0.1:8080/health"
-      retries: 10  # Tolerate more failures
-      success_threshold: 3  # Require sustained success
-
-  fallback-service:
-    enabled: false  # Enable manually when primary fails
-    command: ["./fallback"]
 ```
 
 ## Complete Examples
@@ -313,9 +285,9 @@ processes:
     health_check:
       type: tcp
       address: "127.0.0.1:9000"
-      interval: 5
+      period: 5
       timeout: 2
-      retries: 3
+      failure_threshold: 3
 
   # Nginx with HTTP check
   nginx:
@@ -323,10 +295,10 @@ processes:
     depends_on: [php-fpm]
     health_check:
       type: http
-      address: "http://127.0.0.1:80/health"
-      interval: 10
+      url: "http://127.0.0.1:80/health"
+      period: 10
       timeout: 5
-      retries: 3
+      failure_threshold: 3
       expected_status: 200
 
   # Queue worker with exec check (Laravel example)
@@ -335,9 +307,9 @@ processes:
     health_check:
       type: exec
       command: ["pgrep", "-f", "queue:work"]
-      interval: 60
+      period: 60
       timeout: 10
-      retries: 2
+      failure_threshold: 2
 ```
 
 ### Microservices Stack
@@ -349,23 +321,23 @@ processes:
     health_check:
       type: tcp
       address: "127.0.0.1:5432"
-      interval: 5
+      period: 5
 
   cache:
     command: ["redis-server"]
     health_check:
       type: tcp
       address: "127.0.0.1:6379"
-      interval: 5
+      period: 5
 
   api:
     command: ["./api-server"]
     depends_on: [database, cache]
     health_check:
       type: http
-      address: "http://127.0.0.1:8080/health"
-      interval: 10
-      expected_body: '{"status":"ok"}'
+      url: "http://127.0.0.1:8080/health"
+      period: 10
+      expected_status: 200
 
   worker:
     command: ["./worker"]
@@ -373,7 +345,7 @@ processes:
     health_check:
       type: exec
       command: ["./worker-health-check"]
-      interval: 30
+      period: 30
 ```
 
 ## Troubleshooting
@@ -383,15 +355,15 @@ processes:
 ```yaml
 # Increase timeout
 health_check:
-  timeout: 15  # Was 5, too short
+  timeout: 15  # Was 3, too short
 
-# Allow more retries
+# Allow more failures before flipping
 health_check:
-  retries: 5  # Was 3
+  failure_threshold: 5  # Was 3
 
 # Check less frequently
 health_check:
-  interval: 30  # Was 10
+  period: 30  # Was 10
 ```
 
 ### Health Check Too Sensitive
@@ -403,18 +375,18 @@ health_check:
 
 # Tolerate transient failures
 health_check:
-  retries: 10  # Was 3
+  failure_threshold: 10  # Was 3
 ```
 
 ### Slow Startup Detection
 
 ```yaml
-# Wait longer for initial health
+# Wait longer before checking, and require sustained success
 health_check:
-  success_threshold: 3  # Require 3 successes
-  interval: 10
+  initial_delay: 20   # Wait 20s before the first check
+  success_threshold: 3
+  period: 10
   timeout: 10
-  # First success after 10s, healthy after 30s (3 × 10s)
 ```
 
 ## Monitoring Health Status
@@ -425,21 +397,15 @@ health_check:
 # Prometheus metrics
 curl http://localhost:9090/metrics | grep health
 
-# Example output
-cbox_init_process_health_status{process="nginx"} 1  # 1 = healthy
+# Example output (labels: name, type)
+cbox_init_health_check_status{name="nginx",type="http"} 1  # 1 = healthy
 ```
 
 ### Via Management API
 
 ```bash
 # Get process status
-curl http://localhost:9180/api/v1/processes | jq '.[] | {name, health_status}'
-
-# Example output
-{
-  "name": "nginx",
-  "health_status": "healthy"
-}
+curl http://localhost:9180/api/v1/processes | jq '.'
 ```
 
 ## See Also
