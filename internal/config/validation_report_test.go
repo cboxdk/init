@@ -66,7 +66,7 @@ func TestFormatValidationReport(t *testing.T) {
 				"💡 SUGGESTIONS (best practices):",
 				"[sugg.field]",
 				"suggestion message",
-				"→ Consider: consider this",
+				"→ consider this",
 				"✅ Validation passed (with suggestions)",
 			},
 		},

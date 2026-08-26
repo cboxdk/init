@@ -76,7 +76,10 @@ func FormatValidationReport(result *ValidationResult) string {
 			lines = append(lines, fmt.Sprintf("  %d. [%s]", i+1, sugg.Field))
 			lines = append(lines, fmt.Sprintf("     %s", sugg.Message))
 			if sugg.Suggestion != "" {
-				lines = append(lines, fmt.Sprintf("     → Consider: %s", sugg.Suggestion))
+				// Suggestions are already phrased as advice ("Consider …",
+				// "Use …"), so the arrow alone reads correctly — a "Consider:"
+				// prefix here produced "→ Consider: Consider …".
+				lines = append(lines, fmt.Sprintf("     → %s", sugg.Suggestion))
 			}
 			if i < len(result.Suggestions)-1 {
 				lines = append(lines, "")

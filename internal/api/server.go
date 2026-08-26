@@ -654,7 +654,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc, requireAuth bool) http.Ha
 // handleHealth returns health status
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodGet)
 		return
 	}
 
@@ -678,7 +678,7 @@ func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
 		s.handleAddProcess(w, r)
 
 	default:
-		s.respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodGet, http.MethodPost)
 	}
 }
 
@@ -686,7 +686,7 @@ func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleProcessAction(w http.ResponseWriter, r *http.Request) {
 	// Support GET (logs), POST (actions), PUT (update), DELETE (remove)
 	if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
-		s.respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete)
 		return
 	}
 
@@ -1064,6 +1064,7 @@ func (s *Server) handleGetProcess(w http.ResponseWriter, _ *http.Request, proces
 //   - process: filter by process name (optional, empty = all)
 func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -1126,7 +1127,7 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 // handleStackLogs aggregates logs across the entire stack
 func (s *Server) handleStackLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodGet)
 		return
 	}
 
@@ -1235,7 +1236,7 @@ func (s *Server) handleRemoveProcess(w http.ResponseWriter, r *http.Request, pro
 // handleConfigSave saves the current configuration to file
 func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		s.respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodPost)
 		return
 	}
 
@@ -1253,7 +1254,7 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 // handleConfigReload reloads the configuration from file
 func (s *Server) handleConfigReload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		s.respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodPost)
 		return
 	}
 
@@ -1288,6 +1289,13 @@ func (s *Server) respondError(w http.ResponseWriter, status int, message string)
 	})
 }
 
+// respondMethodNotAllowed writes a 405 with the Allow header that RFC 7231
+// §6.5.5 requires, listing the methods the endpoint accepts.
+func (s *Server) respondMethodNotAllowed(w http.ResponseWriter, allowed ...string) {
+	w.Header().Set("Allow", strings.Join(allowed, ", "))
+	s.respondError(w, http.StatusMethodNotAllowed, "method not allowed")
+}
+
 func httpStatusFromError(err error) int {
 	switch {
 	case err == nil:
@@ -1312,7 +1320,7 @@ func (s *Server) Port() int {
 // GET /api/v1/metrics/history?process=name&instance=id&since=timestamp&limit=N
 func (s *Server) handleMetricsHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodGet)
 		return
 	}
 
@@ -1388,7 +1396,7 @@ func (s *Server) handleMetricsHistory(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/oneshot/history?limit=N
 func (s *Server) handleOneshotHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		s.respondMethodNotAllowed(w, http.MethodGet)
 		return
 	}
 
