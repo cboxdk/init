@@ -120,9 +120,11 @@ func TestGenerateConfig_Laravel(t *testing.T) {
 		t.Error("Laravel config should contain horizon process")
 	}
 
-	// Check queue-default process
-	if !strings.Contains(content, "queue-default:") {
-		t.Error("Laravel config should contain queue-default process")
+	// With Horizon enabled (the Laravel default), the raw queue:work worker must
+	// NOT also be generated — Horizon supervises the workers itself, and a
+	// second worker on the same queue would race it for jobs (DX-11).
+	if strings.Contains(content, "queue-default:") {
+		t.Error("Laravel config with Horizon should NOT also contain a raw queue-default worker")
 	}
 
 	// Check scheduler process
