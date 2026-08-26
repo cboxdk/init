@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/cboxdk/init/internal/acl"
+	"github.com/cboxdk/init/internal/apitypes"
 	"github.com/cboxdk/init/internal/audit"
 	"github.com/cboxdk/init/internal/config"
 	"github.com/cboxdk/init/internal/process"
@@ -670,9 +671,7 @@ func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		// List all processes
 		processes := s.manager.ListProcesses()
-		s.respondJSON(w, http.StatusOK, map[string]any{
-			"processes": processes,
-		})
+		s.respondJSON(w, http.StatusOK, apitypes.ProcessListResponse{Processes: processes})
 
 	case http.MethodPost:
 		// Add new process
@@ -1038,11 +1037,11 @@ func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request, processNa
 	}
 
 	// Return logs as JSON array
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"process": processName,
-		"limit":   limit,
-		"count":   len(logs),
-		"logs":    logs,
+	s.respondJSON(w, http.StatusOK, apitypes.LogsResponse{
+		Process: processName,
+		Limit:   limit,
+		Count:   len(logs),
+		Logs:    logs,
 	})
 }
 
@@ -1059,10 +1058,7 @@ func (s *Server) handleGetProcess(w http.ResponseWriter, _ *http.Request, proces
 	// returns a copy, so this does not affect the running configuration. (SEC-4)
 	redactProcessEnv(cfg)
 
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"process": processName,
-		"config":  cfg,
-	})
+	s.respondJSON(w, http.StatusOK, apitypes.ProcessDetailResponse{Process: processName, Config: cfg})
 }
 
 // secretEnvKeyPattern matches environment-variable names that typically hold a
@@ -1168,11 +1164,11 @@ func (s *Server) handleStackLogs(w http.ResponseWriter, r *http.Request) {
 
 	logs := s.manager.GetStackLogs(limit)
 
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"scope": "stack",
-		"limit": limit,
-		"count": len(logs),
-		"logs":  logs,
+	s.respondJSON(w, http.StatusOK, apitypes.LogsResponse{
+		Scope: "stack",
+		Limit: limit,
+		Count: len(logs),
+		Logs:  logs,
 	})
 }
 
@@ -1440,10 +1436,9 @@ func (s *Server) handleOneshotHistory(w http.ResponseWriter, r *http.Request) {
 	// Get oneshot executions from manager
 	executions := s.manager.GetAllOneshotExecutions(limit)
 
-	// Build response
-	s.respondJSON(w, http.StatusOK, map[string]any{
-		"executions": executions,
-		"count":      len(executions),
-		"limit":      limit,
+	s.respondJSON(w, http.StatusOK, apitypes.OneshotHistoryResponse{
+		Executions: executions,
+		Count:      len(executions),
+		Limit:      limit,
 	})
 }
