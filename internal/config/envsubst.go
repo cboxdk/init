@@ -2,7 +2,9 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
@@ -54,6 +56,18 @@ func LoadWithEnvExpansion(path string) (*Config, error) {
 		expanded := ExpandEnv(string(content))
 		if err := yaml.Unmarshal([]byte(expanded), &rawConfig); err != nil {
 			return nil, fmt.Errorf("failed to parse config: %w", err)
+		}
+		// Reject unknown keys (typos like `comand:` for `command:` or
+		// `health_chek:` for `health_check:`) with the file's own line numbers,
+		// before the env-merge below flattens line information. Without this a
+		// misspelled key was silently dropped — a mistyped `health_check` turned
+		// off health checking with no warning. KnownFields only rejects keys that
+		// are not struct fields; arbitrary process names (map keys) are unaffected.
+		strictDec := yaml.NewDecoder(strings.NewReader(expanded))
+		strictDec.KnownFields(true)
+		var strictCheck Config
+		if err := strictDec.Decode(&strictCheck); err != nil && !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("invalid configuration (%s): %w", path, err)
 		}
 	}
 
