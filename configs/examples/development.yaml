@@ -48,7 +48,6 @@ processes:
     command: ["php", "artisan", "horizon"]
     restart: always
     scale: 1
-    scale_locked: false  # Can scale if needed (no port binding)
     depends_on: [php-fpm]
     shutdown:
       pre_stop_hook:
@@ -64,7 +63,6 @@ processes:
     command: ["php", "artisan", "queue:work", "--tries=3"]
     restart: on-failure
     scale: 1  # Start with 1, can scale up
-    scale_locked: false  # Can scale to test load
     depends_on: [php-fpm]
     shutdown:
       timeout: 60
