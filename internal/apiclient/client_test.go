@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -967,21 +968,21 @@ func TestClient_DeleteProcess_ErrorPaths(t *testing.T) {
 			serverResponse: `{"error": "process not found"}`,
 			serverStatus:   http.StatusNotFound,
 			wantErr:        true,
-			errContains:    "delete failed",
+			errContains:    "API error",
 		},
 		{
 			name:           "internal server error",
 			serverResponse: `{"error": "internal error"}`,
 			serverStatus:   http.StatusInternalServerError,
 			wantErr:        true,
-			errContains:    "delete failed",
+			errContains:    "API error",
 		},
 		{
 			name:           "bad request",
 			serverResponse: `{"error": "invalid process name"}`,
 			serverStatus:   http.StatusBadRequest,
 			wantErr:        true,
-			errContains:    "delete failed",
+			errContains:    "API error",
 		},
 	}
 
@@ -1019,8 +1020,8 @@ func TestClient_DeleteProcess_NetworkError(t *testing.T) {
 		t.Fatal("Expected error for network failure, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to send request") {
-		t.Errorf("Expected 'failed to send request' error, got %v", err)
+	if !strings.Contains(err.Error(), "failed to connect to API") {
+		t.Errorf("Expected connection error, got %v", err)
 	}
 }
 
@@ -1050,7 +1051,7 @@ func TestClient_UpdateProcess_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusNotFound,
 			serverResponse: `{"error": "process not found"}`,
 			wantErr:        true,
-			errContains:    "update failed",
+			errContains:    "API error",
 		},
 		{
 			name: "bad request error",
@@ -1062,7 +1063,7 @@ func TestClient_UpdateProcess_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusBadRequest,
 			serverResponse: `{"error": "invalid config"}`,
 			wantErr:        true,
-			errContains:    "update failed",
+			errContains:    "API error",
 		},
 		{
 			name: "internal server error",
@@ -1074,7 +1075,7 @@ func TestClient_UpdateProcess_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusInternalServerError,
 			serverResponse: `{"error": "server error"}`,
 			wantErr:        true,
-			errContains:    "update failed",
+			errContains:    "API error",
 		},
 	}
 
@@ -1127,8 +1128,8 @@ func TestClient_UpdateProcess_NetworkError(t *testing.T) {
 		t.Fatal("Expected error for network failure, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to send request") {
-		t.Errorf("Expected 'failed to send request' error, got %v", err)
+	if !strings.Contains(err.Error(), "failed to connect to API") {
+		t.Errorf("Expected connection error, got %v", err)
 	}
 }
 
@@ -1161,7 +1162,7 @@ func TestClient_fetchLogs_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusNotFound,
 			serverResponse: `{"error": "not found"}`,
 			wantErr:        true,
-			errContains:    "logs request failed",
+			errContains:    "API error",
 		},
 		{
 			name: "invalid JSON response",
@@ -1172,7 +1173,7 @@ func TestClient_fetchLogs_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusOK,
 			serverResponse: `invalid json{`,
 			wantErr:        true,
-			errContains:    "failed to decode logs response",
+			errContains:    "failed to decode response",
 		},
 		{
 			name: "internal server error",
@@ -1183,7 +1184,7 @@ func TestClient_fetchLogs_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusInternalServerError,
 			serverResponse: `{"error": "internal error"}`,
 			wantErr:        true,
-			errContains:    "logs request failed",
+			errContains:    "API error",
 		},
 	}
 
@@ -1227,8 +1228,8 @@ func TestClient_fetchLogs_NetworkError(t *testing.T) {
 		t.Fatal("Expected error for network failure, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to fetch logs") {
-		t.Errorf("Expected 'failed to fetch logs' error, got %v", err)
+	if !strings.Contains(err.Error(), "failed to connect to API") {
+		t.Errorf("Expected connection error, got %v", err)
 	}
 }
 
@@ -1268,7 +1269,7 @@ func TestClient_GetProcessConfig_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusNotFound,
 			serverResponse: `{"error": "not found"}`,
 			wantErr:        true,
-			errContains:    "process request failed",
+			errContains:    "API error",
 		},
 		{
 			name:           "invalid JSON response",
@@ -1276,7 +1277,7 @@ func TestClient_GetProcessConfig_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusOK,
 			serverResponse: `invalid json{`,
 			wantErr:        true,
-			errContains:    "failed to decode process response",
+			errContains:    "failed to decode response",
 		},
 		{
 			name:           "missing config in response",
@@ -1292,7 +1293,7 @@ func TestClient_GetProcessConfig_ErrorPaths(t *testing.T) {
 			serverStatus:   http.StatusInternalServerError,
 			serverResponse: `{"error": "server error"}`,
 			wantErr:        true,
-			errContains:    "process request failed",
+			errContains:    "API error",
 		},
 	}
 
@@ -1339,8 +1340,8 @@ func TestClient_GetProcessConfig_NetworkError(t *testing.T) {
 		t.Fatal("Expected error for network failure, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "failed to fetch process") {
-		t.Errorf("Expected 'failed to fetch process' error, got %v", err)
+	if !strings.Contains(err.Error(), "failed to connect to API") {
+		t.Errorf("Expected connection error, got %v", err)
 	}
 }
 
@@ -1787,5 +1788,31 @@ func TestClient_GetOneshotHistory(t *testing.T) {
 				t.Errorf("GetOneshotHistory() got %d results, want %d", len(results), tt.wantCount)
 			}
 		})
+	}
+}
+
+// TestClient_APIError_Typed verifies non-2xx responses surface as a typed
+// *APIError carrying the status code and the server's error message, so callers
+// get structured errors instead of a raw JSON dump (DX-7).
+func TestClient_APIError_Typed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "process not found"})
+	}))
+	defer srv.Close()
+
+	err := New(srv.URL, "").StartProcess("ghost")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("want *APIError, got %T (%v)", err, err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Errorf("StatusCode = %d, want 404", apiErr.StatusCode)
+	}
+	if apiErr.Message != "process not found" {
+		t.Errorf("Message = %q, want %q", apiErr.Message, "process not found")
 	}
 }
