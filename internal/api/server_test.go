@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -23,6 +24,7 @@ import (
 	"errors"
 	"github.com/cboxdk/init/internal/audit"
 	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/process"
 	"github.com/cboxdk/init/internal/schedule"
 )
@@ -4882,5 +4884,63 @@ func TestRedactProcessEnv(t *testing.T) {
 	}
 	if cfg.Env["EMPTY_TOKEN"] != "" {
 		t.Errorf("empty value should stay empty, got %q", cfg.Env["EMPTY_TOKEN"])
+	}
+}
+
+// TestServer_HandleLogStream_StreamsBroadcast exercises the SSE log pipeline
+// end to end: it connects to the stream handler, broadcasts a log entry through
+// the manager, and asserts the entry is delivered as an SSE data frame (TEST-6,
+// covering handleLogStream + SubscribeLogs + LogBroadcaster).
+func TestServer_HandleLogStream_StreamsBroadcast(t *testing.T) {
+	s := createTestServer(t, "", nil)
+	ts := httptest.NewServer(http.HandlerFunc(s.handleLogStream))
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL) //nolint:bodyclose // closed via the defer below; bodyclose loses track across the reader goroutine
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
+		t.Fatalf("Content-Type = %q, want text/event-stream", ct)
+	}
+
+	got := make(chan struct{}, 1)
+	go func() {
+		r := bufio.NewReader(resp.Body)
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				return
+			}
+			if strings.HasPrefix(line, "data: ") && strings.Contains(line, "hello-sse") {
+				select {
+				case got <- struct{}{}:
+				default:
+				}
+				return
+			}
+		}
+	}()
+
+	// Broadcast repeatedly so we don't race the handler's Subscribe.
+	deadline := time.After(3 * time.Second)
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-got:
+			return // delivered
+		case <-deadline:
+			t.Fatal("did not receive the broadcast log entry over SSE")
+		case <-tick.C:
+			s.manager.LogBroadcaster().Broadcast(logger.LogEntry{
+				Timestamp:   time.Now(),
+				ProcessName: "web",
+				Stream:      "stdout",
+				Level:       "info",
+				Message:     "hello-sse",
+			})
+		}
 	}
 }
