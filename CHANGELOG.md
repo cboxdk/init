@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A "public" name no longer exempts a real secret.** The public-value
+  exemption was checked first, so `RECAPTCHA_SITE_SECRET`, `SITE_PRIVATE_KEY`
+  and `PUBLIC_SECRET_KEY` were returned in cleartext. An explicit secret word now
+  always wins; the exemption only overrides the weak "ends in key" match.
+- **A readiness-only health check no longer restarts the process.** `mode:
+  readiness` is documented as gating dependents, but a failing probe still killed
+  and restarted the service. It now only gates readiness; `liveness` and the
+  default `both` still restart.
+- **A failed restart no longer strands its dependents.** When a replacement
+  instance could not be started, readiness was left re-armed but never resolved
+  and the all-processes-dead sweep was not run, so dependents waited out the full
+  dependency timeout and the container could idle with no workload. The failure
+  now resolves readiness and triggers the sweep.
+- **A dead long-running dependency is no longer reported ready.** A process with
+  no health check answered "ready" immediately even when all its instances had
+  exited; it now reports that readiness is impossible.
+- **A reload that cannot stop a process aborts instead of duplicating it.** The
+  stop failure was logged and the reload continued, replacing the supervisor
+  entry — leaving the old process running with nothing managing it, alongside a
+  new copy. The reload now refuses and leaves the running configuration in place.
+
+### Fixed
+
 - **Public keys are no longer masked as secrets.** `PUBLIC_KEY`,
   `STRIPE_PUBLISHABLE_KEY`, `RECAPTCHA_SITE_KEY` and frontend-exposed variables
   (`MIX_*`, `VITE_*`, `NEXT_PUBLIC_*`) are published by definition, so hiding

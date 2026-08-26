@@ -1112,24 +1112,37 @@ func urlHasCredentials(value string) bool {
 	return hasPassword
 }
 
-// publicKeyPattern marks values that merely *look* like secrets but are meant to
-// be published — a publishable/site/public key, or a frontend-exposed variable
-// (Laravel Mix/Vite, Next.js). Masking these only hides information the operator
-// needs, and they are safe by definition.
-var publicKeyPattern = regexp.MustCompile(`(?i)(^|[_-])(public|publishable|site)([_-]|$)|^(mix|vite|next_public|react_app|vue_app|nuxt_public)[_-]`)
+// frontendPublicPattern matches variables a framework publishes to the browser
+// by contract (Laravel Mix/Vite, Next.js, CRA, Nuxt). These cannot hold a
+// server-side secret, so they are never masked.
+var frontendPublicPattern = regexp.MustCompile(`(?i)^(mix|vite|next_public|react_app|vue_app|nuxt_public)[_-]`)
+
+// publicWordPattern marks values that merely *look* like secrets because they end
+// in "key" but are published by definition (a publishable/site/public key). It
+// only overrides the weak, ends-in-key match — a name that also carries a real
+// secret word (RECAPTCHA_SITE_SECRET, SITE_PRIVATE_KEY) is still masked.
+var publicWordPattern = regexp.MustCompile(`(?i)(^|[_-])(public|publishable|site)([_-]|$)`)
 
 // shouldRedactEnv decides whether an env var's value must be masked.
 func shouldRedactEnv(key, value string) bool {
 	if value == "" {
 		return false
 	}
-	// An explicitly public value is never masked, even if it contains "key".
-	if publicKeyPattern.MatchString(key) {
+	// Framework-published variables can't hold a server-side secret.
+	if frontendPublicPattern.MatchString(key) {
 		return false
 	}
-	if secretEnvKeyPattern.MatchString(key) ||
-		shortSecretKeyPattern.MatchString(key) ||
-		ambiguousSecretKeyPattern.MatchString(key) {
+	// An explicit secret word always wins, even alongside "public"/"site" —
+	// RECAPTCHA_SITE_SECRET and SITE_PRIVATE_KEY are secrets.
+	if secretEnvKeyPattern.MatchString(key) || shortSecretKeyPattern.MatchString(key) {
+		return true
+	}
+	// Otherwise a "public"/"publishable"/"site" name overrides the weak
+	// ends-in-key/auth/pat match.
+	if publicWordPattern.MatchString(key) {
+		return false
+	}
+	if ambiguousSecretKeyPattern.MatchString(key) {
 		return true
 	}
 	return credentialURLKeyPattern.MatchString(key) && urlHasCredentials(value)
