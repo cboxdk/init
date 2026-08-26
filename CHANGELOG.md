@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Startup no longer mixes log formats or claims the config is valid before it
+  loads.** The permission-setup and runtime-validation phases ran before the
+  logger was configured, so they logged in slog's text format while everything
+  after config load was JSON — one startup, two formats. A structured logger is
+  now bootstrapped from the environment (`LOG_FORMAT`/`LOG_LEVEL`, or the
+  `CBOX_INIT_GLOBAL_*` overrides) before those phases, then refined from the
+  config. The runtime php-fpm/nginx validation also logged a generic "All
+  configurations valid", which read as if the cbox-init config had passed right
+  before a "Failed to load configuration"; it now names the runtime service
+  configs explicitly. (DX-9)
+
+### Fixed
+
 - **The Laravel scaffold no longer generates a queue worker that races Horizon.**
   `scaffold laravel` enabled both Horizon and a raw `queue:work --queue=default`
   worker by default. Horizon supervises its own workers for every queue, so the
