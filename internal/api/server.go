@@ -25,6 +25,23 @@ import (
 // DefaultMaxRequestBodySize is the default request body size limit (8MB)
 const DefaultMaxRequestBodySize = 8 * 1024 * 1024 // 8MB
 
+// MaxLogLimit bounds the ?limit= parameter on log endpoints. Without it a single
+// request could ask the manager to pre-allocate len(processes)*limit entries — a
+// multi-GB allocation (or an integer overflow) that is fatal in PID 1. Matches
+// the cap already enforced on the metrics-history endpoint.
+const MaxLogLimit = 10000
+
+// clampLogLimit bounds a positive, caller-supplied log limit to MaxLogLimit.
+// Parsing stays lenient (a non-numeric or non-positive limit falls back to the
+// endpoint default); only oversized values are clamped, so a pathological
+// ?limit=1000000000 can't drive a huge allocation.
+func clampLogLimit(limit int) int {
+	if limit > MaxLogLimit {
+		return MaxLogLimit
+	}
+	return limit
+}
+
 // rateLimiter implements a token bucket rate limiter per client IP
 type rateLimiter struct {
 	visitors        map[string]*visitor
@@ -191,6 +208,7 @@ type Server struct {
 	rateLimiter        *rateLimiter
 	aclConfig          *config.ACLConfig
 	aclChecker         *acl.Checker
+	aclInitErr         error // ACL was enabled but its checker failed to build; fail closed at Start
 	tlsConfig          *config.TLSConfig
 	tlsManager         *tlsmgr.Manager
 	auditLogger        *audit.Logger
@@ -212,12 +230,18 @@ type Server struct {
 // Rate limiting is always enabled at 100 requests/second with burst of 200.
 // ACL is only applied to TCP connections; Unix socket relies on file permissions.
 func NewServer(port int, socketPath string, auth string, aclCfg *config.ACLConfig, tlsCfg *config.TLSConfig, auditEnabled bool, maxRequestBodySize int64, manager *process.Manager, log *slog.Logger) *Server {
-	// Create ACL checker if enabled
+	// Create ACL checker if enabled. If the operator asked for an ACL but it
+	// cannot be built (a malformed CIDR, say), we must NOT silently proceed with
+	// no ACL — that fails open and exposes the endpoint the operator was trying
+	// to lock down. The error is remembered and returned from Start/StartSocketOnly
+	// so the server refuses to come up.
 	var aclChecker *acl.Checker
+	var aclInitErr error
 	if aclCfg != nil && aclCfg.Enabled {
 		checker, err := acl.NewChecker(aclCfg)
 		if err != nil {
-			log.Error("Failed to create ACL checker", "error", err)
+			log.Error("ACL is enabled but its configuration is invalid; the server will refuse to start", "error", err)
+			aclInitErr = fmt.Errorf("invalid ACL configuration: %w", err)
 		} else {
 			aclChecker = checker
 			log.Info("ACL enabled", "mode", aclCfg.Mode, "allow_count", len(aclCfg.AllowList), "deny_count", len(aclCfg.DenyList))
@@ -242,6 +266,7 @@ func NewServer(port int, socketPath string, auth string, aclCfg *config.ACLConfi
 		maxRequestBodySize: maxRequestBodySize,
 		aclConfig:          aclCfg,
 		aclChecker:         aclChecker,
+		aclInitErr:         aclInitErr,
 		tlsConfig:          tlsCfg,
 		manager:            manager,
 		logger:             log,
@@ -270,6 +295,10 @@ func (s *Server) listenAddr() string {
 
 // Start starts the API server (both TCP and Unix socket if configured)
 func (s *Server) Start(ctx context.Context) error {
+	if s.aclInitErr != nil {
+		return s.aclInitErr
+	}
+
 	mux := http.NewServeMux()
 
 	// API routes with full middleware stack: panicRecovery -> bodyLimit -> rateLimit -> auth -> handler
@@ -989,7 +1018,7 @@ func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request, processNa
 	limit := 100 // Default limit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
+			limit = clampLogLimit(parsedLimit)
 		}
 	}
 
@@ -1097,7 +1126,7 @@ func (s *Server) handleStackLogs(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
+			limit = clampLogLimit(parsedLimit)
 		}
 	}
 

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -87,7 +88,44 @@ func (c *Config) validateGlobal() error {
 	if c.Global.LogFormat != "json" && c.Global.LogFormat != "text" {
 		return fmt.Errorf("invalid log_format: %s", c.Global.LogFormat)
 	}
+	if err := c.validateAPIExposure(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validateAPIExposure refuses to start an unauthenticated management API on a
+// non-loopback interface. The API can add and stop processes and rewrite the
+// config, so exposing it beyond localhost without a bearer token or an IP ACL is
+// a remote-control-plane exposure, not a convenience. Loopback binds (the
+// default) and the local Unix socket are unaffected.
+func (c *Config) validateAPIExposure() error {
+	if !c.Global.APIEnabledValue() {
+		return nil
+	}
+	if isLoopbackHost(c.Global.APIHost) {
+		return nil
+	}
+	aclEnabled := c.Global.APIACL != nil && c.Global.APIACL.Enabled
+	if c.Global.APIAuth == "" && !aclEnabled {
+		return fmt.Errorf("api_host %q exposes the management API beyond loopback with no authentication: "+
+			"set api_auth (bearer token) or api_acl (IP allowlist), or bind api_host to 127.0.0.1",
+			c.Global.APIHost)
+	}
+	return nil
+}
+
+// isLoopbackHost reports whether host binds only the loopback interface. An
+// empty host is treated as loopback because SetDefaults fills it with 127.0.0.1.
+func isLoopbackHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "", "127.0.0.1", "::1", "localhost":
+		return true
+	}
+	if ip := net.ParseIP(strings.TrimSpace(host)); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 // validateHooks validates all lifecycle hook lists

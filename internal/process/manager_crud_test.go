@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -911,5 +912,40 @@ func TestManager_GetStackLogs(t *testing.T) {
 
 			t.Logf("Logs from %d different processes", len(processNames))
 		})
+	}
+}
+
+// A pathological ?limit= must not make GetStackLogs pre-allocate
+// len(processes)*limit entries — that either requests a multi-GB backing array
+// or overflows negative, and a failed make() is fatal in PID 1. With processes
+// registered, the old code would OOM/panic on this input; the capped prealloc
+// returns a bounded result.
+func TestManager_GetStackLogs_HugeLimitIsBounded(t *testing.T) {
+	cfg := &config.Config{
+		Global: config.GlobalConfig{
+			ShutdownTimeout: 30, LogLevel: "error", MaxRestartAttempts: 3, RestartBackoff: 5,
+		},
+		Processes: map[string]*config.Process{
+			"a": {Enabled: true, InitialState: "running", Command: []string{"sleep", "1"}, Restart: "never", Scale: 1},
+			"b": {Enabled: true, InitialState: "running", Command: []string{"sleep", "1"}, Restart: "never", Scale: 1},
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	manager := NewManager(cfg, logger, audit.NewLogger(logger, false))
+	if err := manager.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = manager.Shutdown(shutdownCtx)
+	}()
+
+	// A billion. Old code: make([]LogEntry, 0, 2_000_000_000) -> fatal.
+	logs := manager.GetStackLogs(1_000_000_000)
+
+	// No crash, and the result is bounded by what actually exists, not the limit.
+	if len(logs) > 100000 {
+		t.Errorf("GetStackLogs returned %d entries for an empty-ish stack; result should reflect real logs, not the limit", len(logs))
 	}
 }

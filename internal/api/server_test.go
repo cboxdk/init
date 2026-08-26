@@ -4818,3 +4818,15 @@ func TestServer_RoutePostRequest_SignalAction(t *testing.T) {
 		t.Errorf("signal action not routed: %s", w.Body.String())
 	}
 }
+
+func TestClampLogLimit(t *testing.T) {
+	if got := clampLogLimit(50); got != 50 {
+		t.Errorf("clampLogLimit(50) = %d, want 50 (under cap, unchanged)", got)
+	}
+	if got := clampLogLimit(MaxLogLimit); got != MaxLogLimit {
+		t.Errorf("clampLogLimit(MaxLogLimit) = %d, want %d", got, MaxLogLimit)
+	}
+	if got := clampLogLimit(1_000_000_000); got != MaxLogLimit {
+		t.Errorf("clampLogLimit(1e9) = %d, want clamp to %d", got, MaxLogLimit)
+	}
+}

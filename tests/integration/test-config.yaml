@@ -12,6 +12,12 @@ global:
 
   api_enabled: true
   api_port: 9180
+  # The workload test publishes this port and reaches it from the host, so the
+  # API must bind all interfaces inside the container. Binding non-loopback now
+  # requires authentication (or an ACL); the unauthenticated /health endpoint the
+  # test curls is served regardless.
+  api_host: 0.0.0.0
+  api_auth: integration-test-token
 
 processes:
   # Simple sleep process for testing (short duration for tests)
