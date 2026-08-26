@@ -285,7 +285,15 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 	// cannot stop is still running the old definition, so abort before swapping
 	// the config rather than starting a second copy alongside it.
 	if failed := m.stopReloadProcesses(ctx, stopSet); len(failed) > 0 {
-		return fmt.Errorf("refusing to reload: could not stop %v (still running the previous configuration; running config unchanged)", failed)
+		// Some processes were already stopped before this one refused to. Bring
+		// them back on their existing definitions so the abort really is a
+		// no-op, rather than leaving half the stack down.
+		m.logger.Error("Reload could not stop a process; restoring the ones already stopped", "processes", failed)
+		restoreFailures := m.rollbackReload(ctx, oldCfg, stopSet)
+		if restoreFailures > 0 {
+			return fmt.Errorf("reload aborted: could not stop %v, and %d process(es) could not be restarted — they are stopped", failed, restoreFailures)
+		}
+		return fmt.Errorf("reload aborted: could not stop %v (they are still running the previous configuration, which is unchanged)", failed)
 	}
 
 	// Update config
@@ -346,6 +354,7 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 	// Tear down whatever is currently running for the touched processes, in
 	// reverse dependency order so dependents stop before what they depend on.
 	stopFailures := 0
+	unstoppable := map[string]bool{}
 	stopTouched := func(name string) {
 		sup, ok := m.processes[name]
 		if !ok {
@@ -353,11 +362,13 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 		}
 		m.unregisterScheduledProcess(name)
 		if err := sup.Stop(rbCtx); err != nil {
-			// A process we could not stop may still be running under the failed
-			// configuration, so this counts as an unrestored process — otherwise
-			// the rollback would report success while a stale process lives on.
+			// Still running under the failed configuration. Keep its supervisor
+			// entry — dropping it would orphan a live process with nothing
+			// managing it — and skip restoring this name below.
 			m.logger.Error("Rollback: failed to stop process", "name", name, "error", err)
 			stopFailures++
+			unstoppable[name] = true
+			return
 		}
 		delete(m.processes, name)
 	}
@@ -394,6 +405,9 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 	for _, name := range order {
 		if !touched[name] {
 			continue
+		}
+		if unstoppable[name] {
+			continue // still running the old process; do not start a second copy
 		}
 		procCfg, ok := oldCfg.Processes[name]
 		if !ok || !procCfg.Enabled {
