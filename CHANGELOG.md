@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Resource-metrics history is no longer O(n²) to read.** `TimeSeriesBuffer.GetRange`
+  prepended each sample to a growing slice, reallocating and copying the whole
+  result every iteration (~260k element copies for a full 720-sample read). It now
+  appends newest-first and reverses once.
 - **The log writer is now thread-safe, and partial lines are assembled
   correctly.** `ProcessWriter.Write` mutated an unsynchronized buffer, so the
   scheduled-job path — which hands the *same* writer to both `cmd.Stdout` and
