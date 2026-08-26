@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The process-detail API redacts secret-looking environment variables.**
+  `GET /api/v1/processes/{name}` returned the process's full `env` in cleartext,
+  so an authenticated operator (or anything with API access) saw values like
+  `DB_PASSWORD`, `API_TOKEN`, or `AWS_SECRET_KEY`. Values whose variable name
+  matches a secret pattern (password/secret/token/credential/api-key/access-key/
+  private-key/auth) are now masked as `***REDACTED***` in the response;
+  non-secret vars and the running configuration are unaffected. (SEC-4)
+
 ### Fixed
 
 - **Per-process CPU% is now the recent usage, not a lifetime average.** The

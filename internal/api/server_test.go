@@ -4852,3 +4852,35 @@ func TestClampLogLimit(t *testing.T) {
 		t.Errorf("clampLogLimit(1e9) = %d, want clamp to %d", got, MaxLogLimit)
 	}
 }
+
+// TestRedactProcessEnv verifies secret-looking env vars are masked in API
+// responses while ordinary ones and empty values are left as-is (SEC-4).
+func TestRedactProcessEnv(t *testing.T) {
+	cfg := &config.Process{Env: map[string]string{
+		"DB_PASSWORD":    "hunter2",
+		"API_TOKEN":      "abc123",
+		"AWS_SECRET_KEY": "xyz",
+		"STRIPE_APIKEY":  "sk_live",
+		"AUTH_HEADER":    "Bearer z",
+		"LOG_LEVEL":      "info",
+		"PORT":           "9000",
+		"EMPTY_TOKEN":    "",
+	}}
+	redactProcessEnv(cfg)
+
+	const masked = "***REDACTED***"
+	for _, k := range []string{"DB_PASSWORD", "API_TOKEN", "AWS_SECRET_KEY", "STRIPE_APIKEY", "AUTH_HEADER"} {
+		if cfg.Env[k] != masked {
+			t.Errorf("env %s = %q, want redacted", k, cfg.Env[k])
+		}
+	}
+	if cfg.Env["LOG_LEVEL"] != "info" {
+		t.Errorf("LOG_LEVEL was redacted; non-secret keys must be preserved")
+	}
+	if cfg.Env["PORT"] != "9000" {
+		t.Errorf("PORT was redacted; non-secret keys must be preserved")
+	}
+	if cfg.Env["EMPTY_TOKEN"] != "" {
+		t.Errorf("empty value should stay empty, got %q", cfg.Env["EMPTY_TOKEN"])
+	}
+}
