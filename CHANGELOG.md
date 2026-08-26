@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`shutdown.kill_signal` is now honored, and signal names are validated.**
+  The per-process `shutdown.kill_signal` was defaulted to `SIGKILL` but read
+  nowhere — `stopInstance` hard-coded `SIGKILL`, so a configured value did
+  nothing. It is now used to force-kill an instance that overruns its graceful
+  timeout. `parseSignal` recognized only four names and silently coerced
+  everything else (including a valid `SIGUSR2`) to `SIGTERM`; it now understands
+  the full set of forwardable/stop signals in both `SIGTERM` and bare `TERM`
+  spellings, and `check-config` rejects an unknown `shutdown.signal` /
+  `shutdown.kill_signal` instead of letting it silently degrade.
 - **`check-config --json` now emits real JSON.** The flag advertised for CI/CD
   hand-rolled its serialization and printed Go syntax instead — a `[{ … map[errors:0 …] }]`
   dump that no `jq` pipeline or JSON parser could read, and the error path

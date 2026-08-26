@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -1393,12 +1394,14 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 		return nil
 
 	case <-time.After(timeout):
+		killSig := s.killSignal()
 		s.logger.Warn("Process instance did not stop gracefully, force killing",
 			"instance_id", instance.id,
 			"timeout", timeout,
+			"kill_signal", killSig,
 		)
 
-		if err := s.signalProcessGroup(instance, syscall.SIGKILL, "force kill"); err != nil {
+		if err := s.signalProcessGroup(instance, killSig, "force kill"); err != nil {
 			return fmt.Errorf("failed to force kill process group: %w", err)
 		}
 
@@ -1467,6 +1470,17 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 	}
 
 	return s.signalProcessGroup(instance, sig, "shutdown")
+}
+
+// killSignal returns the signal used to force-kill an instance that did not
+// stop within its graceful timeout. Honors the per-process shutdown.kill_signal
+// (defaulted to SIGKILL by config.SetDefaults); falls back to SIGKILL so a
+// process can always be stopped even if the field is somehow empty.
+func (s *Supervisor) killSignal() syscall.Signal {
+	if s.config.Shutdown != nil && s.config.Shutdown.KillSignal != "" {
+		return parseSignal(s.config.Shutdown.KillSignal)
+	}
+	return syscall.SIGKILL
 }
 
 // signalMoot reports whether a signal failed only because the process had
@@ -1767,19 +1781,51 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 }
 
 // parseSignal converts signal name to syscall.Signal
-func parseSignal(name string) syscall.Signal {
-	switch name {
-	case "SIGTERM":
-		return syscall.SIGTERM
-	case "SIGQUIT":
-		return syscall.SIGQUIT
-	case "SIGINT":
-		return syscall.SIGINT
-	case "SIGKILL":
-		return syscall.SIGKILL
-	default:
-		return syscall.SIGTERM
+// signalsByName maps the signal names cbox-init accepts in configuration to
+// their syscall value. Both the "SIGTERM" and bare "TERM" spellings are
+// accepted. Kept to signals that are meaningful to send to a supervised
+// workload; parseSignalStrict rejects anything outside this set.
+var signalsByName = map[string]syscall.Signal{
+	"SIGTERM":  syscall.SIGTERM,
+	"SIGINT":   syscall.SIGINT,
+	"SIGQUIT":  syscall.SIGQUIT,
+	"SIGKILL":  syscall.SIGKILL,
+	"SIGHUP":   syscall.SIGHUP,
+	"SIGUSR1":  syscall.SIGUSR1,
+	"SIGUSR2":  syscall.SIGUSR2,
+	"SIGWINCH": syscall.SIGWINCH,
+	"SIGCONT":  syscall.SIGCONT,
+	"SIGSTOP":  syscall.SIGSTOP,
+	"SIGTSTP":  syscall.SIGTSTP,
+	"SIGABRT":  syscall.SIGABRT,
+}
+
+// parseSignalStrict resolves a configured signal name (case-insensitive, with
+// or without the "SIG" prefix) to its syscall value, returning an error for an
+// unknown name so configuration can be rejected at load time rather than
+// silently coerced.
+func parseSignalStrict(name string) (syscall.Signal, error) {
+	key := strings.ToUpper(strings.TrimSpace(name))
+	if key == "" {
+		return 0, fmt.Errorf("empty signal name")
 	}
+	if !strings.HasPrefix(key, "SIG") {
+		key = "SIG" + key
+	}
+	if sig, ok := signalsByName[key]; ok {
+		return sig, nil
+	}
+	return 0, fmt.Errorf("unknown signal %q", name)
+}
+
+// parseSignal resolves a signal name for runtime use. Unknown names fall back to
+// SIGTERM — configuration is validated with parseSignalStrict at load, so this
+// path should only see valid names; the fallback is defense in depth.
+func parseSignal(name string) syscall.Signal {
+	if sig, err := parseSignalStrict(name); err == nil {
+		return sig
+	}
+	return syscall.SIGTERM
 }
 
 // GetState returns the current supervisor state
