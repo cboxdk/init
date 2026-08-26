@@ -971,6 +971,10 @@ func TestServer_HandleProcesses_MethodNotAllowed(t *testing.T) {
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected 405 for DELETE on /processes, got %d", w.Code)
 	}
+	// RFC 7231 §6.5.5: a 405 MUST advertise the accepted methods.
+	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "GET") || !strings.Contains(allow, "POST") {
+		t.Errorf("405 Allow header = %q, want it to list GET and POST", allow)
+	}
 }
 
 // TestServer_HandleProcesses_PostRouting tests POST routing to handleAddProcess

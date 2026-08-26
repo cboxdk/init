@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **405 responses now include an `Allow` header, and a doubled word in
+  `check-config` is gone.** Every `405 Method Not Allowed` from the management
+  API now advertises the accepted methods as RFC 7231 §6.5.5 requires (clients
+  and proxies rely on it). And the suggestion formatter printed "→ Consider:
+  Consider …" because the suggestions already begin with "Consider"; the
+  redundant prefix is removed. (DX-13)
+
 ## [3.0.0] - 2026-08-26
 
 ### Added
