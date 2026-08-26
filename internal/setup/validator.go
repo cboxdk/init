@@ -25,7 +25,11 @@ func (cv *ConfigValidator) binaryExists(name string) bool {
 
 // ValidateAll validates PHP-FPM and Nginx configurations
 func (cv *ConfigValidator) ValidateAll() error {
-	cv.logger.Info("Validating configurations...")
+	// These messages name the runtime service configs (php-fpm, nginx) explicitly:
+	// a bare "Validating configurations..." / "All configurations valid" reads as
+	// if the cbox-init config itself had been validated, which is misleading when
+	// it appears right before a "Failed to load configuration" from the load below.
+	cv.logger.Info("Validating runtime service configs (php-fpm, nginx)...")
 
 	if err := cv.ValidatePHPFPM(); err != nil {
 		return fmt.Errorf("php-fpm config invalid: %w", err)
@@ -37,7 +41,7 @@ func (cv *ConfigValidator) ValidateAll() error {
 	}
 	cv.logger.Debug("Nginx config valid")
 
-	cv.logger.Info("All configurations valid")
+	cv.logger.Info("Runtime service configs valid")
 	return nil
 }
 

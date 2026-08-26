@@ -62,6 +62,16 @@ func runServe(cmd *cobra.Command, args []string) {
 	fmt.Fprintf(os.Stderr, "\n🚀 Cbox Init v%s\n", version)
 	fmt.Fprintf(os.Stderr, "   Production-grade process supervisor for Docker containers\n\n")
 
+	// Bootstrap a structured logger before loading the config, so the setup
+	// phases below emit the same format as the rest of startup. Previously they
+	// logged through slog.Default's text handler while everything after config
+	// load was JSON, so a single startup mixed two log formats. Level and format
+	// come from env here (the config can only refine them once it is loaded).
+	slog.SetDefault(logger.New(
+		firstNonEmptyEnv("CBOX_INIT_GLOBAL_LOG_LEVEL", "LOG_LEVEL", "info"),
+		firstNonEmptyEnv("CBOX_INIT_GLOBAL_LOG_FORMAT", "LOG_FORMAT", "json"),
+	))
+
 	// Determine working directory
 	workdir := os.Getenv("WORKDIR")
 	if workdir == "" {
@@ -356,6 +366,18 @@ func runServe(cmd *cobra.Command, args []string) {
 			os.Exit(code)
 		}
 	}
+}
+
+// firstNonEmptyEnv returns the value of the first set (non-empty) environment
+// variable among names, or fallback if none are set.
+func firstNonEmptyEnv(name1, name2, fallback string) string {
+	if v := os.Getenv(name1); v != "" {
+		return v
+	}
+	if v := os.Getenv(name2); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func truthyEnv(name string) bool {
