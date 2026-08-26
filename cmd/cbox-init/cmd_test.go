@@ -334,7 +334,7 @@ processes:
 	// The whole point of --json is that it is machine-readable: it must parse.
 	// The old hand-rolled formatter emitted Go map syntax (map[errors:0 …]),
 	// which passed substring checks but broke every jq pipeline.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
 		t.Fatalf("--json output is not valid JSON: %v\noutput:\n%s", err, output)
 	}
@@ -346,7 +346,7 @@ processes:
 	}
 
 	// Nested summary must itself be a JSON object, not a stringified Go map.
-	summary, ok := parsed["summary"].(map[string]interface{})
+	summary, ok := parsed["summary"].(map[string]any)
 	if !ok {
 		t.Fatalf("summary is not a JSON object: %T", parsed["summary"])
 	}
@@ -600,27 +600,27 @@ func executeCommandWithError(cmd *cobra.Command, args ...string) (string, error)
 func TestPrintJSON_RoundTrips(t *testing.T) {
 	tests := []struct {
 		name  string
-		input map[string]interface{}
+		input map[string]any
 	}{
-		{"strings", map[string]interface{}{"name": "test", "status": "ok"}},
-		{"integers", map[string]interface{}{"count": 42, "port": 9180}},
-		{"booleans", map[string]interface{}{"enabled": true, "disabled": false}},
-		{"nested", map[string]interface{}{
+		{"strings", map[string]any{"name": "test", "status": "ok"}},
+		{"integers", map[string]any{"count": 42, "port": 9180}},
+		{"booleans", map[string]any{"enabled": true, "disabled": false}},
+		{"nested", map[string]any{
 			"version": "1.0",
 			"summary": map[string]int{"errors": 0, "warnings": 2},
 			"issues":  []map[string]string{{"field": "global", "message": "note"}},
 		}},
-		{"strings needing escaping", map[string]interface{}{
+		{"strings needing escaping", map[string]any{
 			"error": "line 2: cannot unmarshal \"thirty\"\n  into int",
 		}},
-		{"empty", map[string]interface{}{}},
+		{"empty", map[string]any{}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, _ := captureOutput(func() { printJSON(tt.input) })
 
-			var parsed map[string]interface{}
+			var parsed map[string]any
 			if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
 				t.Fatalf("printJSON output is not valid JSON: %v\noutput: %q", err, stdout)
 			}
@@ -6532,299 +6532,6 @@ func TestWaitForShutdownOrReloadWithReloadChannel(t *testing.T) {
 	}
 }
 
-// TestResolveConfigPathEnvVar tests ENV variable priority
-func TestResolveConfigPathEnvVar(t *testing.T) {
-	// Set ENV variable
-	os.Setenv("CBOX_INIT_CONFIG", "/custom/env/path.yaml")
-	defer os.Unsetenv("CBOX_INIT_CONFIG")
-
-	result := ResolveConfigPath("")
-	if result.Path != "/custom/env/path.yaml" {
-		t.Errorf("ResolveConfigPath() path = %q, want %q", result.Path, "/custom/env/path.yaml")
-	}
-	if result.Source != "ENV variable" {
-		t.Errorf("ResolveConfigPath() source = %q, want %q", result.Source, "ENV variable")
-	}
-}
-
-// TestResolveConfigPathCLIOverridesEnv tests CLI flag priority over ENV
-func TestResolveConfigPathCLIOverridesEnv(t *testing.T) {
-	os.Setenv("CBOX_INIT_CONFIG", "/env/path.yaml")
-	defer os.Unsetenv("CBOX_INIT_CONFIG")
-
-	result := ResolveConfigPath("/cli/path.yaml")
-	if result.Path != "/cli/path.yaml" {
-		t.Errorf("ResolveConfigPath() path = %q, want %q", result.Path, "/cli/path.yaml")
-	}
-	if result.Source != "CLI flag" {
-		t.Errorf("ResolveConfigPath() source = %q, want %q", result.Source, "CLI flag")
-	}
-}
-
-// TestResolveConfigPathLocalDefault tests local config default
-func TestResolveConfigPathLocalDefault(t *testing.T) {
-	// Ensure no ENV is set
-	os.Unsetenv("CBOX_INIT_CONFIG")
-
-	result := ResolveConfigPath("")
-	// Should fall back to local config (unless system or user config exists)
-	if result.Source != "local config" && result.Source != "user config" && result.Source != "system config" {
-		t.Errorf("ResolveConfigPath() source = %q, want 'local config', 'user config', or 'system config'", result.Source)
-	}
-}
-
-// TestDetermineWorkdirDefault tests default workdir
-func TestDetermineWorkdirDefault(t *testing.T) {
-	os.Unsetenv("WORKDIR")
-	result := DetermineWorkdir()
-	if result != "/var/www/html" {
-		t.Errorf("DetermineWorkdir() = %q, want %q", result, "/var/www/html")
-	}
-}
-
-// TestDetermineWorkdirEnv tests WORKDIR env override
-func TestDetermineWorkdirEnv(t *testing.T) {
-	os.Setenv("WORKDIR", "/custom/workdir")
-	defer os.Unsetenv("WORKDIR")
-
-	result := DetermineWorkdir()
-	if result != "/custom/workdir" {
-		t.Errorf("DetermineWorkdir() = %q, want %q", result, "/custom/workdir")
-	}
-}
-
-// TestResolveAutotuneProfileFromEnv tests profile from ENV
-func TestResolveAutotuneProfileFromEnv(t *testing.T) {
-	os.Setenv("PHP_FPM_AUTOTUNE_PROFILE", "heavy")
-	defer os.Unsetenv("PHP_FPM_AUTOTUNE_PROFILE")
-
-	result := ResolveAutotuneProfile("")
-	if result != "heavy" {
-		t.Errorf("ResolveAutotuneProfile() = %q, want %q", result, "heavy")
-	}
-}
-
-// TestResolveAutotuneProfileCLIOverridesEnv tests CLI overrides ENV
-func TestResolveAutotuneProfileCLIOverridesEnv(t *testing.T) {
-	os.Setenv("PHP_FPM_AUTOTUNE_PROFILE", "heavy")
-	defer os.Unsetenv("PHP_FPM_AUTOTUNE_PROFILE")
-
-	result := ResolveAutotuneProfile("light")
-	if result != "light" {
-		t.Errorf("ResolveAutotuneProfile() = %q, want %q", result, "light")
-	}
-}
-
-// TestGetAutotuneProfileSourceCLI tests CLI source
-func TestGetAutotuneProfileSourceCLI(t *testing.T) {
-	result := GetAutotuneProfileSource("dev")
-	if result != "CLI flag" {
-		t.Errorf("GetAutotuneProfileSource() = %q, want %q", result, "CLI flag")
-	}
-}
-
-// TestGetAutotuneProfileSourceEnv tests ENV source
-func TestGetAutotuneProfileSourceEnv(t *testing.T) {
-	result := GetAutotuneProfileSource("")
-	if result != "ENV var" {
-		t.Errorf("GetAutotuneProfileSource() = %q, want %q", result, "ENV var")
-	}
-}
-
-// TestFormatAutotuneOutputWithThreshold tests threshold display
-func TestFormatAutotuneOutputWithThreshold(t *testing.T) {
-	lines := FormatAutotuneOutput("dev", "CLI flag", 0.8, "config", true)
-	if len(lines) != 2 {
-		t.Errorf("FormatAutotuneOutput() returned %d lines, want 2", len(lines))
-	}
-	if !strings.Contains(lines[0], "dev profile") {
-		t.Errorf("FormatAutotuneOutput() first line = %q, want to contain 'dev profile'", lines[0])
-	}
-	if !strings.Contains(lines[1], "80.0%") {
-		t.Errorf("FormatAutotuneOutput() second line = %q, want to contain '80.0%%'", lines[1])
-	}
-}
-
-// TestFormatAutotuneOutputWithoutThreshold tests no threshold display
-func TestFormatAutotuneOutputWithoutThreshold(t *testing.T) {
-	lines := FormatAutotuneOutput("light", "ENV var", 0, "default", false)
-	if len(lines) != 1 {
-		t.Errorf("FormatAutotuneOutput() returned %d lines, want 1", len(lines))
-	}
-	if !strings.Contains(lines[0], "light profile") {
-		t.Errorf("FormatAutotuneOutput() first line = %q, want to contain 'light profile'", lines[0])
-	}
-}
-
-// TestDetermineScaffoldFilesAll tests all scaffold files
-func TestDetermineScaffoldFilesAll(t *testing.T) {
-	files := DetermineScaffoldFiles(true, true)
-	if len(files) != 3 {
-		t.Errorf("DetermineScaffoldFiles() returned %d files, want 3", len(files))
-	}
-	expected := map[string]bool{"config": true, "docker-compose": true, "dockerfile": true}
-	for _, f := range files {
-		if !expected[f] {
-			t.Errorf("DetermineScaffoldFiles() unexpected file: %q", f)
-		}
-	}
-}
-
-// TestDetermineScaffoldFilesOnlyCompose tests compose only
-func TestDetermineScaffoldFilesOnlyCompose(t *testing.T) {
-	files := DetermineScaffoldFiles(true, false)
-	if len(files) != 2 {
-		t.Errorf("DetermineScaffoldFiles() returned %d files, want 2", len(files))
-	}
-}
-
-// TestDetermineScaffoldFilesOnlyDocker tests dockerfile only
-func TestDetermineScaffoldFilesOnlyDocker(t *testing.T) {
-	files := DetermineScaffoldFiles(false, true)
-	if len(files) != 2 {
-		t.Errorf("DetermineScaffoldFiles() returned %d files, want 2", len(files))
-	}
-}
-
-// TestCheckExistingFilesNone tests no existing files
-func TestCheckExistingFilesNone(t *testing.T) {
-	tmpDir := t.TempDir()
-	files := []string{"config", "docker-compose"}
-	existing := CheckExistingFiles(tmpDir, files)
-	if len(existing) != 0 {
-		t.Errorf("CheckExistingFiles() returned %d files, want 0", len(existing))
-	}
-}
-
-// TestCheckExistingFilesSome tests some existing files
-func TestCheckExistingFilesSome(t *testing.T) {
-	tmpDir := t.TempDir()
-	// Create one file
-	if err := os.WriteFile(filepath.Join(tmpDir, "cbox-init.yaml"), []byte("test"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	files := []string{"config", "docker-compose"}
-	existing := CheckExistingFiles(tmpDir, files)
-	if len(existing) != 1 {
-		t.Errorf("CheckExistingFiles() returned %d files, want 1", len(existing))
-	}
-}
-
-// TestValidatePresetValid tests valid preset
-func TestValidatePresetValid(t *testing.T) {
-	valid, presets := ValidatePreset("laravel")
-	if !valid {
-		t.Error("ValidatePreset('laravel') = false, want true")
-	}
-	if len(presets) == 0 {
-		t.Error("ValidatePreset() returned empty presets")
-	}
-}
-
-// TestValidatePresetInvalid tests invalid preset
-func TestValidatePresetInvalid(t *testing.T) {
-	valid, presets := ValidatePreset("invalid-preset")
-	if valid {
-		t.Error("ValidatePreset('invalid-preset') = true, want false")
-	}
-	if len(presets) == 0 {
-		t.Error("ValidatePreset() returned empty presets")
-	}
-}
-
-// TestExtractGlobalConfigComprehensive tests global config extraction comprehensively
-func TestExtractGlobalConfigComprehensive(t *testing.T) {
-	cfg := &config.Config{
-		Version: "1.0",
-		Global: config.GlobalConfig{
-			LogLevel:        "debug",
-			LogFormat:       "json",
-			ShutdownTimeout: 60,
-			MetricsEnabled:  boolPtr(true),
-			APIEnabled:      boolPtr(true),
-			TracingEnabled:  true,
-		},
-	}
-
-	result := ExtractGlobalConfig(cfg)
-	if result.LogLevel != "debug" {
-		t.Errorf("ExtractGlobalConfig().LogLevel = %q, want %q", result.LogLevel, "debug")
-	}
-	if result.LogFormat != "json" {
-		t.Errorf("ExtractGlobalConfig().LogFormat = %q, want %q", result.LogFormat, "json")
-	}
-	if result.ShutdownTimeout != 60 {
-		t.Errorf("ExtractGlobalConfig().ShutdownTimeout = %d, want %d", result.ShutdownTimeout, 60)
-	}
-	if !result.MetricsEnabled {
-		t.Error("ExtractGlobalConfig().MetricsEnabled = false, want true")
-	}
-	if !result.APIEnabled {
-		t.Error("ExtractGlobalConfig().APIEnabled = false, want true")
-	}
-	if !result.TracingEnabled {
-		t.Error("ExtractGlobalConfig().TracingEnabled = false, want true")
-	}
-}
-
-// TestResolveAutotuneThresholdCLI tests CLI threshold priority
-func TestResolveAutotuneThresholdCLI(t *testing.T) {
-	result := ResolveAutotuneThreshold(0.9, "0.8", 0.7)
-	if result.Threshold != 0.9 {
-		t.Errorf("ResolveAutotuneThreshold() threshold = %f, want %f", result.Threshold, 0.9)
-	}
-	if result.Source != "CLI flag" {
-		t.Errorf("ResolveAutotuneThreshold() source = %q, want %q", result.Source, "CLI flag")
-	}
-}
-
-// TestResolveAutotuneThresholdEnv tests ENV threshold priority
-func TestResolveAutotuneThresholdEnv(t *testing.T) {
-	result := ResolveAutotuneThreshold(0, "0.8", 0.7)
-	if result.Threshold != 0.8 {
-		t.Errorf("ResolveAutotuneThreshold() threshold = %f, want %f", result.Threshold, 0.8)
-	}
-	if result.Source != "ENV variable" {
-		t.Errorf("ResolveAutotuneThreshold() source = %q, want %q", result.Source, "ENV variable")
-	}
-}
-
-// TestResolveAutotuneThresholdConfig tests config threshold priority
-func TestResolveAutotuneThresholdConfig(t *testing.T) {
-	result := ResolveAutotuneThreshold(0, "", 0.7)
-	if result.Threshold != 0.7 {
-		t.Errorf("ResolveAutotuneThreshold() threshold = %f, want %f", result.Threshold, 0.7)
-	}
-	if result.Source != "global config" {
-		t.Errorf("ResolveAutotuneThreshold() source = %q, want %q", result.Source, "global config")
-	}
-}
-
-// TestResolveAutotuneThresholdDefault tests default threshold
-func TestResolveAutotuneThresholdDefault(t *testing.T) {
-	result := ResolveAutotuneThreshold(0, "", 0)
-	if result.Threshold != 0 {
-		t.Errorf("ResolveAutotuneThreshold() threshold = %f, want %f", result.Threshold, 0.0)
-	}
-	if result.Source != "profile default" {
-		t.Errorf("ResolveAutotuneThreshold() source = %q, want %q", result.Source, "profile default")
-	}
-}
-
-// TestResolveAutotuneThresholdInvalidEnv tests invalid ENV threshold
-func TestResolveAutotuneThresholdInvalidEnv(t *testing.T) {
-	result := ResolveAutotuneThreshold(0, "invalid", 0.7)
-	// Invalid ENV should fall through to config
-	if result.Threshold != 0.7 {
-		t.Errorf("ResolveAutotuneThreshold() threshold = %f, want %f", result.Threshold, 0.7)
-	}
-	if result.Source != "global config" {
-		t.Errorf("ResolveAutotuneThreshold() source = %q, want %q", result.Source, "global config")
-	}
-}
-
-// boolPtr returns a pointer to a bool value
 func boolPtr(b bool) *bool {
 	return &b
 }
@@ -6934,7 +6641,7 @@ func TestLogsCommandHelpOutput(t *testing.T) {
 // TestPrintJSON_AllTypes checks printJSON renders every value type as valid,
 // parseable JSON — including nested slices, which the old formatter stringified.
 func TestPrintJSON_AllTypes(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"string_val": "hello",
 		"int_val":    42,
 		"bool_val":   true,
@@ -6943,7 +6650,7 @@ func TestPrintJSON_AllTypes(t *testing.T) {
 
 	stdout, _ := captureOutput(func() { printJSON(data) })
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
 		t.Fatalf("printJSON output is not valid JSON: %v\noutput: %q", err, stdout)
 	}
@@ -6956,7 +6663,7 @@ func TestPrintJSON_AllTypes(t *testing.T) {
 	if parsed["bool_val"] != true {
 		t.Errorf("bool_val = %v, want true", parsed["bool_val"])
 	}
-	arr, ok := parsed["other_val"].([]interface{})
+	arr, ok := parsed["other_val"].([]any)
 	if !ok || len(arr) != 3 {
 		t.Errorf("other_val did not round-trip as a JSON array: %v", parsed["other_val"])
 	}

@@ -123,8 +123,8 @@ func FormatValidationSummary(result *ValidationResult) string {
 }
 
 // FormatValidationJSON formats validation results as JSON (for API/programmatic use)
-func FormatValidationJSON(result *ValidationResult) map[string]interface{} {
-	return map[string]interface{}{
+func FormatValidationJSON(result *ValidationResult) map[string]any {
+	return map[string]any{
 		"passed": !result.HasErrors(),
 		"summary": map[string]int{
 			"errors":      len(result.Errors),

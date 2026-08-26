@@ -39,7 +39,7 @@ func TestLogger_SystemStart(t *testing.T) {
 	auditLogger.LogSystemStart("1.0.0")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestLogger_SystemShutdown(t *testing.T) {
 			auditLogger.LogSystemShutdown(tt.reason, tt.graceful)
 
 			// Parse output
-			var logEntry map[string]interface{}
+			var logEntry map[string]any
 			if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 				t.Fatalf("Failed to parse log output: %v", err)
 			}
@@ -130,7 +130,7 @@ func TestLogger_ProcessStart(t *testing.T) {
 	auditLogger.LogProcessStart("php-fpm", 1234, 5)
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestLogger_ProcessStop(t *testing.T) {
 	auditLogger.LogProcessStop("nginx", 5678, "graceful_shutdown")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestLogger_ProcessCrash(t *testing.T) {
 	auditLogger.LogProcessCrash("horizon", 9999, 137, "SIGKILL")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestLogger_ProcessRestart(t *testing.T) {
 	auditLogger.LogProcessRestart("queue-worker", 1111, 2222, "crash")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestLogger_ProcessScale(t *testing.T) {
 	auditLogger.LogProcessScale("worker", 3, 5, "api_request")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestLogger_APIRequest(t *testing.T) {
 	auditLogger.LogAPIRequest("10.0.1.5", "GET", "/api/v1/status", "user@example.com")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestLogger_APIResponse(t *testing.T) {
 			auditLogger.LogAPIResponse("10.0.1.5", "POST", "/api/v1/process/start", tt.statusCode, 150*time.Millisecond)
 
 			// Parse output
-			var logEntry map[string]interface{}
+			var logEntry map[string]any
 			if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 				t.Fatalf("Failed to parse log output: %v", err)
 			}
@@ -392,7 +392,7 @@ func TestLogger_AuthFailure(t *testing.T) {
 	auditLogger.LogAuthFailure("192.168.1.100", "/api/v1/admin", "invalid bearer token")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestLogger_ACLDeny(t *testing.T) {
 	auditLogger.LogACLDeny("203.0.113.50", "/metrics", "IP not in allow list")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -469,7 +469,7 @@ func TestLogger_RateLimit(t *testing.T) {
 	auditLogger.LogRateLimit("10.0.2.50", "/api/v1/process/restart")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -500,7 +500,7 @@ func TestLogger_ConfigLoad(t *testing.T) {
 	auditLogger.LogConfigLoad("/etc/cbox-init/cbox-init.yaml", 5)
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestLogger_TimestampAutoSet(t *testing.T) {
 	afterLog := time.Now()
 
 	// Parse embedded event JSON to check timestamp
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -563,7 +563,7 @@ func TestLogger_JSONMarshaling(t *testing.T) {
 	auditLogger.LogProcessStart("test-process", 12345, 3)
 
 	// Parse log entry
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -612,7 +612,7 @@ func TestLogger_SystemError(t *testing.T) {
 	auditLogger.LogSystemError("scheduler", "failed to execute cron job")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -647,7 +647,7 @@ func TestLogger_ProcessAdded(t *testing.T) {
 	auditLogger.LogProcessAdded("new-worker", []string{"php", "artisan", "queue:work"}, 3)
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -687,7 +687,7 @@ func TestLogger_ProcessRemoved(t *testing.T) {
 	auditLogger.LogProcessRemoved("old-worker")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -719,7 +719,7 @@ func TestLogger_ProcessUpdated(t *testing.T) {
 	auditLogger.LogProcessUpdated("horizon", []string{"php", "artisan", "horizon"}, 5)
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -754,7 +754,7 @@ func TestLogger_ConfigSaved(t *testing.T) {
 	auditLogger.LogConfigSaved("/etc/cbox-init/config.yaml")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}
@@ -789,7 +789,7 @@ func TestLogger_ConfigReloaded(t *testing.T) {
 	auditLogger.LogConfigReloaded("/etc/cbox-init/config.yaml")
 
 	// Parse output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
 		t.Fatalf("Failed to parse log output: %v", err)
 	}

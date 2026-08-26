@@ -39,7 +39,7 @@ func TestSetNestedValue(t *testing.T) {
 	tests := []struct {
 		name  string
 		path  []string
-		value interface{}
+		value any
 	}{
 		{
 			name:  "empty path",
@@ -60,14 +60,14 @@ func TestSetNestedValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			root := make(map[string]interface{})
+			root := make(map[string]any)
 			setNestedValue(root, tt.path, tt.value)
 
 			// For non-empty paths, verify the value was set
 			if len(tt.path) > 0 {
 				current := root
 				for i := 0; i < len(tt.path)-1; i++ {
-					next, ok := current[tt.path[i]].(map[string]interface{})
+					next, ok := current[tt.path[i]].(map[string]any)
 					if !ok {
 						t.Fatalf("Path segment %d not found or not a map", i)
 					}
@@ -85,7 +85,7 @@ func TestParseEnvValue(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  interface{}
+		want  any
 	}{
 		{
 			name:  "empty string",
@@ -100,12 +100,12 @@ func TestParseEnvValue(t *testing.T) {
 		{
 			name:  "JSON array",
 			input: `["item1", "item2"]`,
-			want:  []interface{}{"item1", "item2"},
+			want:  []any{"item1", "item2"},
 		},
 		{
 			name:  "JSON object",
 			input: `{"key": "value"}`,
-			want:  map[string]interface{}{"key": "value"},
+			want:  map[string]any{"key": "value"},
 		},
 		{
 			name:  "boolean true",
@@ -155,10 +155,10 @@ func TestParseEnvValue(t *testing.T) {
 }
 
 // Helper function to compare values of different types
-func equalValues(a, b interface{}) bool {
+func equalValues(a, b any) bool {
 	switch v := a.(type) {
-	case []interface{}:
-		arr, ok := b.([]interface{})
+	case []any:
+		arr, ok := b.([]any)
 		if !ok || len(v) != len(arr) {
 			return false
 		}
@@ -168,8 +168,8 @@ func equalValues(a, b interface{}) bool {
 			}
 		}
 		return true
-	case map[string]interface{}:
-		m, ok := b.(map[string]interface{})
+	case map[string]any:
+		m, ok := b.(map[string]any)
 		if !ok || len(v) != len(m) {
 			return false
 		}
@@ -255,7 +255,7 @@ func TestApplyProcessEnvOverride(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			processes := make(map[string]interface{})
+			processes := make(map[string]any)
 			applyProcessEnvOverride(processes, tt.segment, tt.value)
 
 			if tt.checkKey != "" {
@@ -263,8 +263,8 @@ func TestApplyProcessEnvOverride(t *testing.T) {
 				if strings.Contains(tt.segment, "_ENV_") {
 					// Check environment variable
 					procName := "phpfpm"
-					if proc, ok := processes[procName].(map[string]interface{}); ok {
-						if env, ok := proc["env"].(map[string]interface{}); ok {
+					if proc, ok := processes[procName].(map[string]any); ok {
+						if env, ok := proc["env"].(map[string]any); ok {
 							if env[tt.checkKey] != tt.checkVal {
 								t.Errorf("Env var not set correctly: got %v, want %v", env[tt.checkKey], tt.checkVal)
 							}
@@ -281,29 +281,29 @@ func TestApplyProcessEnvOverride(t *testing.T) {
 func TestDecodeProcessName(t *testing.T) {
 	tests := []struct {
 		name      string
-		processes map[string]interface{}
+		processes map[string]any
 		encoded   string
 		want      string
 	}{
 		{
 			name: "exact match",
-			processes: map[string]interface{}{
-				"php-fpm": map[string]interface{}{},
+			processes: map[string]any{
+				"php-fpm": map[string]any{},
 			},
 			encoded: "PHP_FPM",
 			want:    "php-fpm",
 		},
 		{
 			name: "underscore to dash",
-			processes: map[string]interface{}{
-				"my-process": map[string]interface{}{},
+			processes: map[string]any{
+				"my-process": map[string]any{},
 			},
 			encoded: "MY_PROCESS",
 			want:    "my-process",
 		},
 		{
 			name:      "no match",
-			processes: map[string]interface{}{},
+			processes: map[string]any{},
 			encoded:   "NONEXISTENT",
 			want:      "",
 		},
@@ -363,13 +363,13 @@ func TestApplyEnvOverridesMap_GlobalOverrides(t *testing.T) {
 		os.Unsetenv("CBOX_INIT_GLOBAL_METRICS_PORT")
 	}()
 
-	raw := make(map[string]interface{})
+	raw := make(map[string]any)
 	err := applyEnvOverridesMap(raw)
 	if err != nil {
 		t.Fatalf("applyEnvOverridesMap() error = %v", err)
 	}
 
-	global, ok := raw["global"].(map[string]interface{})
+	global, ok := raw["global"].(map[string]any)
 	if !ok {
 		t.Fatal("global map not created")
 	}
@@ -394,18 +394,18 @@ func TestApplyEnvOverridesMap_ProcessOverrides(t *testing.T) {
 		os.Unsetenv("CBOX_INIT_PROCESS_PHPFPM_ENV_DB_HOST")
 	}()
 
-	raw := make(map[string]interface{})
+	raw := make(map[string]any)
 	err := applyEnvOverridesMap(raw)
 	if err != nil {
 		t.Fatalf("applyEnvOverridesMap() error = %v", err)
 	}
 
-	processes, ok := raw["processes"].(map[string]interface{})
+	processes, ok := raw["processes"].(map[string]any)
 	if !ok {
 		t.Fatal("processes map not created")
 	}
 
-	phpfpm, ok := processes["phpfpm"].(map[string]interface{})
+	phpfpm, ok := processes["phpfpm"].(map[string]any)
 	if !ok {
 		t.Fatal("phpfpm process not created")
 	}
@@ -414,7 +414,7 @@ func TestApplyEnvOverridesMap_ProcessOverrides(t *testing.T) {
 		t.Errorf("scale = %v, want 10", phpfpm["scale"])
 	}
 
-	env, ok := phpfpm["env"].(map[string]interface{})
+	env, ok := phpfpm["env"].(map[string]any)
 	if !ok {
 		t.Fatal("env map not created")
 	}

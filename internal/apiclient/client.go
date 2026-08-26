@@ -366,9 +366,9 @@ func (c *Client) AddProcess(ctx context.Context, name string, command []string, 
 	url := c.getURL("/api/v1/processes")
 
 	// Build request body matching API expectations
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"name": name,
-		"process": map[string]interface{}{
+		"process": map[string]any{
 			"enabled": enabled,
 			"command": command,
 			"scale":   scale,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -202,7 +203,7 @@ func (c *Config) validateGlobalBasicSettings(result *ValidationResult) {
 
 	// Log level
 	validLogLevels := []string{"debug", "info", "warn", "error"}
-	if !contains(validLogLevels, c.Global.LogLevel) {
+	if !slices.Contains(validLogLevels, c.Global.LogLevel) {
 		result.AddError("global.log_level", fmt.Sprintf("Invalid log level: %s", c.Global.LogLevel), fmt.Sprintf("Must be one of: %s", strings.Join(validLogLevels, ", ")))
 	} else if c.Global.LogLevel == "debug" {
 		result.AddWarning("global.log_level", "Debug logging enabled in production may impact performance", "Use 'info' level for production deployments")
@@ -210,7 +211,7 @@ func (c *Config) validateGlobalBasicSettings(result *ValidationResult) {
 
 	// Log format
 	validLogFormats := []string{"json", "text"}
-	if !contains(validLogFormats, c.Global.LogFormat) {
+	if !slices.Contains(validLogFormats, c.Global.LogFormat) {
 		result.AddError("global.log_format", fmt.Sprintf("Invalid log format: %s", c.Global.LogFormat), fmt.Sprintf("Must be one of: %s", strings.Join(validLogFormats, ", ")))
 	} else if c.Global.LogFormat == "text" {
 		result.AddSuggestion("global.log_format", "Text format is human-readable but not ideal for log aggregation", "Consider 'json' format for production with centralized logging (Elasticsearch, Loki, etc.)")
@@ -324,7 +325,7 @@ func (c *Config) validateGlobalReadinessSettings(result *ValidationResult) {
 
 	// Validate mode
 	validReadinessModes := []string{"all_healthy", "all_running"}
-	if !contains(validReadinessModes, c.Global.Readiness.Mode) {
+	if !slices.Contains(validReadinessModes, c.Global.Readiness.Mode) {
 		result.AddError("global.readiness.mode", fmt.Sprintf("Invalid readiness mode: %s", c.Global.Readiness.Mode), fmt.Sprintf("Must be one of: %s", strings.Join(validReadinessModes, ", ")))
 	}
 
@@ -392,17 +393,17 @@ func (c *Config) validateSingleProcess(name string, proc *Process, result *Valid
 // validateProcessCoreFields validates type, initial_state, and restart policy
 func (c *Config) validateProcessCoreFields(name string, proc *Process, result *ValidationResult) {
 	validTypes := []string{"oneshot", "longrun"}
-	if !contains(validTypes, proc.Type) {
+	if !slices.Contains(validTypes, proc.Type) {
 		result.AddProcessError(name, "type", fmt.Sprintf("Invalid type: %s", proc.Type), fmt.Sprintf("Must be one of: %s", strings.Join(validTypes, ", ")))
 	}
 
 	validStates := []string{"running", "stopped"}
-	if !contains(validStates, proc.InitialState) {
+	if !slices.Contains(validStates, proc.InitialState) {
 		result.AddProcessError(name, "initial_state", fmt.Sprintf("Invalid initial state: %s", proc.InitialState), fmt.Sprintf("Must be one of: %s", strings.Join(validStates, ", ")))
 	}
 
 	validRestartPolicies := []string{"always", "on-failure", "never"}
-	if !contains(validRestartPolicies, proc.Restart) {
+	if !slices.Contains(validRestartPolicies, proc.Restart) {
 		result.AddProcessError(name, "restart", fmt.Sprintf("Invalid restart policy: %s", proc.Restart), fmt.Sprintf("Must be one of: %s", strings.Join(validRestartPolicies, ", ")))
 	}
 }
@@ -469,7 +470,7 @@ func (c *Config) validateProcessLoggingConfig(name string, proc *Process, result
 // validateHealthCheck validates health check configuration
 func (c *Config) validateHealthCheck(processName string, hc *HealthCheck, result *ValidationResult) {
 	validTypes := []string{"tcp", "http", "exec"}
-	if !contains(validTypes, hc.Type) {
+	if !slices.Contains(validTypes, hc.Type) {
 		result.AddProcessError(processName, "health_check.type", fmt.Sprintf("Invalid type: %s", hc.Type), fmt.Sprintf("Must be one of: %s", strings.Join(validTypes, ", ")))
 	}
 
@@ -633,14 +634,4 @@ func (c *Config) validateSecurity(result *ValidationResult) {
 	if !c.Global.AuditEnabled && c.Global.APIEnabledValue() {
 		result.AddSuggestion("global.audit_enabled", "API enabled but audit logging disabled", "Enable audit logging for security event tracking")
 	}
-}
-
-// contains checks if a string slice contains a value
-func contains(slice []string, val string) bool {
-	for _, item := range slice {
-		if item == val {
-			return true
-		}
-	}
-	return false
 }

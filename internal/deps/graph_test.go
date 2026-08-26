@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -137,7 +138,7 @@ func TestGraph_ComplexCycle(t *testing.T) {
 	}
 
 	// Verify cycle path contains all nodes
-	if !contains(cycle, "A") || !contains(cycle, "B") || !contains(cycle, "C") {
+	if !slices.Contains(cycle, "A") || !slices.Contains(cycle, "B") || !slices.Contains(cycle, "C") {
 		t.Errorf("Expected cycle to contain A, B, C, got: %v", cycle)
 	}
 }
@@ -516,7 +517,7 @@ func TestGraph_DuplicateAddNode(t *testing.T) {
 	}
 
 	// Both A and B should be in the result
-	if !contains(order, "A") || !contains(order, "B") {
+	if !slices.Contains(order, "A") || !slices.Contains(order, "B") {
 		t.Errorf("Expected both A and B in result, got: %v", order)
 	}
 }

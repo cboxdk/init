@@ -83,7 +83,7 @@ func EnvOverridesPresent() bool {
 
 // LoadWithEnvExpansion loads config file, expands env vars, and applies ENV overrides
 func LoadWithEnvExpansion(path string) (*Config, error) {
-	rawConfig := map[string]interface{}{}
+	rawConfig := map[string]any{}
 
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -217,19 +217,19 @@ func matchFieldPath(node *fieldNode, tokens []string) ([]string, bool) {
 	return nil, false
 }
 
-func ensureMap(m map[string]interface{}, key string) map[string]interface{} {
+func ensureMap(m map[string]any, key string) map[string]any {
 	val, ok := m[key]
 	if ok {
-		if cast, ok := val.(map[string]interface{}); ok {
+		if cast, ok := val.(map[string]any); ok {
 			return cast
 		}
 	}
-	newMap := map[string]interface{}{}
+	newMap := map[string]any{}
 	m[key] = newMap
 	return newMap
 }
 
-func setNestedValue(root map[string]interface{}, path []string, value interface{}) {
+func setNestedValue(root map[string]any, path []string, value any) {
 	if len(path) == 0 {
 		return
 	}
@@ -240,14 +240,14 @@ func setNestedValue(root map[string]interface{}, path []string, value interface{
 	current[path[len(path)-1]] = value
 }
 
-func parseEnvValue(raw string) interface{} {
+func parseEnvValue(raw string) any {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
 
 	if strings.HasPrefix(raw, "[") || strings.HasPrefix(raw, "{") {
-		var data interface{}
+		var data any
 		if err := json.Unmarshal([]byte(raw), &data); err == nil {
 			return data
 		}
@@ -266,18 +266,18 @@ func parseEnvValue(raw string) interface{} {
 	return raw
 }
 
-func ensureGlobalMap(raw map[string]interface{}) map[string]interface{} {
+func ensureGlobalMap(raw map[string]any) map[string]any {
 	return ensureMap(raw, "global")
 }
 
-func ensureProcessMap(raw map[string]interface{}) map[string]interface{} {
+func ensureProcessMap(raw map[string]any) map[string]any {
 	return ensureMap(raw, "processes")
 }
 
-func applyEnvOverridesMap(raw map[string]interface{}) error {
+func applyEnvOverridesMap(raw map[string]any) error {
 	globalMap := ensureGlobalMap(raw)
 	processesMap := ensureProcessMap(raw)
-	hookCollector := map[string]map[int]map[string]interface{}{}
+	hookCollector := map[string]map[int]map[string]any{}
 
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
@@ -312,7 +312,7 @@ func applyEnvOverridesMap(raw map[string]interface{}) error {
 // collectHookEnvOverride parses one CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD> variable
 // into the collector, keyed by hook-list YAML key and index. Unknown types,
 // indexes, or fields are ignored, matching the behavior of the other prefixes.
-func collectHookEnvOverride(collector map[string]map[int]map[string]interface{}, segment string, value string) {
+func collectHookEnvOverride(collector map[string]map[int]map[string]any, segment string, value string) {
 	var yamlKey string
 	for _, ht := range hookEnvTypes {
 		if strings.HasPrefix(segment, ht.envPrefix) {
@@ -365,15 +365,15 @@ func collectHookEnvOverride(collector map[string]map[int]map[string]interface{},
 }
 
 // hookEnvEntry returns (creating as needed) the collector entry for one hook.
-func hookEnvEntry(collector map[string]map[int]map[string]interface{}, yamlKey string, index int) map[string]interface{} {
+func hookEnvEntry(collector map[string]map[int]map[string]any, yamlKey string, index int) map[string]any {
 	byIndex, ok := collector[yamlKey]
 	if !ok {
-		byIndex = map[int]map[string]interface{}{}
+		byIndex = map[int]map[string]any{}
 		collector[yamlKey] = byIndex
 	}
 	hookMap, ok := byIndex[index]
 	if !ok {
-		hookMap = map[string]interface{}{}
+		hookMap = map[string]any{}
 		byIndex[index] = hookMap
 	}
 	return hookMap
@@ -381,7 +381,7 @@ func hookEnvEntry(collector map[string]map[int]map[string]interface{}, yamlKey s
 
 // applyHookEnvOverrides appends env-defined hooks to the raw config, after any
 // YAML-defined hooks, ordered by their env index within each hook list.
-func applyHookEnvOverrides(raw map[string]interface{}, collector map[string]map[int]map[string]interface{}) {
+func applyHookEnvOverrides(raw map[string]any, collector map[string]map[int]map[string]any) {
 	if len(collector) == 0 {
 		return
 	}
@@ -399,7 +399,7 @@ func applyHookEnvOverrides(raw map[string]interface{}, collector map[string]map[
 		}
 		sort.Ints(indexes)
 
-		list, _ := hooksMap[ht.yamlKey].([]interface{})
+		list, _ := hooksMap[ht.yamlKey].([]any)
 		for _, index := range indexes {
 			list = append(list, byIndex[index])
 		}
@@ -409,17 +409,17 @@ func applyHookEnvOverrides(raw map[string]interface{}, collector map[string]map[
 
 // parseCommandValue parses a command list from an env value: a JSON array
 // (["php","artisan","migrate"]) or a comma-separated list (php,artisan,migrate).
-func parseCommandValue(raw string) interface{} {
+func parseCommandValue(raw string) any {
 	raw = strings.TrimSpace(raw)
 	if strings.HasPrefix(raw, "[") {
-		var arr []interface{}
+		var arr []any
 		if err := json.Unmarshal([]byte(raw), &arr); err == nil {
 			return arr
 		}
 	}
 
 	parts := strings.Split(raw, ",")
-	command := make([]interface{}, 0, len(parts))
+	command := make([]any, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part != "" {
@@ -438,7 +438,7 @@ func buildPathFromKey(segment string, tree *fieldNode) []string {
 	return path
 }
 
-func applyProcessEnvOverride(processes map[string]interface{}, segment string, value string) {
+func applyProcessEnvOverride(processes map[string]any, segment string, value string) {
 	if segment == "" {
 		return
 	}
@@ -490,7 +490,7 @@ func applyProcessEnvOverride(processes map[string]interface{}, segment string, v
 	}
 }
 
-func decodeProcessName(processes map[string]interface{}, encoded string) string {
+func decodeProcessName(processes map[string]any, encoded string) string {
 	target := strings.ToUpper(encoded)
 	for name := range processes {
 		existing := strings.ToUpper(strings.ReplaceAll(name, "-", "_"))

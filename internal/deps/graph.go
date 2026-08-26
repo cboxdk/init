@@ -2,6 +2,7 @@ package deps
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/cboxdk/init/internal/config"
 )
@@ -169,7 +170,7 @@ func (g *Graph) TopologicalSort() ([]string, error) {
 
 		// For each process that depends on this node, reduce its in-degree
 		for dependent, deps := range g.nodes {
-			if contains(deps, node) {
+			if slices.Contains(deps, node) {
 				inDegree[dependent]--
 
 				// If all dependencies satisfied, add to queue
@@ -203,14 +204,4 @@ func sortAlphabetically(nodes []string) {
 		}
 		nodes[j+1] = key
 	}
-}
-
-// contains checks if a slice contains a string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

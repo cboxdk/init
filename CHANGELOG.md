@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Internal cleanup: removed dead code and duplication (no behavior change).**
+  Deleted `cmd/helpers.go` and its tests — ~170 lines of exported helpers with
+  zero production callers (a `package main`, so nothing could import them), whose
+  `ResolveConfigPath` also disagreed with the config-path resolver `serve.go`
+  actually uses. Replaced two identical package-local `contains` helpers
+  (`internal/config`, `internal/deps`) with the standard library's
+  `slices.Contains`, and swept the remaining `interface{}` type literals to the
+  modern `any` spelling across the tree. (ARCH-8, STYLE-9)
+
 ### Fixed
 
 - **The quick-start guide now actually builds and runs.** Its Dockerfile

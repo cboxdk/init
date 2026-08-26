@@ -127,12 +127,12 @@ func TestServer_ListProcesses(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	var response map[string]interface{}
+	var response map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	processes, ok := response["processes"].([]interface{})
+	processes, ok := response["processes"].([]any)
 	if !ok {
 		t.Fatal("Response does not contain processes array")
 	}
@@ -195,7 +195,7 @@ func TestServer_ScaleProcess(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var response map[string]interface{}
+			var response map[string]any
 			_ = json.NewDecoder(w.Body).Decode(&response)
 
 			if tt.expectError {
@@ -224,7 +224,7 @@ func TestServer_ScaleProcessDelta(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if status, ok := resp["status"].(string); !ok || status != "scaled" {
 		t.Fatalf("expected scaled status, got %v", resp["status"])
@@ -428,7 +428,7 @@ func TestServer_HandleRestart(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var response map[string]interface{}
+			var response map[string]any
 			_ = json.NewDecoder(w.Body).Decode(&response)
 
 			if tt.expectError {
@@ -475,7 +475,7 @@ func TestServer_HandleStop(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var response map[string]interface{}
+			var response map[string]any
 			_ = json.NewDecoder(w.Body).Decode(&response)
 
 			if tt.expectError {
@@ -522,7 +522,7 @@ func TestServer_HandleStart(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var response map[string]interface{}
+			var response map[string]any
 			_ = json.NewDecoder(w.Body).Decode(&response)
 
 			if tt.expectError {
@@ -547,7 +547,7 @@ func TestServer_ConfigSave(t *testing.T) {
 	// Should return an error status since no config path is set
 	if w.Code == http.StatusOK {
 		// OK response is also acceptable if SaveConfig succeeds
-		var response map[string]interface{}
+		var response map[string]any
 		_ = json.NewDecoder(w.Body).Decode(&response)
 		if status, ok := response["status"].(string); !ok || status != "saved" {
 			t.Errorf("Expected status 'saved', got %v", response["status"])
@@ -570,7 +570,7 @@ func TestServer_ConfigReload(t *testing.T) {
 	// Should return an error status since no config path is set
 	if w.Code == http.StatusOK {
 		// OK response is also acceptable if ReloadConfig succeeds
-		var response map[string]interface{}
+		var response map[string]any
 		_ = json.NewDecoder(w.Body).Decode(&response)
 		if status, ok := response["status"].(string); !ok || status != "reloaded" {
 			t.Errorf("Expected status 'reloaded', got %v", response["status"])
@@ -750,7 +750,7 @@ func TestServer_InvalidJSON(t *testing.T) {
 		t.Errorf("Expected 400 for invalid JSON, got %d", w.Code)
 	}
 
-	var response map[string]interface{}
+	var response map[string]any
 	_ = json.NewDecoder(w.Body).Decode(&response)
 
 	if _, hasError := response["error"]; !hasError {
@@ -1108,7 +1108,7 @@ func TestServer_HandleGetLogs(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var response map[string]interface{}
+			var response map[string]any
 			_ = json.NewDecoder(w.Body).Decode(&response)
 
 			if tt.expectError {
@@ -1166,7 +1166,7 @@ func TestServer_HandleGetProcess(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var response map[string]interface{}
+			var response map[string]any
 			_ = json.NewDecoder(w.Body).Decode(&response)
 
 			if tt.expectError {
@@ -1239,7 +1239,7 @@ func TestServer_HandleStackLogs(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			var response map[string]interface{}
+			var response map[string]any
 			_ = json.NewDecoder(w.Body).Decode(&response)
 
 			if tt.expectError {
@@ -1332,7 +1332,7 @@ func TestServer_HandleGetLogs_LimitParsing(t *testing.T) {
 			server.handleGetLogs(w, req, "test-process")
 
 			if w.Code == http.StatusOK {
-				var response map[string]interface{}
+				var response map[string]any
 				_ = json.NewDecoder(w.Body).Decode(&response)
 
 				if limit, ok := response["limit"].(float64); ok {
@@ -1370,7 +1370,7 @@ func TestServer_HandleStackLogs_LimitParsing(t *testing.T) {
 			server.handleStackLogs(w, req)
 
 			if w.Code == http.StatusOK {
-				var response map[string]interface{}
+				var response map[string]any
 				_ = json.NewDecoder(w.Body).Decode(&response)
 
 				if limit, ok := response["limit"].(float64); ok {
@@ -1402,7 +1402,7 @@ func TestServer_PanicRecoveryMiddleware(t *testing.T) {
 		t.Errorf("Expected 500 after panic, got %d", w.Code)
 	}
 
-	var response map[string]interface{}
+	var response map[string]any
 	_ = json.NewDecoder(w.Body).Decode(&response)
 
 	if _, hasError := response["error"]; !hasError {
@@ -1416,7 +1416,7 @@ func TestServer_BodyLimitMiddleware(t *testing.T) {
 
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try to read body
-		var data map[string]interface{}
+		var data map[string]any
 		err := json.NewDecoder(r.Body).Decode(&data)
 		if err != nil {
 			server.respondError(w, http.StatusBadRequest, "invalid body")
@@ -2734,7 +2734,7 @@ func TestServer_RespondJSON(t *testing.T) {
 	tests := []struct {
 		name     string
 		status   int
-		data     interface{}
+		data     any
 		wantCode int
 	}{
 		{

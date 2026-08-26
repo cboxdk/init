@@ -226,7 +226,7 @@ func TestJSONParser_ToLogAttrs_ExtractMessage(t *testing.T) {
 	}
 	parser := NewJSONParser(cfg)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"message": "Test message",
 		"level":   "info",
 		"user_id": 123,
@@ -297,7 +297,7 @@ func TestJSONParser_ToLogAttrs_ExtractLevel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data := map[string]interface{}{
+			data := map[string]any{
 				"level": tt.levelStr,
 			}
 
@@ -322,7 +322,7 @@ func TestJSONParser_ToLogAttrs_MergeFields(t *testing.T) {
 	}
 	parser := NewJSONParser(cfg)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"message":  "Test message",
 		"level":    "error",
 		"user_id":  123,
@@ -345,7 +345,7 @@ func TestJSONParser_ToLogAttrs_MergeFields(t *testing.T) {
 	}
 
 	// Check attrs contain expected keys
-	attrMap := make(map[string]interface{})
+	attrMap := make(map[string]any)
 	for _, attr := range attrs {
 		attrMap[attr.Key] = attr.Value.Any()
 	}
@@ -383,7 +383,7 @@ func TestJSONParser_ToLogAttrs_NoExtraction(t *testing.T) {
 	}
 	parser := NewJSONParser(cfg)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"message": "Test message",
 		"level":   "error",
 		"user_id": 123,
@@ -413,7 +413,7 @@ func TestJSONParser_ToLogAttrs_NonStringMessage(t *testing.T) {
 	parser := NewJSONParser(cfg)
 
 	// Message is not a string
-	data := map[string]interface{}{
+	data := map[string]any{
 		"message": 123,
 	}
 
@@ -437,7 +437,7 @@ func TestJSONParser_ToLogAttrs_NonStringLevel(t *testing.T) {
 	parser := NewJSONParser(cfg)
 
 	// Level is not a string
-	data := map[string]interface{}{
+	data := map[string]any{
 		"level": 123,
 	}
 
@@ -498,13 +498,13 @@ func TestJSONParser_ToLogAttrs_ComplexTypes(t *testing.T) {
 	}
 	parser := NewJSONParser(cfg)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"message": "Complex data",
 		"level":   "info",
-		"nested": map[string]interface{}{
+		"nested": map[string]any{
 			"key": "value",
 		},
-		"array": []interface{}{1, 2, 3},
+		"array": []any{1, 2, 3},
 		"bool":  true,
 		"null":  nil,
 	}
