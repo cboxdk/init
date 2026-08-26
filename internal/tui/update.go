@@ -240,13 +240,15 @@ func (m Model) handleProcessActionKeys(key string) (bool, Model, tea.Cmd) {
 		return true, m, nil
 
 	case "r":
+		// Restart is disruptive — confirm first (the help promises confirmation).
 		procName := m.getSelectedProcess()
 		if procName != "" {
-			return true, m, m.triggerAction(actionRestart, procName)
+			m.confirmAction(actionRestart, procName)
 		}
 		return true, m, nil
 
 	case "s":
+		// Start is not destructive, so it runs immediately.
 		info := m.getSelectedProcessInfo()
 		if info == nil {
 			m.showToast("✗ No process selected", 3*time.Second)
@@ -259,6 +261,7 @@ func (m Model) handleProcessActionKeys(key string) (bool, Model, tea.Cmd) {
 		return true, m, m.triggerAction(actionStart, info.name)
 
 	case "x":
+		// Stop is disruptive — confirm first.
 		info := m.getSelectedProcessInfo()
 		if info == nil {
 			m.showToast("✗ No process selected", 3*time.Second)
@@ -268,7 +271,8 @@ func (m Model) handleProcessActionKeys(key string) (bool, Model, tea.Cmd) {
 			m.showToast("Process already stopped", 3*time.Second)
 			return true, m, nil
 		}
-		return true, m, m.triggerAction(actionStop, info.name)
+		m.confirmAction(actionStop, info.name)
+		return true, m, nil
 
 	case "d":
 		procName := m.getSelectedProcess()
@@ -614,9 +618,12 @@ func (m Model) handleProcessDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showToast("✗ No process selected", 3*time.Second)
 			return m, nil
 		}
-		return m, m.triggerAction(actionRestart, m.detailProc)
+		m.confirmAction(actionRestart, m.detailProc)
+		return m, nil
 
-	case "s":
+	case "x":
+		// Stop is spelled `x` here too (it used to be `s`, which meant Start in
+		// the list view — a dangerous inconsistency). Confirm first.
 		if m.detailProc == "" {
 			m.showToast("✗ No process selected", 3*time.Second)
 			return m, nil
@@ -627,7 +634,8 @@ func (m Model) handleProcessDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		return m, m.triggerAction(actionStop, m.detailProc)
+		m.confirmAction(actionStop, m.detailProc)
+		return m, nil
 	}
 
 	var cmd tea.Cmd
