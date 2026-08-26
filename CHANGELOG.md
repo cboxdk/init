@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **TLS `min_version` is now floored at 1.2.** A configured `min_version` of
+  `"TLS 1.0"` or `"TLS 1.1"` was honored verbatim, silently serving the
+  management API over protocol versions deprecated by RFC 8996 and vulnerable to
+  known downgrade/padding attacks. Those values are now clamped up to TLS 1.2 and
+  the operator is warned once at startup that the weaker floor did not take
+  effect. Defaults and `"TLS 1.3"` are unchanged. (SEC-6)
+- **`config/save` refuses to write a config derived from the environment.** The
+  in-memory config holds `${VAR}` placeholders already resolved to their (often
+  secret) values, plus any `CBOX_INIT_*` overrides that live only in the process
+  environment. Saving it — via the API `POST /config/save` or the TUI — wrote
+  those secrets to disk in cleartext and destroyed the templates. `SaveConfig`
+  now detects both cases and refuses with an explanatory error, pointing the
+  operator at the file instead. Configs with no templating or overrides save as
+  before. (SEC-2)
+
 ### Changed
 
 - **BREAKING: the management API now binds loopback by default.** `api_host`

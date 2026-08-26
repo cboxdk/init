@@ -19,7 +19,7 @@ import (
 // Supports ${VAR:-default} and ${VAR} syntax
 func ExpandEnv(content string) string {
 	// Pattern: ${VAR:-default} or ${VAR}
-	pattern := regexp.MustCompile(`\$\{([^}:]+)(?::-([^}]*))?\}`)
+	pattern := envReferencePattern
 
 	return pattern.ReplaceAllStringFunc(content, func(match string) string {
 		parts := pattern.FindStringSubmatch(match)
@@ -40,6 +40,45 @@ func ExpandEnv(content string) string {
 
 		return defaultValue
 	})
+}
+
+// envReferencePattern matches ${VAR} / ${VAR:-default} placeholders — the same
+// syntax ExpandEnv resolves.
+var envReferencePattern = regexp.MustCompile(`\$\{([^}:]+)(?::-([^}]*))?\}`)
+
+// HasEnvReferences reports whether the given config content contains any
+// ${VAR} placeholders. A file that does was loaded with its secrets expanded
+// in memory, so marshalling that in-memory config back to disk would write the
+// resolved secrets in cleartext and destroy the placeholders.
+func HasEnvReferences(content string) bool {
+	return envReferencePattern.MatchString(content)
+}
+
+// envOverridePrefixes are the environment prefixes that inject configuration at
+// load time (see applyEnvOverridesMap). Their presence means the effective
+// in-memory config differs from the file on disk.
+var envOverridePrefixes = []string{
+	"CBOX_INIT_GLOBAL_",
+	"CBOX_INIT_HOOK_",
+	"CBOX_INIT_PROCESS_",
+}
+
+// EnvOverridesPresent reports whether any CBOX_INIT_* override variable is set
+// in the current environment. Saving a config assembled from such overrides
+// would bake the runtime environment into a static file.
+func EnvOverridesPresent() bool {
+	for _, env := range os.Environ() {
+		key := env
+		if i := strings.IndexByte(env, '='); i >= 0 {
+			key = env[:i]
+		}
+		for _, prefix := range envOverridePrefixes {
+			if strings.HasPrefix(key, prefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // LoadWithEnvExpansion loads config file, expands env vars, and applies ENV overrides

@@ -610,6 +610,86 @@ func TestManager_SaveConfig_NoConfigPath(t *testing.T) {
 	}
 }
 
+// TestManager_SaveConfig_RefusesEnvReferences verifies SaveConfig will not
+// overwrite a config file that uses ${VAR} templating: doing so would replace
+// the placeholders with their resolved (possibly secret) values (SEC-2).
+func TestManager_SaveConfig_RefusesEnvReferences(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cbox-init.yaml")
+	// A file that references an env var for a secret-bearing field.
+	raw := "version: \"1.0\"\nglobal:\n  shutdown_timeout: 10\n  log_level: error\napi_auth: \"${CBOX_API_TOKEN}\"\nprocesses: {}\n"
+	if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg := &config.Config{
+		Global:    config.GlobalConfig{ShutdownTimeout: 10, LogLevel: "error", MaxRestartAttempts: 3, RestartBackoff: 1},
+		Processes: map[string]*config.Process{},
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	manager := NewManager(cfg, logger, audit.NewLogger(logger, false))
+	manager.SetConfigPath(path)
+
+	if err := manager.SaveConfig(); err == nil {
+		t.Fatal("expected SaveConfig to refuse a config that uses ${VAR} references")
+	}
+
+	// The file on disk must be untouched — the placeholder must survive.
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if !config.HasEnvReferences(string(after)) {
+		t.Errorf("SaveConfig clobbered the ${VAR} placeholder; file now:\n%s", after)
+	}
+}
+
+// TestManager_SaveConfig_RefusesEnvOverrides verifies SaveConfig refuses to run
+// while any CBOX_INIT_* override is present, since it would bake the runtime
+// environment into a static file (SEC-2).
+func TestManager_SaveConfig_RefusesEnvOverrides(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cbox-init.yaml")
+	if err := os.WriteFile(path, []byte("version: \"1.0\"\nprocesses: {}\n"), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("CBOX_INIT_GLOBAL_LOG_LEVEL", "debug")
+
+	cfg := &config.Config{
+		Global:    config.GlobalConfig{ShutdownTimeout: 10, LogLevel: "error", MaxRestartAttempts: 3, RestartBackoff: 1},
+		Processes: map[string]*config.Process{},
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	manager := NewManager(cfg, logger, audit.NewLogger(logger, false))
+	manager.SetConfigPath(path)
+
+	if err := manager.SaveConfig(); err == nil {
+		t.Fatal("expected SaveConfig to refuse while a CBOX_INIT_* override is set")
+	}
+}
+
+// TestManager_SaveConfig_PlainFileSucceeds is the control: a config with no env
+// templating and no overrides saves normally.
+func TestManager_SaveConfig_PlainFileSucceeds(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cbox-init.yaml")
+	if err := os.WriteFile(path, []byte("version: \"1.0\"\nprocesses: {}\n"), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg := &config.Config{
+		Global:    config.GlobalConfig{ShutdownTimeout: 10, LogLevel: "error", MaxRestartAttempts: 3, RestartBackoff: 1},
+		Processes: map[string]*config.Process{},
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	manager := NewManager(cfg, logger, audit.NewLogger(logger, false))
+	manager.SetConfigPath(path)
+
+	if err := manager.SaveConfig(); err != nil {
+		t.Fatalf("SaveConfig on a plain file should succeed, got: %v", err)
+	}
+}
+
 // TestManager_GetProcessConfig_NotFound tests getting config for non-existent process
 func TestManager_GetProcessConfig_NotFound(t *testing.T) {
 	cfg := &config.Config{

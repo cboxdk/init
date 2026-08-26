@@ -46,6 +46,16 @@ func NewManager(cfg *config.TLSConfig, logger *slog.Logger) (*Manager, error) {
 		stopCh:   make(chan struct{}),
 	}
 
+	// A configured min_version below the 1.2 floor is clamped, not obeyed; say
+	// so once at startup so the operator is not misled into thinking the weaker
+	// floor took effect.
+	if isWeakTLSVersion(cfg.MinVersion) {
+		logger.Warn("Configured TLS min_version is below the enforced floor; raising to TLS 1.2",
+			"configured", cfg.MinVersion,
+			"enforced", "TLS 1.2",
+		)
+	}
+
 	// Load initial certificates
 	if err := m.loadCertificates(); err != nil {
 		return nil, fmt.Errorf("failed to load certificates: %w", err)
@@ -140,20 +150,28 @@ func (m *Manager) GetTLSConfig() (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
-// parseTLSVersion converts string version to tls constant
+// parseTLSVersion converts string version to a tls constant, with a hard floor
+// at TLS 1.2. TLS 1.0 and 1.1 are deprecated (RFC 8996) and broken; honoring a
+// `min_version: "TLS 1.0"` would let a misconfiguration silently downgrade the
+// management API onto a protocol with known attacks. An explicit request for a
+// sub-1.2 floor is clamped to 1.2 rather than obeyed — the caller logs a warning
+// once at startup (see clampedMinVersion). Unknown/empty values also default to
+// 1.2.
 func (m *Manager) parseTLSVersion(version string) uint16 {
 	switch version {
 	case "TLS 1.3":
 		return tls.VersionTLS13
-	case "TLS 1.2":
-		return tls.VersionTLS12
-	case "TLS 1.1":
-		return tls.VersionTLS11
-	case "TLS 1.0":
-		return tls.VersionTLS10
 	default:
-		return tls.VersionTLS12 // Default to TLS 1.2
+		// "TLS 1.2", "TLS 1.1", "TLS 1.0", "", and anything unrecognized all
+		// resolve to the 1.2 floor.
+		return tls.VersionTLS12
 	}
+}
+
+// isWeakTLSVersion reports whether the configured min_version names a protocol
+// below the enforced 1.2 floor, so the caller can warn that it is being raised.
+func isWeakTLSVersion(version string) bool {
+	return version == "TLS 1.1" || version == "TLS 1.0"
 }
 
 // parseClientAuth converts string to tls.ClientAuthType
