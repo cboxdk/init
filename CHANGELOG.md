@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Benchmarks for the hot paths.** The repo had a `make bench` target but no
+  benchmarks, so there was no baseline to catch a performance regression.
+  Added benchmarks for `TimeSeriesBuffer.GetRange`/`Add` (the resource-history
+  read/write — `GetRange` now shows a single allocation, locking in the O(n)
+  fix) and `ProcessWriter.Write` (the per-child log path, incl. cross-write
+  partial-line assembly). (PERF-9)
+
 ### Fixed
 
 - **405 responses now include an `Allow` header, and a doubled word in
