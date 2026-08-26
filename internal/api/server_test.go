@@ -582,40 +582,49 @@ func TestServer_ConfigReload(t *testing.T) {
 	}
 }
 
-// TestRateLimitMiddleware tests rate limiting middleware integration
+// TestRateLimitMiddleware tests rate limiting middleware integration.
+//
+// It installs a deliberately tiny bucket (burst 2, 1 token/s) instead of using
+// the server's default 200/100-per-second one: consuming a 200-request burst
+// takes long enough on a loaded CI runner that the bucket refills mid-loop, so
+// the "next request is limited" assertion flaked. With a 1/s refill, a token
+// cannot come back within the microseconds these requests take.
 func TestRateLimitMiddleware(t *testing.T) {
 	server := createTestServer(t, "", nil)
+	server.rateLimiter.stop() // replace the default limiter and its goroutine
+	server.rateLimiter = newRateLimiter(1, 2)
+	t.Cleanup(server.rateLimiter.stop)
 
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
-
 	handler := server.rateLimitMiddleware(testHandler)
 
-	// First 200 requests should pass (burst capacity)
-	for i := 0; i < 200; i++ {
+	do := func() int {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		w := httptest.NewRecorder()
-
 		handler.ServeHTTP(w, req)
+		return w.Code
+	}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Request %d should pass (within burst), got status %d", i+1, w.Code)
+	// The burst is spent first.
+	for i := 0; i < 2; i++ {
+		if code := do(); code != http.StatusOK {
+			t.Fatalf("request %d within the burst should pass, got %d", i+1, code)
+		}
+	}
+	// With the burst spent and refill at 1/s, the next requests must be limited.
+	limited := false
+	for i := 0; i < 5; i++ {
+		if do() == http.StatusTooManyRequests {
+			limited = true
 			break
 		}
 	}
-
-	// Next request should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.RemoteAddr = "192.168.1.1:12345"
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusTooManyRequests {
-		t.Errorf("Expected rate limit (429), got %d", w.Code)
+	if !limited {
+		t.Error("expected a request past the burst to be rate limited (429)")
 	}
 }
 
