@@ -2142,9 +2142,20 @@ func (s *Supervisor) checkAllInstancesDead() {
 	notifier := s.deathNotifier
 	s.mu.RUnlock()
 
-	if allDead && len(s.instances) > 0 && notifier != nil {
-		s.logger.Debug("All instances dead, notifying manager")
-		notifier(s.name)
+	if allDead && len(s.instances) > 0 {
+		// A long-running process with no live instance cannot serve anything, so
+		// stop advertising it as ready: otherwise a dependent started later (a
+		// reload, a scale-up) would see the previous run's readiness and launch
+		// against a process that is gone. A oneshot is exempt — for it, "all
+		// instances finished" IS the success condition, and its readiness was set
+		// deliberately by handleOneshotExit.
+		if s.config.Type != "oneshot" {
+			s.markReadinessImpossible("all instances exited and will not restart")
+		}
+		if notifier != nil {
+			s.logger.Debug("All instances dead, notifying manager")
+			notifier(s.name)
+		}
 	}
 }
 
