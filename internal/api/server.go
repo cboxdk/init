@@ -1080,7 +1080,12 @@ const RedactedValue = "***REDACTED***"
 // SECRETARY_EMAIL readable. False negatives leak secrets and false positives
 // only hide a setting, so the rule leans towards masking.
 var secretEnvKeyPattern = regexp.MustCompile(
-	`(?i)(password|passwd|secret|token|credentials?|apikey|api[_-]?key|access[_-]?key|private[_-]?key|dsn|salt|passphrase)([^a-z]|$)`)
+	`(?i)(password|passwd|secret|secret[_-]?key|token|credentials?|apikey|api[_-]?key|access[_-]?key|private[_-]?key|auth[_-]?config|dsn|salt|passphrase)([^a-z]|$)`)
+
+// shortSecretKeyPattern covers the abbreviated forms (DB_PASS, MYSQL_PWD).
+// These need a boundary on BOTH sides, or COMPASS_DIR and PASSENGER_ROOT would
+// be masked.
+var shortSecretKeyPattern = regexp.MustCompile(`(?i)(^|[^a-z])(pass|pwd)([^a-z]|$)`)
 
 // ambiguousSecretKeyPattern covers words that are only a secret when they end
 // the name: API_AUTH and APP_KEY are secrets, AUTH_DRIVER and KEYSPACE are not.
@@ -1112,7 +1117,9 @@ func shouldRedactEnv(key, value string) bool {
 	if value == "" {
 		return false
 	}
-	if secretEnvKeyPattern.MatchString(key) || ambiguousSecretKeyPattern.MatchString(key) {
+	if secretEnvKeyPattern.MatchString(key) ||
+		shortSecretKeyPattern.MatchString(key) ||
+		ambiguousSecretKeyPattern.MatchString(key) {
 		return true
 	}
 	return credentialURLKeyPattern.MatchString(key) && urlHasCredentials(value)

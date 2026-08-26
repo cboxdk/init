@@ -341,35 +341,40 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 
 	// Tear down whatever is currently running for the touched processes, in
 	// reverse dependency order so dependents stop before what they depend on.
-	stopOrder := m.getShutdownOrder()
-	for _, name := range stopOrder {
+	stopFailures := 0
+	stopTouched := func(name string) {
+		sup, ok := m.processes[name]
+		if !ok {
+			return
+		}
+		m.unregisterScheduledProcess(name)
+		if err := sup.Stop(rbCtx); err != nil {
+			// A process we could not stop may still be running under the failed
+			// configuration, so this counts as an unrestored process — otherwise
+			// the rollback would report success while a stale process lives on.
+			m.logger.Error("Rollback: failed to stop process", "name", name, "error", err)
+			stopFailures++
+		}
+		delete(m.processes, name)
+	}
+
+	for _, name := range m.getShutdownOrder() {
 		if !touched[name] {
 			continue
 		}
 		m.unregisterScheduledProcess(name)
-		if sup, ok := m.processes[name]; ok {
-			if err := sup.Stop(rbCtx); err != nil {
-				m.logger.Error("Rollback: failed to stop process", "name", name, "error", err)
-			}
-			delete(m.processes, name)
-		}
+		stopTouched(name)
 	}
 	// Anything touched but not in the shutdown order (e.g. only present in the
-	// new config) still needs its scheduler registration cleared.
+	// new config) still needs stopping and its scheduler registration cleared.
 	for name := range touched {
-		if sup, ok := m.processes[name]; ok {
-			m.unregisterScheduledProcess(name)
-			if err := sup.Stop(rbCtx); err != nil {
-				m.logger.Error("Rollback: failed to stop process", "name", name, "error", err)
-			}
-			delete(m.processes, name)
-		}
+		stopTouched(name)
 	}
 
 	// Restore the previous configuration and bring the touched processes that
 	// existed before back up on their old definitions, in dependency order.
 	m.config = oldCfg
-	failures := 0
+	failures := stopFailures
 	order, err := m.getStartupOrder()
 	if err != nil {
 		m.logger.Error("Rollback: could not determine startup order", "error", err)

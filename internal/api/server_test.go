@@ -4873,6 +4873,10 @@ func TestShouldRedactEnv(t *testing.T) {
 		"DBPASSWORD": "x", "MYSQLPASSWORD": "x", "jwtSecret": "x", "CLIENTSECRET": "x",
 		"JWT_PASSPHRASE": "x", "GOOGLE_APPLICATION_CREDENTIALS": "/creds.json",
 		"GITHUB_PAT": "x", "STRIPE_SECRET": "sk",
+		// Abbreviated forms, separator-less compounds, and registry creds.
+		"DB_PASS": "x", "MYSQL_PASS": "x", "REDIS_PASS": "x", "SMTP_PASS": "x",
+		"MYSQL_PWD": "x", "DB_PWD": "x", "SECRETKEY": "x",
+		"DOCKER_AUTH_CONFIG": "{}", "BASIC_AUTH_PASS": "x",
 		"MAIL_DSN":     "smtp://u:p@mail",
 		"DATABASE_URL": "mysql://user:pw@db/app",
 		"REDIS_URL":    "redis://:supersecret@redis:6379/0",
@@ -4884,6 +4888,7 @@ func TestShouldRedactEnv(t *testing.T) {
 		"TOKENIZER_PATH": "/x", "SECRETARY_EMAIL": "a@b.c", "KEYSPACE": "ks",
 		"LOG_LEVEL": "info", "PORT": "9000", "APP_URL": "https://example.com",
 		"SESSION_DRIVER": "redis", "APP_ENV": "prod", "EMPTY_TOKEN": "",
+		"COMPASS_DIR": "/c", "PASSENGER_ROOT": "/p",
 	}
 	for k, v := range secret {
 		if !shouldRedactEnv(k, v) {
