@@ -50,6 +50,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (API + TUI + watcher) could both pass the check and each start `Scale`
   instances. `Supervisor.Start` is now idempotent for an already-running
   supervisor.
+- **The log writer is now thread-safe, and partial lines are assembled
+  correctly.** `ProcessWriter.Write` mutated an unsynchronized buffer, so the
+  scheduled-job path — which hands the *same* writer to both `cmd.Stdout` and
+  `cmd.Stderr`, which os/exec then drives with two concurrent copier goroutines —
+  raced on it and could panic (fatal in PID 1). A mutex now guards the buffer and
+  multiline state. Separately, `Write` used a `bufio.Scanner`, which emits the
+  final token even without a trailing newline: a line flushed mid-write was split
+  into several log entries, and the incomplete-line / oversized-buffer handling
+  was unreachable dead code. `Write` now consumes only through the last newline
+  and holds the trailing partial line until the next write or `Flush`.
 - **A single log request could crash PID 1.** `GET /api/v1/logs?limit=N` and the
   per-process logs endpoint pre-allocated `len(processes) * limit` entries with
   no upper bound, so a large `limit` requested a multi-GB backing array (or

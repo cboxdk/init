@@ -2,8 +2,10 @@ package logger
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -174,21 +176,49 @@ func TestProcessWriter_Write_PartialLine(t *testing.T) {
 
 	initialCount := len(pw.GetLogs())
 
-	// bufio.Scanner treats data without newline as complete line when scanner finishes
-	// So "Partial" without \n gets processed immediately by scanner.Scan()
-	_, _ = pw.Write([]byte("Partial"))
-
-	// Scanner processes it as complete line (EOF condition)
-	logs := pw.GetLogs()
-	if len(logs) != initialCount+1 {
-		t.Errorf("expected 1 log, got %d (initial: %d)", len(logs), initialCount)
+	// A line delivered across two writes (no newline in the first) must be
+	// assembled into a single entry, not split at the write boundary.
+	_, _ = pw.Write([]byte("Par"))
+	if got := len(pw.GetLogs()); got != initialCount {
+		t.Fatalf("partial line should be buffered until a newline: got %d entries, want %d", got, initialCount)
 	}
 
-	if len(logs) > 0 {
-		lastLog := logs[len(logs)-1]
-		if lastLog.Message != "Partial" {
-			t.Errorf("log message = %q, want %q", lastLog.Message, "Partial")
-		}
+	_, _ = pw.Write([]byte("tial\n"))
+	logs := pw.GetLogs()
+	if len(logs) != initialCount+1 {
+		t.Fatalf("completed line should emit exactly one entry: got %d, want %d", len(logs), initialCount+1)
+	}
+	if last := logs[len(logs)-1]; last.Message != "Partial" {
+		t.Errorf("log message = %q, want %q (line not reassembled)", last.Message, "Partial")
+	}
+}
+
+// A ProcessWriter shared by two concurrent writers (the scheduled-job path,
+// which hands the same writer to cmd.Stdout and cmd.Stderr) must not race on
+// its buffer. Run with -race.
+func TestProcessWriter_ConcurrentWrites(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	pw, err := NewProcessWriter(logger, "test-process", "test-0", "stdout", nil)
+	if err != nil {
+		t.Fatalf("NewProcessWriter() error = %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for w := 0; w < 4; w++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < 200; i++ {
+				_, _ = fmt.Fprintf(pw, "writer-%d line-%d\n", id, i)
+			}
+		}(w)
+	}
+	wg.Wait()
+	pw.Flush()
+
+	if got := len(pw.GetLogs()); got == 0 {
+		t.Error("expected log entries from concurrent writes, got 0")
 	}
 }
 
@@ -228,21 +258,25 @@ func TestProcessWriter_Flush(t *testing.T) {
 
 	initialCount := len(pw.GetLogs())
 
-	// Write line without newline - scanner processes it as EOF
+	// A write with no trailing newline is an incomplete line: it must be held in
+	// the buffer, not emitted yet. (The old Scanner-based Write emitted it
+	// immediately, which split any line flushed mid-write into pieces.)
 	_, _ = pw.Write([]byte("Incomplete"))
 
-	// Scanner processes it immediately (EOF condition)
-	logs := pw.GetLogs()
-	if len(logs) != initialCount+1 {
-		t.Fatalf("expected 1 log entry, got %d (initial: %d)", len(logs), initialCount)
+	if got := len(pw.GetLogs()); got != initialCount {
+		t.Fatalf("incomplete line should be buffered, not logged: got %d entries, want %d", got, initialCount)
 	}
 
-	// Flush with empty buffer should not add more logs
+	// Flush emits the buffered incomplete line as one entry.
+	pw.Flush()
+	if got := len(pw.GetLogs()); got != initialCount+1 {
+		t.Fatalf("Flush should emit the buffered line: got %d entries, want %d", got, initialCount+1)
+	}
+
+	// A second Flush with an empty buffer adds nothing.
 	beforeFlush := len(pw.GetLogs())
 	pw.Flush()
-	afterFlush := len(pw.GetLogs())
-
-	if afterFlush != beforeFlush {
+	if afterFlush := len(pw.GetLogs()); afterFlush != beforeFlush {
 		t.Errorf("Flush with empty buffer should not add logs, had %d, now %d", beforeFlush, afterFlush)
 	}
 }
