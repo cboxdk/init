@@ -33,6 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Misspelled config keys are now rejected instead of silently ignored.** A
+  mistyped `health_chek:` used to turn off health checking with no warning, and a
+  fabricated key like `scale_locked:` did nothing. Config loading now rejects any
+  key that is not a real field, reporting the offending key with the file's own
+  line number. (This surfaced a dead `scale_locked` key in the development
+  example, now removed.)
+- **`check-config` reports the same error every run.** The fail-fast validator
+  iterated processes in map order, so a config with several problems surfaced a
+  different error each run — whack-a-mole to fix and non-deterministic in CI. It
+  now iterates in name order.
+
 - **The log writer is now thread-safe, and partial lines are assembled
   correctly.** `ProcessWriter.Write` mutated an unsynchronized buffer, so the
   scheduled-job path — which hands the *same* writer to both `cmd.Stdout` and
