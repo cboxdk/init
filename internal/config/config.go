@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -62,8 +63,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("no processes defined")
 	}
 
-	for name, proc := range c.Processes {
-		if err := c.validateProcess(name, proc); err != nil {
+	// Iterate in name order so a config with several problems reports the SAME
+	// error every run. Map iteration order is randomized, so this fail-fast
+	// validator otherwise surfaced a different error each time — whack-a-mole for
+	// anyone fixing a broken config, and non-deterministic in CI logs.
+	names := make([]string, 0, len(c.Processes))
+	for name := range c.Processes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := c.validateProcess(name, c.Processes[name]); err != nil {
 			return err
 		}
 	}
