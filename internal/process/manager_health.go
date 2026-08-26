@@ -52,7 +52,11 @@ func (m *Manager) checkAllProcessesDead() {
 		hasRunningInstance := false
 
 		for _, inst := range instances {
-			if inst.State == string(StateRunning) {
+			// A checkpointed instance is alive-on-purpose (its process was
+			// snapshotted to disk for the warm tier), not dead. Counting it as
+			// dead would close the all-dead channel and shut the container down,
+			// discarding the checkpoint.
+			if inst.State == string(StateRunning) || inst.State == string(StateCheckpointed) {
 				hasRunningInstance = true
 				break
 			}
