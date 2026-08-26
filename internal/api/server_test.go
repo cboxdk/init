@@ -4855,35 +4855,81 @@ func TestClampLogLimit(t *testing.T) {
 	}
 }
 
-// TestRedactProcessEnv verifies secret-looking env vars are masked in API
-// responses while ordinary ones and empty values are left as-is (SEC-4).
-func TestRedactProcessEnv(t *testing.T) {
-	cfg := &config.Process{Env: map[string]string{
-		"DB_PASSWORD":    "hunter2",
-		"API_TOKEN":      "abc123",
-		"AWS_SECRET_KEY": "xyz",
-		"STRIPE_APIKEY":  "sk_live",
-		"AUTH_HEADER":    "Bearer z",
-		"LOG_LEVEL":      "info",
-		"PORT":           "9000",
-		"EMPTY_TOKEN":    "",
-	}}
-	redactProcessEnv(cfg)
-
-	const masked = "***REDACTED***"
-	for _, k := range []string{"DB_PASSWORD", "API_TOKEN", "AWS_SECRET_KEY", "STRIPE_APIKEY", "AUTH_HEADER"} {
-		if cfg.Env[k] != masked {
-			t.Errorf("env %s = %q, want redacted", k, cfg.Env[k])
+// TestShouldRedactEnv pins which env-var names count as secrets. The generic
+// words must be word-bounded and the ambiguous ones (auth/key/pat) only count
+// at the end of a name, so ordinary framework settings stay readable while the
+// real secrets — including Laravel's APP_KEY and credential-bearing DSN/URLs —
+// are masked. (SEC-4)
+func TestShouldRedactEnv(t *testing.T) {
+	cases := map[string]struct {
+		val  string
+		want bool
+	}{
+		"DB_PASSWORD":    {"hunter2", true},
+		"API_TOKEN":      {"abc", true},
+		"APP_KEY":        {"base64:xx", true},
+		"AWS_SECRET_KEY": {"s", true},
+		"MAIL_DSN":       {"smtp://u:p@h", true},
+		"STRIPE_SECRET":  {"sk", true},
+		"DATABASE_URL":   {"mysql://user:pw@db/app", true},
+		"GITHUB_PAT":     {"ghp_x", true},
+		"API_AUTH":       {"bearer", true},
+		"AUTH_DRIVER":    {"session", false},
+		"OAUTH_ENABLED":  {"true", false},
+		"AUTHOR":         {"me", false},
+		"TOKENIZER_PATH": {"/x", false},
+		"LOG_LEVEL":      {"info", false},
+		"KEYSPACE":       {"ks", false},
+		"APP_URL":        {"https://example.com", false},
+		"SESSION_DRIVER": {"redis", false},
+		"EMPTY_TOKEN":    {"", false},
+	}
+	for k, c := range cases {
+		if got := shouldRedactEnv(k, c.val); got != c.want {
+			t.Errorf("shouldRedactEnv(%q, %q) = %v, want %v", k, c.val, got, c.want)
 		}
 	}
+}
+
+// TestRestoreRedactedEnv covers the round-trip guard: a client that reads a
+// process (secrets masked), edits one field and PUTs the whole config back must
+// not overwrite the real secret with the placeholder. (SEC-4)
+func TestRestoreRedactedEnv(t *testing.T) {
+	current := &config.Process{Env: map[string]string{
+		"DB_PASSWORD": "real-secret",
+		"LOG_LEVEL":   "info",
+	}}
+	incoming := &config.Process{Env: map[string]string{
+		"DB_PASSWORD": RedactedValue, // came back masked
+		"LOG_LEVEL":   "debug",       // genuinely edited
+		"GONE_TOKEN":  RedactedValue, // placeholder for a var that no longer exists
+	}}
+
+	restoreRedactedEnv(incoming, current)
+
+	if incoming.Env["DB_PASSWORD"] != "real-secret" {
+		t.Errorf("DB_PASSWORD = %q, want the real value restored", incoming.Env["DB_PASSWORD"])
+	}
+	if incoming.Env["LOG_LEVEL"] != "debug" {
+		t.Errorf("LOG_LEVEL = %q, want the edited value kept", incoming.Env["LOG_LEVEL"])
+	}
+	if _, ok := incoming.Env["GONE_TOKEN"]; ok {
+		t.Error("a placeholder for an unknown var must be dropped, not written through")
+	}
+}
+
+// TestRedactProcessEnv verifies the response masking itself.
+func TestRedactProcessEnv(t *testing.T) {
+	cfg := &config.Process{Env: map[string]string{
+		"DB_PASSWORD": "hunter2",
+		"LOG_LEVEL":   "info",
+	}}
+	redactProcessEnv(cfg)
+	if cfg.Env["DB_PASSWORD"] != RedactedValue {
+		t.Errorf("DB_PASSWORD = %q, want redacted", cfg.Env["DB_PASSWORD"])
+	}
 	if cfg.Env["LOG_LEVEL"] != "info" {
-		t.Errorf("LOG_LEVEL was redacted; non-secret keys must be preserved")
-	}
-	if cfg.Env["PORT"] != "9000" {
-		t.Errorf("PORT was redacted; non-secret keys must be preserved")
-	}
-	if cfg.Env["EMPTY_TOKEN"] != "" {
-		t.Errorf("empty value should stay empty, got %q", cfg.Env["EMPTY_TOKEN"])
+		t.Errorf("LOG_LEVEL = %q, want preserved", cfg.Env["LOG_LEVEL"])
 	}
 }
 

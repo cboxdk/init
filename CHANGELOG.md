@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The process-detail API no longer leaks — or destroys — secrets.** Two
+  problems with the env redaction: (1) a client that read a process (secrets
+  masked), changed one field and PUT the whole config back wrote the literal
+  `***REDACTED***` over the real secret and restarted the service with a broken
+  environment — the TUI's edit flow did exactly this; the API now treats the
+  placeholder as "keep the configured value". (2) The secret-name pattern both
+  over- and under-matched: it masked ordinary settings (`AUTH_DRIVER`,
+  `OAUTH_ENABLED`, `TOKENIZER_PATH`) while missing the ones that matter most for
+  the frameworks this targets — Laravel's `APP_KEY`, and credential-bearing
+  `DATABASE_URL`/`MAIL_DSN` values. Generic words now need word boundaries, the
+  ambiguous ones (`auth`, `key`, `pat`) only count at the end of a name, and
+  URL/DSN variables are masked when their value actually carries credentials.
+
+### Fixed
+
+- **A failed oneshot no longer stalls startup for the dependency timeout.** With
+  oneshot readiness gated on successful completion, a oneshot that *failed* never
+  signalled anything, so its dependents waited out the full `dependency_timeout`
+  (5 minutes by default) — with the manager's write lock held, during which PID 1
+  also could not act on SIGTERM. A failed oneshot now immediately signals that
+  readiness is impossible, and dependents fail in milliseconds with an error
+  naming the exit code.
+- **A failed reload's rollback no longer runs on a dead context.** The rollback
+  reused the reload's context, but the failures that trigger a rollback (a
+  dependency wait timing out, a cancelled request) are exactly the ones that
+  exhaust it — so the rollback force-killed the old processes and then refused to
+  start any of them, turning a failed reload into an outage while reporting
+  success. It now runs on a detached, separately-bounded context, tears down in
+  reverse dependency order, and reports how many processes it could not restore
+  instead of always claiming a clean rollback.
+- **Per-process CPU% now really is recent usage.** The previous change cached the
+  gopsutil handle but still called `CPUPercent()`, which divides total CPU time
+  by the process's *lifetime* — so the gauge kept reporting a historical average
+  no matter how the handle was managed (measured: an idle process still reported
+  72.8%). The collector now uses the interval-based reading that the cached
+  handle actually enables, so an idle process reads ~0%. The first sample after a
+  process starts or restarts reports 0; the scale is unchanged (100 = one core).
+- **`POST /processes` returns the right status code.** It hardcoded 500, so a
+  duplicate name returned 500 instead of 409 and an invalid definition 500
+  instead of 400, defeating the typed errors added earlier.
+- **TUI: the detail view's footer advertised a dead key.** It still said
+  `<s> Stop` after Stop moved to `x`, so pressing `s` there did nothing.
+- **The log-stream endpoint's 405 is JSON like every other endpoint** (it was
+  `text/plain`), and the API client no longer treats an empty 2xx body as a
+  decode error.
+- **The OpenAPI spec's `PUT /processes/{name}` body was wrong** — it declared a
+  bare process object, but the endpoint requires a `{"process": {…}}` wrapper, so
+  a generated client got a 400.
+
 ## [3.0.0] - 2026-08-26
 
 ### Added

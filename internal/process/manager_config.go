@@ -291,7 +291,11 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 		// a bad command). Roll back to the previous configuration so a failed
 		// reload does not leave services down. Best-effort.
 		m.logger.Error("Reload failed to start the new configuration; rolling back", "error", err)
-		m.rollbackReload(ctx, oldCfg, touched)
+		if failures := m.rollbackReload(ctx, oldCfg, touched); failures > 0 {
+			// Say so plainly rather than claiming a clean rollback: some services
+			// are down and need operator attention.
+			return fmt.Errorf("reload failed and the rollback could not restore %d process(es) — they are stopped: %w", failures, err)
+		}
 		return fmt.Errorf("reload failed and was rolled back to the previous configuration: %w", err)
 	}
 
@@ -307,15 +311,45 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 // partway through. It stops whatever the failed reload left running for the
 // touched processes, then restores the old config and restarts the processes
 // that were running before (removed and changed ones); processes that the
-// reload had only newly added are left absent. Best-effort: individual
-// stop/start errors are logged, not returned, because the reload has already
-// failed and the goal is to get as close to the prior state as possible.
-func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, touched map[string]bool) {
-	// Tear down whatever is currently running for the touched processes.
-	for name := range touched {
+// reload had only newly added are left absent. It returns how many processes it
+// could NOT bring back, so the caller can report honestly instead of claiming a
+// clean rollback.
+//
+// The rollback deliberately does NOT reuse the reload's context: the very
+// failures that trigger a rollback (a dependency wait timing out, an operator
+// cancelling the request) are the ones that exhaust it, and a dead context would
+// force-kill the old processes and then refuse to start any of them — turning a
+// failed reload into a total outage. It runs on a detached context with its own
+// bounded deadline.
+func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, touched map[string]bool) int {
+	budget := m.processStopTimeout + m.processStartTimeout
+	if budget <= 0 {
+		budget = DefaultProcessStopTimeout + DefaultProcessStartTimeout
+	}
+	rbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
+	defer cancel()
+
+	// Tear down whatever is currently running for the touched processes, in
+	// reverse dependency order so dependents stop before what they depend on.
+	stopOrder := m.getShutdownOrder()
+	for _, name := range stopOrder {
+		if !touched[name] {
+			continue
+		}
 		m.unregisterScheduledProcess(name)
 		if sup, ok := m.processes[name]; ok {
-			if err := sup.Stop(ctx); err != nil {
+			if err := sup.Stop(rbCtx); err != nil {
+				m.logger.Error("Rollback: failed to stop process", "name", name, "error", err)
+			}
+			delete(m.processes, name)
+		}
+	}
+	// Anything touched but not in the shutdown order (e.g. only present in the
+	// new config) still needs its scheduler registration cleared.
+	for name := range touched {
+		if sup, ok := m.processes[name]; ok {
+			m.unregisterScheduledProcess(name)
+			if err := sup.Stop(rbCtx); err != nil {
 				m.logger.Error("Rollback: failed to stop process", "name", name, "error", err)
 			}
 			delete(m.processes, name)
@@ -325,10 +359,11 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 	// Restore the previous configuration and bring the touched processes that
 	// existed before back up on their old definitions, in dependency order.
 	m.config = oldCfg
+	failures := 0
 	order, err := m.getStartupOrder()
 	if err != nil {
 		m.logger.Error("Rollback: could not determine startup order", "error", err)
-		return
+		return len(touched)
 	}
 	for _, name := range order {
 		if !touched[name] {
@@ -341,14 +376,21 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 		if procCfg.Schedule != "" {
 			if err := m.registerScheduledProcess(name, procCfg); err != nil {
 				m.logger.Error("Rollback: failed to re-register scheduled process", "name", name, "error", err)
+				failures++
 			}
 			continue
 		}
-		if err := m.startRegularProcess(ctx, name, procCfg); err != nil {
+		if err := m.startRegularProcess(rbCtx, name, procCfg); err != nil {
 			m.logger.Error("Rollback: failed to restart process", "name", name, "error", err)
+			failures++
 		}
 	}
-	m.logger.Warn("Reload rolled back to the previous configuration")
+	if failures > 0 {
+		m.logger.Error("Reload rollback finished with processes still down", "failed", failures)
+	} else {
+		m.logger.Warn("Reload rolled back to the previous configuration")
+	}
+	return failures
 }
 
 func namesToSet(names []string) map[string]bool {

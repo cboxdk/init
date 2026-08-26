@@ -225,7 +225,7 @@ func (m Model) renderProcessDetail() string {
 		b.WriteString("\n")
 	}
 
-	footer := dimStyle.Render("<l> Logs | <r> Restart | <s> Stop | <ESC> Back")
+	footer := dimStyle.Render("<l> Logs | <r> Restart | <x> Stop | <ESC> Back")
 	b.WriteString(footer)
 
 	return m.padViewHeight(b.String())

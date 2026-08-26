@@ -139,6 +139,9 @@ type Supervisor struct {
 	cancel                 context.CancelFunc
 	readinessCh            chan struct{}  // Closed when service becomes ready
 	readinessOnce          sync.Once      // CRITICAL: Ensures readinessCh closed exactly once
+	readyFailedCh          chan struct{}  // Closed when the process can never become ready (oneshot exited non-zero)
+	readyFailedOnce        sync.Once      // Ensures readyFailedCh is closed exactly once
+	readyFailReason        string         // Why readiness became impossible (guarded by mu)
 	isReady                bool           // Track readiness state
 	healthKnown            bool           // Whether at least one health check result has been observed
 	healthHealthy          bool           // Liveness health after thresholds/hysteresis
@@ -270,6 +273,7 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 		credentialErr:          credErr,
 		healthCheckStrict:      globalCfg.HealthCheckStrict,
 		readinessCh:            make(chan struct{}),
+		readyFailedCh:          make(chan struct{}),
 		isReady:                false,
 	}
 }
@@ -331,6 +335,31 @@ func (s *Supervisor) markReady(reason string) {
 	})
 }
 
+// markReadinessImpossible records that this process can never become ready, so
+// anything waiting on it (a dependent's WaitForReadiness) fails immediately
+// instead of burning the whole dependency timeout. Used when a oneshot exits
+// non-zero: readiness for a oneshot means "completed successfully", and a failed
+// run will never produce that. Thread-safe and idempotent.
+func (s *Supervisor) markReadinessImpossible(reason string) {
+	s.readyFailedOnce.Do(func() {
+		s.mu.Lock()
+		s.readyFailReason = reason
+		s.mu.Unlock()
+		close(s.readyFailedCh)
+		s.logger.Debug("Readiness marked impossible", "reason", reason)
+	})
+}
+
+// readinessFailure returns the recorded reason readiness became impossible.
+func (s *Supervisor) readinessFailure() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.readyFailReason == "" {
+		return "process cannot become ready"
+	}
+	return s.readyFailReason
+}
+
 // WaitForReadiness waits for the service to become ready (health check passes)
 // Returns nil when ready, error on timeout or context cancellation
 func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration) error {
@@ -359,13 +388,21 @@ func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration
 		)
 	}
 
-	// Wait for readiness with timeout
-	timeoutCh := time.After(timeout)
+	// Wait for readiness with timeout. readyFailedCh short-circuits the wait when
+	// readiness has become impossible (a oneshot that exited non-zero will never
+	// complete successfully), so a failed migration fails its dependents in
+	// milliseconds instead of burning the full dependency timeout with the
+	// manager lock held.
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	select {
 	case <-s.readinessCh:
 		s.logger.Info("Service ready")
 		return nil
-	case <-timeoutCh:
+	case <-s.readyFailedCh:
+		return fmt.Errorf("service can never become ready: %s", s.readinessFailure())
+	case <-timer.C:
 		return fmt.Errorf("service did not become ready within %v", timeout)
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting for readiness")
@@ -1664,9 +1701,13 @@ func (s *Supervisor) handleOneshotExit(instance *Instance, exitCode int, err err
 		s.oneshotHistory.Complete(execID, exitCode, err)
 	}
 
-	// Signal readiness if completed successfully (allows dependents to proceed)
+	// Signal readiness if completed successfully (allows dependents to proceed).
+	// On failure, signal that readiness is impossible so dependents fail fast
+	// rather than waiting out the whole dependency timeout.
 	if exitCode == 0 {
 		s.markReady("oneshot completed successfully")
+	} else {
+		s.markReadinessImpossible(fmt.Sprintf("oneshot %q exited with code %d", s.name, exitCode))
 	}
 
 	s.checkAllInstancesDead()
