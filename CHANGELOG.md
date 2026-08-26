@@ -7,15 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [3.0.0] - 2026-08-26
 
-- **Stopping the management API is now bounded and never hangs.** `Server.Stop`
-  called `http.Server.Shutdown(ctx)` and surfaced any error, so a lingering
-  keep-alive connection made it block until the caller's deadline and then report
-  "context deadline exceeded" (which also made the API stop tests flake on loaded
-  CI runners). Stop now forces the connections closed if the graceful drain does
-  not finish within the context, so it always returns promptly and cleanly.
-  (TEST-8)
+### Added
+
+- **Per-process signal action.** `cbox-init signal <process> <signal>` (and
+  `POST /api/v1/processes/{name}/signal` with `{"signal":"SIGHUP"}`) delivers an
+  operational signal to a single service's process group — an nginx config
+  reload (`SIGHUP`), php-fpm log reopen (`SIGUSR1`) or graceful reload
+  (`SIGUSR2`) — without touching the rest of the stack. The signal accepts the
+  `SIGHUP` or bare `HUP` spelling; an unknown name is rejected with 400.
+- **cbox-init now behaves like an init on the signal plane.** Previously only
+  SIGTERM/SIGINT/SIGQUIT were handled (all as shutdown) and every other signal
+  was dropped, so `docker kill -s HUP` was a silent no-op. Now:
+  - **SIGHUP** reloads the configuration (works with or without `--watch`).
+  - **SIGUSR1 / SIGUSR2** are forwarded to every managed process group, so
+    operators can drive nginx reloads and php-fpm log reopen / graceful reload
+    with `docker kill -s USR1|USR2 <container>`.
+  - When cbox-init is **not PID 1** (a `docker run --init` wrapper, a shell
+    entrypoint, or a Kubernetes pod sharing the PID namespace with the pause
+    container), it now registers as a **child subreaper**
+    (`PR_SET_CHILD_SUBREAPER` on Linux) so orphaned grandchildren still
+    re-parent onto it and its zombie-reaping and restart guarantees keep
+    applying. The startup log states which mode it is running in.
+
+- Global lifecycle hooks can be defined entirely via environment variables —
+  `CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD>` (e.g. `CBOX_INIT_HOOK_PRE_START_0_COMMAND=php,please,stache:warm`)
+  — so docker-compose/k8s deployments on prepared base images need no YAML
+  mount for warmup or migration hooks. Env-defined hooks append after
+  YAML-defined ones, ordered by index; `ALLOW_FAILURE` is accepted as the env
+  spelling of `continue_on_error`. (#33)
+- `COMMAND` env overrides (hooks and processes) accept a comma-separated list
+  alongside the existing JSON-array form.
+- Hooks are validated at config load (command required, non-negative
+  timeout/retry/retry_delay) and unnamed hooks get a stable default name
+  (`pre-start-0`, …) so logs and metrics always carry a hook identity.
+- Hook execution logs carry structured `type`, `duration_seconds` and
+  `exit_code` fields.
+
+- The supply-chain gate the sibling packages run: `govulncheck`, a deterministic
+  CycloneDX 1.5 SBOM (`tools/sbomnorm`) and a dependency license check
+  (`tools/licensecheck`), plus gofmt and `go mod tidy` drift checks. CI had none
+  of these, so nothing would have reported a vulnerable dependency or a
+  non-permissive licence. 63 dependencies, all permissive.
+- `make check` runs the whole gate locally, identical to CI.
+- `bodyclose`, `errorlint` and `misspell`, added one at a time per this repo's
+  own linter policy after fixing everything they surfaced.
+
+- A documentation config drift gate: `tools/check-doc-configs.sh` (and
+  `make check-configs`, wired into CI as the "Config examples" job) validates
+  every `configs/examples/*.yaml` with `check-config`. Those files back the
+  examples throughout `docs/`, so a config that references a removed or
+  misspelled key now fails CI instead of silently misleading a reader.
 
 ### Changed
 
@@ -25,42 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   step that fails if total statement coverage drops below a floor
   (`COVERAGE_FLOOR`, currently 78% — a regression backstop below the 80%+ goal),
   and a `codecov.yml` sets the project/patch targets. (TEST-9)
-
-### Security
-
-- **`trust_proxy` no longer lets any client spoof its source IP.** With
-  `api_acl.trust_proxy` enabled, the `X-Forwarded-For` header was trusted from
-  *any* direct connection, so a client bypassing the proxy could send
-  `X-Forwarded-For: <allowed-ip>` and defeat the IP ACL. A new
-  `api_acl.trusted_proxies` list names the reverse proxies whose header is
-  honored; `X-Forwarded-For` is now used only when the direct peer is one of
-  them, and is ignored otherwise (fail closed, including when the list is empty).
-  `check-config` warns when `trust_proxy` is set without `trusted_proxies`. (CDX-7)
-
-### Fixed
-
-- **Startup no longer mixes log formats or claims the config is valid before it
-  loads.** The permission-setup and runtime-validation phases ran before the
-  logger was configured, so they logged in slog's text format while everything
-  after config load was JSON — one startup, two formats. A structured logger is
-  now bootstrapped from the environment (`LOG_FORMAT`/`LOG_LEVEL`, or the
-  `CBOX_INIT_GLOBAL_*` overrides) before those phases, then refined from the
-  config. The runtime php-fpm/nginx validation also logged a generic "All
-  configurations valid", which read as if the cbox-init config had passed right
-  before a "Failed to load configuration"; it now names the runtime service
-  configs explicitly. (DX-9)
-
-### Fixed
-
-- **The Laravel scaffold no longer generates a queue worker that races Horizon.**
-  `scaffold laravel` enabled both Horizon and a raw `queue:work --queue=default`
-  worker by default. Horizon supervises its own workers for every queue, so the
-  two drained the `default` queue simultaneously and raced for each job. The raw
-  worker is now omitted whenever Horizon is enabled (Symfony and Horizon-less
-  Laravel setups still get it). The generated API block also documents its
-  loopback-by-default binding and how to secure it. (DX-11)
-
-### Changed
 
 - **Lifecycle hook types are now constants, and the four execution blocks share
   one helper.** The manager ran pre-start / post-start / pre-stop / post-stop
@@ -90,7 +97,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `slices.Contains`, and swept the remaining `interface{}` type literals to the
   modern `any` spelling across the tree. (ARCH-8, STYLE-9)
 
+- **BREAKING: the management API now binds loopback by default.** `api_host`
+  defaulted to empty, meaning all interfaces — enabling the API with no
+  `api_auth` and no `api_acl` served the full control plane (add/stop processes,
+  save/reload config) unauthenticated on `0.0.0.0:9180`. `api_host` now defaults
+  to `127.0.0.1`, and configuration validation **refuses to start** an API bound
+  to a non-loopback interface without either a bearer token (`api_auth`) or an IP
+  ACL (`api_acl`). To expose the API deliberately, set an explicit `api_host`
+  (e.g. `0.0.0.0`) *and* configure auth or an ACL. The local Unix socket and
+  loopback binds are unaffected; `metrics_host` is unchanged (Prometheus scrapes
+  it on the pod/container IP).
+
+- Moved `docker-compose.yaml` and `kubernetes-deployment.yaml` out of
+  `configs/examples/` into a new `deploy/` directory. They are deployment
+  manifests, not cbox-init configs, so keeping them in the examples glob would
+  have made the drift gate above either wrong or littered with special cases.
+
 ### Fixed
+
+- **Stopping the management API is now bounded and never hangs.** `Server.Stop`
+  called `http.Server.Shutdown(ctx)` and surfaced any error, so a lingering
+  keep-alive connection made it block until the caller's deadline and then report
+  "context deadline exceeded" (which also made the API stop tests flake on loaded
+  CI runners). Stop now forces the connections closed if the graceful drain does
+  not finish within the context, so it always returns promptly and cleanly.
+  (TEST-8)
+
+- **Startup no longer mixes log formats or claims the config is valid before it
+  loads.** The permission-setup and runtime-validation phases ran before the
+  logger was configured, so they logged in slog's text format while everything
+  after config load was JSON — one startup, two formats. A structured logger is
+  now bootstrapped from the environment (`LOG_FORMAT`/`LOG_LEVEL`, or the
+  `CBOX_INIT_GLOBAL_*` overrides) before those phases, then refined from the
+  config. The runtime php-fpm/nginx validation also logged a generic "All
+  configurations valid", which read as if the cbox-init config had passed right
+  before a "Failed to load configuration"; it now names the runtime service
+  configs explicitly. (DX-9)
+
+- **The Laravel scaffold no longer generates a queue worker that races Horizon.**
+  `scaffold laravel` enabled both Horizon and a raw `queue:work --queue=default`
+  worker by default. Horizon supervises its own workers for every queue, so the
+  two drained the `default` queue simultaneously and raced for each job. The raw
+  worker is now omitted whenever Horizon is enabled (Symfony and Horizon-less
+  Laravel setups still get it). The generated API block also documents its
+  loopback-by-default binding and how to secure it. (DX-11)
 
 - **The quick-start guide now actually builds and runs.** Its Dockerfile
   `COPY nginx.conf` referenced a file the guide never created, so `docker build`
@@ -102,24 +152,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema, which still described the old all-interfaces default, is corrected to
   match. (DX-12)
 
-### Security
-
-- **TLS `min_version` is now floored at 1.2.** A configured `min_version` of
-  `"TLS 1.0"` or `"TLS 1.1"` was honored verbatim, silently serving the
-  management API over protocol versions deprecated by RFC 8996 and vulnerable to
-  known downgrade/padding attacks. Those values are now clamped up to TLS 1.2 and
-  the operator is warned once at startup that the weaker floor did not take
-  effect. Defaults and `"TLS 1.3"` are unchanged. (SEC-6)
-- **`config/save` refuses to write a config derived from the environment.** The
-  in-memory config holds `${VAR}` placeholders already resolved to their (often
-  secret) values, plus any `CBOX_INIT_*` overrides that live only in the process
-  environment. Saving it — via the API `POST /config/save` or the TUI — wrote
-  those secrets to disk in cleartext and destroyed the templates. `SaveConfig`
-  now detects both cases and refuses with an explanatory error, pointing the
-  operator at the file instead. Configs with no templating or overrides save as
-  before. (SEC-2)
-### Fixed
-
 - **Hot reload no longer silently ignores changes to `user`, `group`, logging,
   memory limits, heartbeat, or scaled-port settings.** `Process.Equal` — which
   the config reload uses to decide whether a process needs restarting — compared
@@ -128,7 +160,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   old identity with no indication. `Equal` now covers every field of the process
   definition, including the full `logging`/`heartbeat` trees, and a drift-guard
   test asserts each field is compared. (CDX-9)
-### Fixed
 
 - **A slow service can no longer hold shutdown past the global deadline.** When
   stopping an instance, the graceful wait was bounded only by that process's own
@@ -143,36 +174,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from a checkpoint — had no panic recovery, unlike its sibling `monitorInstance`,
   so a panic in the restart path would take down the init process. It now recovers,
   marks the instance failed, and always closes its done channel. (CONC-12)
-
-### Changed
-
-- **BREAKING: the management API now binds loopback by default.** `api_host`
-  defaulted to empty, meaning all interfaces — enabling the API with no
-  `api_auth` and no `api_acl` served the full control plane (add/stop processes,
-  save/reload config) unauthenticated on `0.0.0.0:9180`. `api_host` now defaults
-  to `127.0.0.1`, and configuration validation **refuses to start** an API bound
-  to a non-loopback interface without either a bearer token (`api_auth`) or an IP
-  ACL (`api_acl`). To expose the API deliberately, set an explicit `api_host`
-  (e.g. `0.0.0.0`) *and* configure auth or an ACL. The local Unix socket and
-  loopback binds are unaffected; `metrics_host` is unchanged (Prometheus scrapes
-  it on the pod/container IP).
-
-### Security
-
-- **The local management socket is now owner-only (`0600`).** It was `0660`, so
-  any process in the socket's group could drive the full, unauthenticated
-  control plane (add/stop processes, save/reload config). It is an admin channel
-  and is now restricted to its owner.
-- **The management API and process credentials now fail closed.** Two paths
-  failed *open* — proceeding in a less-secure state after a configuration error:
-  - An **invalid but enabled ACL** (e.g. a malformed CIDR) logged the error and
-    then served the endpoint with **no ACL at all** — exposing exactly what the
-    operator was trying to lock down. The server now refuses to start.
-  - A **user/group that could not be resolved** (a typo in `user:`) logged the
-    error and ran the process as PID 1's uid — i.e. **as root**. The process now
-    refuses to start instead of silently dropping the privilege drop.
-
-### Fixed
 
 - **The container exits non-zero when its workload dies.** When all managed
   processes were dead, PID 1 returned 0, so Docker `restart: on-failure` and
@@ -293,8 +294,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   10000 (matching the metrics-history endpoint) and the manager caps its
   pre-allocation hint independently.
 
-### Fixed
-
 - **`shutdown.kill_signal` is now honored, and signal names are validated.**
   The per-process `shutdown.kill_signal` was defaulted to `SIGKILL` but read
   nowhere — `stopInstance` hard-coded `SIGKILL`, so a configured value did
@@ -326,68 +325,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicitly. Regression tests now assert a child actually *receives* SIGTERM and
   that a child ignoring it is force-killed after the timeout — the assertion no
   test made before, which is why this survived.
-
-### Added
-
-- **Per-process signal action.** `cbox-init signal <process> <signal>` (and
-  `POST /api/v1/processes/{name}/signal` with `{"signal":"SIGHUP"}`) delivers an
-  operational signal to a single service's process group — an nginx config
-  reload (`SIGHUP`), php-fpm log reopen (`SIGUSR1`) or graceful reload
-  (`SIGUSR2`) — without touching the rest of the stack. The signal accepts the
-  `SIGHUP` or bare `HUP` spelling; an unknown name is rejected with 400.
-- **cbox-init now behaves like an init on the signal plane.** Previously only
-  SIGTERM/SIGINT/SIGQUIT were handled (all as shutdown) and every other signal
-  was dropped, so `docker kill -s HUP` was a silent no-op. Now:
-  - **SIGHUP** reloads the configuration (works with or without `--watch`).
-  - **SIGUSR1 / SIGUSR2** are forwarded to every managed process group, so
-    operators can drive nginx reloads and php-fpm log reopen / graceful reload
-    with `docker kill -s USR1|USR2 <container>`.
-  - When cbox-init is **not PID 1** (a `docker run --init` wrapper, a shell
-    entrypoint, or a Kubernetes pod sharing the PID namespace with the pause
-    container), it now registers as a **child subreaper**
-    (`PR_SET_CHILD_SUBREAPER` on Linux) so orphaned grandchildren still
-    re-parent onto it and its zombie-reaping and restart guarantees keep
-    applying. The startup log states which mode it is running in.
-
-### Added
-
-- Global lifecycle hooks can be defined entirely via environment variables —
-  `CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD>` (e.g. `CBOX_INIT_HOOK_PRE_START_0_COMMAND=php,please,stache:warm`)
-  — so docker-compose/k8s deployments on prepared base images need no YAML
-  mount for warmup or migration hooks. Env-defined hooks append after
-  YAML-defined ones, ordered by index; `ALLOW_FAILURE` is accepted as the env
-  spelling of `continue_on_error`. (#33)
-- `COMMAND` env overrides (hooks and processes) accept a comma-separated list
-  alongside the existing JSON-array form.
-- Hooks are validated at config load (command required, non-negative
-  timeout/retry/retry_delay) and unnamed hooks get a stable default name
-  (`pre-start-0`, …) so logs and metrics always carry a hook identity.
-- Hook execution logs carry structured `type`, `duration_seconds` and
-  `exit_code` fields.
-
-- The supply-chain gate the sibling packages run: `govulncheck`, a deterministic
-  CycloneDX 1.5 SBOM (`tools/sbomnorm`) and a dependency license check
-  (`tools/licensecheck`), plus gofmt and `go mod tidy` drift checks. CI had none
-  of these, so nothing would have reported a vulnerable dependency or a
-  non-permissive licence. 63 dependencies, all permissive.
-- `make check` runs the whole gate locally, identical to CI.
-- `bodyclose`, `errorlint` and `misspell`, added one at a time per this repo's
-  own linter policy after fixing everything they surfaced.
-
-- A documentation config drift gate: `tools/check-doc-configs.sh` (and
-  `make check-configs`, wired into CI as the "Config examples" job) validates
-  every `configs/examples/*.yaml` with `check-config`. Those files back the
-  examples throughout `docs/`, so a config that references a removed or
-  misspelled key now fails CI instead of silently misleading a reader.
-
-### Changed
-
-- Moved `docker-compose.yaml` and `kubernetes-deployment.yaml` out of
-  `configs/examples/` into a new `deploy/` directory. They are deployment
-  manifests, not cbox-init configs, so keeping them in the examples glob would
-  have made the drift gate above either wrong or littered with special cases.
-
-### Fixed
 
 - **Documentation described several subsystems that do not exist.** Removed or
   corrected against the actual Go source (reviewer notes DOC-1/DOC-2, P0):
@@ -432,6 +369,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audit log's start and shutdown records, the build-info metric's help text and
   a configuration warning.
 
+### Security
+
+- **`trust_proxy` no longer lets any client spoof its source IP.** With
+  `api_acl.trust_proxy` enabled, the `X-Forwarded-For` header was trusted from
+  *any* direct connection, so a client bypassing the proxy could send
+  `X-Forwarded-For: <allowed-ip>` and defeat the IP ACL. A new
+  `api_acl.trusted_proxies` list names the reverse proxies whose header is
+  honored; `X-Forwarded-For` is now used only when the direct peer is one of
+  them, and is ignored otherwise (fail closed, including when the list is empty).
+  `check-config` warns when `trust_proxy` is set without `trusted_proxies`. (CDX-7)
+
+- **TLS `min_version` is now floored at 1.2.** A configured `min_version` of
+  `"TLS 1.0"` or `"TLS 1.1"` was honored verbatim, silently serving the
+  management API over protocol versions deprecated by RFC 8996 and vulnerable to
+  known downgrade/padding attacks. Those values are now clamped up to TLS 1.2 and
+  the operator is warned once at startup that the weaker floor did not take
+  effect. Defaults and `"TLS 1.3"` are unchanged. (SEC-6)
+- **`config/save` refuses to write a config derived from the environment.** The
+  in-memory config holds `${VAR}` placeholders already resolved to their (often
+  secret) values, plus any `CBOX_INIT_*` overrides that live only in the process
+  environment. Saving it — via the API `POST /config/save` or the TUI — wrote
+  those secrets to disk in cleartext and destroyed the templates. `SaveConfig`
+  now detects both cases and refuses with an explanatory error, pointing the
+  operator at the file instead. Configs with no templating or overrides save as
+  before. (SEC-2)
+
+- **The local management socket is now owner-only (`0600`).** It was `0660`, so
+  any process in the socket's group could drive the full, unauthenticated
+  control plane (add/stop processes, save/reload config). It is an admin channel
+  and is now restricted to its owner.
+- **The management API and process credentials now fail closed.** Two paths
+  failed *open* — proceeding in a less-secure state after a configuration error:
+  - An **invalid but enabled ACL** (e.g. a malformed CIDR) logged the error and
+    then served the endpoint with **no ACL at all** — exposing exactly what the
+    operator was trying to lock down. The server now refuses to start.
+  - A **user/group that could not be resolved** (a typo in `user:`) logged the
+    error and ran the process as PID 1's uid — i.e. **as root**. The process now
+    refuses to start instead of silently dropping the privilege drop.
 
 ## [2.5.1] - 2026-08-11
 
