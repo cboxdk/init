@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -329,15 +331,27 @@ processes:
 
 	output := executeCommandCapture(t, rootCmd, "check-config", "--config", validConfigPath, "--json")
 
-	// JSON output should contain config_path and version keys
-	if !strings.Contains(output, "config_path") {
-		t.Errorf("expected JSON output to contain 'config_path', got:\n%s", output)
+	// The whole point of --json is that it is machine-readable: it must parse.
+	// The old hand-rolled formatter emitted Go map syntax (map[errors:0 …]),
+	// which passed substring checks but broke every jq pipeline.
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("--json output is not valid JSON: %v\noutput:\n%s", err, output)
 	}
-	if !strings.Contains(output, "version") {
-		t.Errorf("expected JSON output to contain 'version', got:\n%s", output)
+
+	for _, key := range []string{"config_path", "version", "process_count", "passed", "summary"} {
+		if _, ok := parsed[key]; !ok {
+			t.Errorf("expected JSON output to contain key %q, got:\n%s", key, output)
+		}
 	}
-	if !strings.Contains(output, "process_count") {
-		t.Errorf("expected JSON output to contain 'process_count', got:\n%s", output)
+
+	// Nested summary must itself be a JSON object, not a stringified Go map.
+	summary, ok := parsed["summary"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("summary is not a JSON object: %T", parsed["summary"])
+	}
+	if _, ok := summary["errors"]; !ok {
+		t.Errorf("summary missing 'errors' count, got: %v", summary)
 	}
 }
 
@@ -583,67 +597,54 @@ func executeCommandWithError(cmd *cobra.Command, args ...string) (string, error)
 }
 
 // TestFormatJSONOutput tests the JSON formatting function
-func TestFormatJSONOutput(t *testing.T) {
+func TestPrintJSON_RoundTrips(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   map[string]interface{}
-		wantKey []string
+		name  string
+		input map[string]interface{}
 	}{
-		{
-			name: "string values",
-			input: map[string]interface{}{
-				"name":   "test",
-				"status": "ok",
-			},
-			wantKey: []string{`"name"`, `"test"`, `"status"`, `"ok"`},
-		},
-		{
-			name: "integer values",
-			input: map[string]interface{}{
-				"count": 42,
-				"port":  9180,
-			},
-			wantKey: []string{`"count"`, "42", `"port"`, "9180"},
-		},
-		{
-			name: "boolean values",
-			input: map[string]interface{}{
-				"enabled":  true,
-				"disabled": false,
-			},
-			wantKey: []string{`"enabled"`, "true", `"disabled"`, "false"},
-		},
-		{
-			name: "mixed values",
-			input: map[string]interface{}{
-				"version":       "1.0",
-				"process_count": 5,
-				"valid":         true,
-			},
-			wantKey: []string{`"version"`, `"1.0"`, `"process_count"`, "5", `"valid"`, "true"},
-		},
-		{
-			name:    "empty map",
-			input:   map[string]interface{}{},
-			wantKey: []string{"{", "}"},
-		},
+		{"strings", map[string]interface{}{"name": "test", "status": "ok"}},
+		{"integers", map[string]interface{}{"count": 42, "port": 9180}},
+		{"booleans", map[string]interface{}{"enabled": true, "disabled": false}},
+		{"nested", map[string]interface{}{
+			"version": "1.0",
+			"summary": map[string]int{"errors": 0, "warnings": 2},
+			"issues":  []map[string]string{{"field": "global", "message": "note"}},
+		}},
+		{"strings needing escaping", map[string]interface{}{
+			"error": "line 2: cannot unmarshal \"thirty\"\n  into int",
+		}},
+		{"empty", map[string]interface{}{}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatJSONOutput(tt.input)
+			stdout, _ := captureOutput(func() { printJSON(tt.input) })
 
-			// Should start with { and end with }
-			if !strings.Contains(result, "{") || !strings.Contains(result, "}") {
-				t.Errorf("JSON output should be wrapped in braces, got: %s", result)
+			var parsed map[string]interface{}
+			if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
+				t.Fatalf("printJSON output is not valid JSON: %v\noutput: %q", err, stdout)
 			}
-
-			for _, key := range tt.wantKey {
-				if !strings.Contains(result, key) {
-					t.Errorf("expected JSON output to contain %q, got: %s", key, result)
+			for k := range tt.input {
+				if _, ok := parsed[k]; !ok {
+					t.Errorf("round-tripped JSON missing key %q; output: %s", k, stdout)
 				}
 			}
 		})
+	}
+}
+
+func TestPrintJSONError_RoundTripsAndEscapes(t *testing.T) {
+	// A multi-line error with quotes must not break the JSON envelope — the old
+	// error path interpolated the message straight into a template string.
+	msg := "failed to parse: yaml: unmarshal errors:\n  line 2: bad \"value\""
+	_, stderr := captureOutput(func() { printJSONError(msg) })
+
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(stderr), &parsed); err != nil {
+		t.Fatalf("printJSONError output is not valid JSON: %v\noutput: %q", err, stderr)
+	}
+	if parsed["error"] != msg {
+		t.Errorf("error message not preserved: got %q, want %q", parsed["error"], msg)
 	}
 }
 
@@ -5834,6 +5835,53 @@ func TestMainEntryPoint(t *testing.T) {
 	}
 }
 
+// TestClassifySignal covers the signal-plane routing: SIGHUP reloads,
+// SIGUSR1/2 are forwarded (handled in place, no shutdown reason), and the
+// shutdown trio return a shutdown reason.
+func TestClassifySignal(t *testing.T) {
+	cfg := &config.Config{Version: "1.0", Global: config.GlobalConfig{ShutdownTimeout: 5}, Processes: make(map[string]*config.Process)}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pm := process.NewManager(cfg, log, audit.NewLogger(log, false))
+
+	if got := classifySignal(syscall.SIGHUP, pm); got != "config_reload" {
+		t.Errorf("SIGHUP => %q, want config_reload", got)
+	}
+	if got := classifySignal(syscall.SIGUSR1, pm); got != "" {
+		t.Errorf("SIGUSR1 => %q, want \"\" (forwarded, keep waiting)", got)
+	}
+	if got := classifySignal(syscall.SIGUSR2, pm); got != "" {
+		t.Errorf("SIGUSR2 => %q, want \"\" (forwarded, keep waiting)", got)
+	}
+	if got := classifySignal(syscall.SIGTERM, pm); !strings.Contains(got, "signal") {
+		t.Errorf("SIGTERM => %q, want a shutdown reason containing 'signal'", got)
+	}
+}
+
+// A forwarded signal (SIGUSR1) must not end the wait; only a real shutdown
+// signal after it should. This proves classifySignal's "keep waiting" path is
+// wired into the loop.
+func TestWaitForShutdown_ForwardedSignalDoesNotStop(t *testing.T) {
+	cfg := &config.Config{Version: "1.0", Global: config.GlobalConfig{ShutdownTimeout: 5}, Processes: make(map[string]*config.Process)}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pm := process.NewManager(cfg, log, audit.NewLogger(log, false))
+
+	sigChan := make(chan os.Signal, 2)
+	done := make(chan string, 1)
+	go func() { done <- waitForShutdown(sigChan, pm) }()
+
+	sigChan <- syscall.SIGUSR1 // forwarded, must not return
+	sigChan <- syscall.SIGTERM // now it should return a shutdown reason
+
+	select {
+	case result := <-done:
+		if !strings.Contains(result, "signal") {
+			t.Errorf("waitForShutdown() = %q, want a shutdown reason", result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("waitForShutdown() timed out; a forwarded signal likely stopped the loop")
+	}
+}
+
 // TestWaitForShutdownSignal tests waitForShutdown with signal path
 func TestWaitForShutdownSignal(t *testing.T) {
 	// Create a minimal config
@@ -6883,8 +6931,9 @@ func TestLogsCommandHelpOutput(t *testing.T) {
 	}
 }
 
-// TestFormatJSONOutputAllTypes tests formatJSONOutput with all types
-func TestFormatJSONOutputAllTypes(t *testing.T) {
+// TestPrintJSON_AllTypes checks printJSON renders every value type as valid,
+// parseable JSON — including nested slices, which the old formatter stringified.
+func TestPrintJSON_AllTypes(t *testing.T) {
 	data := map[string]interface{}{
 		"string_val": "hello",
 		"int_val":    42,
@@ -6892,17 +6941,24 @@ func TestFormatJSONOutputAllTypes(t *testing.T) {
 		"other_val":  []int{1, 2, 3},
 	}
 
-	result := formatJSONOutput(data)
+	stdout, _ := captureOutput(func() { printJSON(data) })
 
-	// Should contain all values
-	if !strings.Contains(result, "hello") {
-		t.Errorf("formatJSONOutput() missing string value")
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
+		t.Fatalf("printJSON output is not valid JSON: %v\noutput: %q", err, stdout)
 	}
-	if !strings.Contains(result, "42") {
-		t.Errorf("formatJSONOutput() missing int value")
+	if parsed["string_val"] != "hello" {
+		t.Errorf("string_val = %v, want hello", parsed["string_val"])
 	}
-	if !strings.Contains(result, "true") {
-		t.Errorf("formatJSONOutput() missing bool value")
+	if parsed["int_val"] != float64(42) {
+		t.Errorf("int_val = %v, want 42", parsed["int_val"])
+	}
+	if parsed["bool_val"] != true {
+		t.Errorf("bool_val = %v, want true", parsed["bool_val"])
+	}
+	arr, ok := parsed["other_val"].([]interface{})
+	if !ok || len(arr) != 3 {
+		t.Errorf("other_val did not round-trip as a JSON array: %v", parsed["other_val"])
 	}
 }
 

@@ -1434,6 +1434,34 @@ func (s *Supervisor) executePreStopHook(ctx context.Context, instance *Instance)
 	}
 }
 
+// ForwardSignal delivers sig to every running instance's process group. It is
+// how operational signals received by cbox-init as PID 1 (SIGHUP, SIGUSR1,
+// SIGUSR2) reach the workload — e.g. an nginx config reload or php-fpm log
+// rotation — without being treated as a stop. Instances that are not running
+// are skipped, and a per-instance failure is logged, not fatal.
+func (s *Supervisor) ForwardSignal(sig syscall.Signal) {
+	s.mu.RLock()
+	instances := make([]*Instance, len(s.instances))
+	copy(instances, s.instances)
+	s.mu.RUnlock()
+
+	for _, inst := range instances {
+		inst.mu.RLock()
+		running := inst.state == StateRunning
+		inst.mu.RUnlock()
+		if !running {
+			continue
+		}
+		if err := s.signalProcessGroup(inst, sig, "forwarded signal"); err != nil {
+			s.logger.Warn("Failed to forward signal to instance",
+				"instance_id", inst.id,
+				"signal", sig,
+				"error", err,
+			)
+		}
+	}
+}
+
 // sendShutdownSignal sends the configured shutdown signal to the process
 func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 	sig := syscall.SIGTERM
