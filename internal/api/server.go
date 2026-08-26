@@ -1112,9 +1112,19 @@ func urlHasCredentials(value string) bool {
 	return hasPassword
 }
 
+// publicKeyPattern marks values that merely *look* like secrets but are meant to
+// be published — a publishable/site/public key, or a frontend-exposed variable
+// (Laravel Mix/Vite, Next.js). Masking these only hides information the operator
+// needs, and they are safe by definition.
+var publicKeyPattern = regexp.MustCompile(`(?i)(^|[_-])(public|publishable|site)([_-]|$)|^(mix|vite|next_public|react_app|vue_app|nuxt_public)[_-]`)
+
 // shouldRedactEnv decides whether an env var's value must be masked.
 func shouldRedactEnv(key, value string) bool {
 	if value == "" {
+		return false
+	}
+	// An explicitly public value is never masked, even if it contains "key".
+	if publicKeyPattern.MatchString(key) {
 		return false
 	}
 	if secretEnvKeyPattern.MatchString(key) ||

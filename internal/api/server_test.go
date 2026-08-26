@@ -4891,6 +4891,9 @@ func TestShouldRedactEnv(t *testing.T) {
 		"SESSION_DRIVER": "redis", "APP_ENV": "prod", "EMPTY_TOKEN": "",
 		"COMPASS_DIR": "/c", "PASSENGER_ROOT": "/p",
 		"COOKIE_DOMAIN": "example.com", "SESSION_COOKIE_NAME": "sid",
+		// Explicitly public values must stay visible even though they contain "key".
+		"PUBLIC_KEY": "pk", "VAPID_PUBLIC_KEY": "pk", "STRIPE_PUBLISHABLE_KEY": "pk_live_x",
+		"RECAPTCHA_SITE_KEY": "6Lx", "MIX_PUSHER_APP_KEY": "abc", "NEXT_PUBLIC_API_KEY": "abc",
 	}
 	for k, v := range secret {
 		if !shouldRedactEnv(k, v) {
