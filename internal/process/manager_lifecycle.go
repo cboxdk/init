@@ -201,6 +201,23 @@ func (m *Manager) registerScheduledProcess(name string, procCfg *config.Process)
 }
 
 // startRegularProcess starts a non-scheduled process.
+// newConfiguredSupervisor builds a Supervisor with every collaborator wired.
+// All supervisor construction MUST go through here. A supervisor created
+// without SetDeathNotifier never reports its death to the manager, so a process
+// added or updated at runtime (via the API/TUI) could exhaust its restarts and
+// die while the container's "all processes dead → shut down" detection never
+// fires — the container would run on as an empty shell. Two-phase init (the
+// four setters) previously drifted between the four construction sites; this is
+// the single place they live.
+func (m *Manager) newConfiguredSupervisor(name string, procCfg *config.Process) *Supervisor {
+	sup := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
+	sup.SetSnapshotStreams(m.snapshotStreams)
+	sup.SetDeathNotifier(m.NotifyProcessDeath)
+	sup.SetOneshotHistory(m.oneshotHistory)
+	sup.SetLogBroadcaster(m.logBroadcaster)
+	return sup
+}
+
 func (m *Manager) startRegularProcess(ctx context.Context, name string, procCfg *config.Process) error {
 	m.logger.Info("Starting process",
 		"name", name,
@@ -212,11 +229,7 @@ func (m *Manager) startRegularProcess(ctx context.Context, name string, procCfg 
 	metrics.SetDesiredScale(name, procCfg.Scale)
 
 	// Create supervisor for this process
-	sup := NewSupervisor(name, procCfg, &m.config.Global, m.logger, m.auditLogger, m.resourceCollector)
-	sup.SetSnapshotStreams(m.snapshotStreams)
-	sup.SetDeathNotifier(m.NotifyProcessDeath)
-	sup.SetOneshotHistory(m.oneshotHistory)
-	sup.SetLogBroadcaster(m.logBroadcaster)
+	sup := m.newConfiguredSupervisor(name, procCfg)
 	m.processes[name] = sup
 
 	// Start the process only if initial_state is "running"

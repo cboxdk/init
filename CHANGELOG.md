@@ -33,6 +33,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Editing one process no longer restarts the whole stack.** `UpdateProcess`
+  already stops and restarts the edited process with its new config, then
+  additionally called an internal `restartAllProcesses` that bounced *every*
+  running process (nginx, php-fpm, every sibling) in map order, ignoring the
+  dependency DAG and restarting the just-edited process a second time. The
+  redundant call is gone; a one-process edit now touches only that process.
+- **Processes added or updated at runtime are now wired for death detection.**
+  Supervisors created by `AddProcess`/`UpdateProcess` skipped
+  `SetDeathNotifier`, so if such a process crashed with its restarts exhausted,
+  the manager's "all processes dead → shut down" detection never heard about it
+  and the container ran on as an empty shell. All four supervisor-construction
+  sites now go through one helper, so the wiring can't drift.
+- **Concurrent starts no longer multiply instances.** The manager checked a
+  process's state before starting it, but outside any lock, so two callers
+  (API + TUI + watcher) could both pass the check and each start `Scale`
+  instances. `Supervisor.Start` is now idempotent for an already-running
+  supervisor.
 - **A single log request could crash PID 1.** `GET /api/v1/logs?limit=N` and the
   per-process logs endpoint pre-allocated `len(processes) * limit` entries with
   no upper bound, so a large `limit` requested a multi-GB backing array (or
