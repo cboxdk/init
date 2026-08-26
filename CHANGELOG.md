@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Resource-metrics history is no longer O(n²) to read.** `TimeSeriesBuffer.GetRange`
+  prepended each sample to a growing slice, reallocating and copying the whole
+  result every iteration (~260k element copies for a full 720-sample read). It now
+  appends newest-first and reverses once.
 - **Fixed a data race in the API rate limiter.** A visitor's `lastSeen` was
   written on every request without the limiter lock while the cleanup goroutine
   read it under the lock. It is now an atomic value.

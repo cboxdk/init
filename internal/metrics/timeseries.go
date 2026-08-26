@@ -67,16 +67,22 @@ func (tsb *TimeSeriesBuffer) GetRange(since time.Time, limit int) []ResourceSamp
 
 	result := make([]ResourceSample, 0, limit)
 
-	// Walk backwards from head (newest to oldest)
+	// Walk backwards from head (newest to oldest), appending as we go — an O(1)
+	// amortized operation. The previous code prepended each sample, which
+	// reallocates and copies the whole slice every iteration: O(n²), ~260k
+	// element copies for a full 720-sample read.
 	for i := 0; i < tsb.size && len(result) < limit; i++ {
 		idx := (tsb.head - 1 - i + tsb.maxSamples) % tsb.maxSamples
 		sample := tsb.samples[idx]
 
-		// Filter by timestamp
 		if sample.Timestamp.After(since) || sample.Timestamp.Equal(since) {
-			// Prepend to maintain chronological order (oldest first)
-			result = append([]ResourceSample{sample}, result...)
+			result = append(result, sample)
 		}
+	}
+
+	// Reverse once into chronological order (oldest first).
+	for l, r := 0, len(result)-1; l < r; l, r = l+1, r-1 {
+		result[l], result[r] = result[r], result[l]
 	}
 
 	return result
