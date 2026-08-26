@@ -197,6 +197,37 @@ func TestNewManager_Success(t *testing.T) {
 	}
 }
 
+// TestGetTLSConfig_WeakMinVersionClamped verifies that a configured sub-1.2
+// min_version does not downgrade the served tls.Config: it is raised to the
+// TLS 1.2 floor (SEC-6).
+func TestGetTLSConfig_WeakMinVersionClamped(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	certFile, keyFile, _, cleanup := createTestCertificates(t)
+	defer cleanup()
+
+	for _, weak := range []string{"TLS 1.0", "TLS 1.1"} {
+		t.Run(weak, func(t *testing.T) {
+			mgr, err := NewManager(&config.TLSConfig{
+				Enabled:    true,
+				CertFile:   certFile,
+				KeyFile:    keyFile,
+				MinVersion: weak,
+			}, logger)
+			if err != nil {
+				t.Fatalf("NewManager error: %v", err)
+			}
+			cfg, err := mgr.GetTLSConfig()
+			if err != nil {
+				t.Fatalf("GetTLSConfig error: %v", err)
+			}
+			if cfg.MinVersion != tls.VersionTLS12 {
+				t.Errorf("MinVersion = %#x, want TLS 1.2 floor (%#x)", cfg.MinVersion, tls.VersionTLS12)
+			}
+		})
+	}
+}
+
 // TestNewManager_WithCA tests manager creation with CA certificate
 func TestNewManager_WithCA(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -492,8 +523,9 @@ func TestParseTLSVersion(t *testing.T) {
 		version  string
 		expected uint16
 	}{
-		{"TLS 1.0", tls.VersionTLS10},
-		{"TLS 1.1", tls.VersionTLS11},
+		// TLS 1.0/1.1 are clamped up to the 1.2 floor, never honored (SEC-6).
+		{"TLS 1.0", tls.VersionTLS12},
+		{"TLS 1.1", tls.VersionTLS12},
 		{"TLS 1.2", tls.VersionTLS12},
 		{"TLS 1.3", tls.VersionTLS13},
 		{"invalid", tls.VersionTLS12}, // Default
@@ -506,7 +538,28 @@ func TestParseTLSVersion(t *testing.T) {
 			if got != tt.expected {
 				t.Errorf("parseTLSVersion(%s) = %v, want %v", tt.version, got, tt.expected)
 			}
+			if got < tls.VersionTLS12 {
+				t.Errorf("parseTLSVersion(%s) = %v is below the enforced TLS 1.2 floor", tt.version, got)
+			}
 		})
+	}
+}
+
+// TestIsWeakTLSVersion covers the helper that flags a sub-floor min_version so
+// NewManager can warn the operator it is being raised.
+func TestIsWeakTLSVersion(t *testing.T) {
+	weak := map[string]bool{
+		"TLS 1.0": true,
+		"TLS 1.1": true,
+		"TLS 1.2": false,
+		"TLS 1.3": false,
+		"":        false,
+		"garbage": false,
+	}
+	for version, want := range weak {
+		if got := isWeakTLSVersion(version); got != want {
+			t.Errorf("isWeakTLSVersion(%q) = %v, want %v", version, got, want)
+		}
 	}
 }
 

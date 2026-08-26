@@ -3,6 +3,7 @@ package process
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/cboxdk/init/internal/config"
 )
@@ -183,6 +184,19 @@ func (m *Manager) SaveConfig() error {
 
 	if configPath == "" {
 		return fmt.Errorf("config file path not set")
+	}
+
+	// Refuse to save when the effective config was assembled from the
+	// environment: the in-memory config holds ${VAR} placeholders already
+	// resolved to their (often secret) values, and CBOX_INIT_* overrides that
+	// live only in the process environment. Marshalling that back to disk would
+	// write those secrets in cleartext and clobber the placeholders — a silent
+	// data-at-rest leak. Point the operator at the file instead. (SEC-2)
+	if envOverrides := config.EnvOverridesPresent(); envOverrides {
+		return fmt.Errorf("refusing to save %s: configuration is assembled from CBOX_INIT_* environment overrides; saving would write their resolved values to disk. Edit the file directly instead", configPath)
+	}
+	if content, err := os.ReadFile(configPath); err == nil && config.HasEnvReferences(string(content)) {
+		return fmt.Errorf("refusing to save %s: it uses ${VAR} environment-variable references; saving would replace them with their resolved (possibly secret) values and destroy the templates. Edit the file directly instead", configPath)
 	}
 
 	m.logger.Info("Saving configuration", "path", configPath)
