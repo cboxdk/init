@@ -129,3 +129,52 @@ func TestStop_ForceKillsWhenChildIgnoresSIGTERM(t *testing.T) {
 		t.Errorf("state = %v, want stopped", sup.GetState())
 	}
 }
+
+// The caller's context deadline must bound the graceful wait even when the
+// per-process shutdown.timeout is much larger. During shutdown the manager
+// passes a context bounded by the global shutdown_timeout; without this, a
+// single service with a large shutdown.timeout would hold PID 1 (and the
+// manager lock, and thus the API) far past the global deadline (PID1-5).
+func TestStop_ContextDeadlineBoundsGracefulWait(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	dir := t.TempDir()
+	ready := filepath.Join(dir, "ready")
+	script := "trap '' TERM; touch " + ready + "; while true; do sleep 0.05; done"
+
+	sup := NewSupervisor("slow-proc", &config.Process{
+		Enabled: true,
+		Type:    "longrun",
+		Command: []string{"sh", "-c", script},
+		Restart: "never",
+		Scale:   1,
+		// A per-process budget far larger than the caller's deadline below.
+		Shutdown: &config.ShutdownConfig{Timeout: 30},
+	}, &config.GlobalConfig{LogLevel: "error", MaxRestartAttempts: 1, RestartBackoff: 1},
+		logger, audit.NewLogger(logger, false), nil)
+
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitForFile(t, ready)
+
+	// The manager's global shutdown deadline, here 500ms — much smaller than the
+	// 30s per-process timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	stopStart := time.Now()
+	if err := sup.Stop(ctx); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	elapsed := time.Since(stopStart)
+
+	// Stop must return shortly after the ctx deadline, not after the 30s
+	// per-process timeout.
+	if elapsed > 5*time.Second {
+		t.Errorf("Stop took %v; the context deadline (500ms) should have bounded the wait, not the 30s per-process timeout", elapsed)
+	}
+	if sup.GetState() != StateStopped {
+		t.Errorf("state = %v, want stopped", sup.GetState())
+	}
+}

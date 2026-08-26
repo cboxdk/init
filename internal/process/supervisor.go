@@ -1022,7 +1022,22 @@ func (s *Supervisor) EndCheckpoint() int {
 
 // monitorRestored watches a process that came back from a checkpoint image.
 func (s *Supervisor) monitorRestored(instance *Instance, pid int, done chan struct{}) {
-	defer close(done)
+	// Panic recovery mirrors monitorInstance: a panic in the restart path
+	// (attemptRestart / checkAllInstancesDead) must not take down PID 1. done is
+	// always closed so nothing waiting on this watch hangs.
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Error("PANIC in monitorRestored recovered",
+				"instance_id", instance.id,
+				"pid", pid,
+				"panic", r,
+			)
+			instance.mu.Lock()
+			instance.state = StateFailed
+			instance.mu.Unlock()
+		}
+		close(done)
+	}()
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -1421,6 +1436,9 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 
 	// CRITICAL: Wait on doneCh instead of calling Wait() again to avoid double-Wait race
 	// The monitorInstance goroutine is already calling Wait() and will close doneCh when done
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	select {
 	case <-instance.doneCh:
 		s.logger.Info("Process instance stopped gracefully",
@@ -1429,24 +1447,50 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 		s.cleanupInstanceResources(instance, pid, "graceful_shutdown")
 		return nil
 
-	case <-time.After(timeout):
-		killSig := s.killSignal()
+	case <-ctx.Done():
+		// The caller's deadline fired first. During shutdown the manager passes a
+		// context bounded by the global shutdown_timeout, so a larger per-process
+		// shutdown.timeout must not be waited out here — otherwise one slow
+		// service holds PID 1 (and, under the manager lock, the API) past the
+		// global deadline. Escalate to the kill signal now.
+		s.logger.Warn("Shutdown deadline reached before instance stopped gracefully, force killing",
+			"instance_id", instance.id,
+			"timeout", timeout,
+			"error", ctx.Err(),
+		)
+		return s.forceKillInstance(instance, pid, "force_killed_shutdown_deadline")
+
+	case <-timer.C:
 		s.logger.Warn("Process instance did not stop gracefully, force killing",
 			"instance_id", instance.id,
 			"timeout", timeout,
-			"kill_signal", killSig,
 		)
-
-		if err := s.signalProcessGroup(instance, killSig, "force kill"); err != nil {
-			return fmt.Errorf("failed to force kill process group: %w", err)
-		}
-
-		// Wait for monitorInstance to detect the exit and close doneCh
-		<-instance.doneCh
-
-		s.cleanupInstanceResources(instance, pid, "force_killed_after_timeout")
-		return nil
+		return s.forceKillInstance(instance, pid, "force_killed_after_timeout")
 	}
+}
+
+// forceKillInstance escalates a stuck instance to the kill signal and waits for
+// monitorInstance to observe the exit before cleaning up. SIGKILL delivered to a
+// direct child is guaranteed by the kernel to terminate it, so the doneCh wait
+// here always completes.
+func (s *Supervisor) forceKillInstance(instance *Instance, pid int, reason string) error {
+	killSig := s.killSignal()
+	s.logger.Warn("Force killing process instance",
+		"instance_id", instance.id,
+		"pid", pid,
+		"kill_signal", killSig,
+		"reason", reason,
+	)
+
+	if err := s.signalProcessGroup(instance, killSig, "force kill"); err != nil {
+		return fmt.Errorf("failed to force kill process group: %w", err)
+	}
+
+	// Wait for monitorInstance to detect the exit and close doneCh.
+	<-instance.doneCh
+
+	s.cleanupInstanceResources(instance, pid, reason)
+	return nil
 }
 
 // executePreStopHook executes the configured pre-stop hook if present

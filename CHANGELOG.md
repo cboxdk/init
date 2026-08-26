@@ -33,6 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   old identity with no indication. `Equal` now covers every field of the process
   definition, including the full `logging`/`heartbeat` trees, and a drift-guard
   test asserts each field is compared. (CDX-9)
+### Fixed
+
+- **A slow service can no longer hold shutdown past the global deadline.** When
+  stopping an instance, the graceful wait was bounded only by that process's own
+  `shutdown.timeout`, ignoring the caller's context — so a service with, say,
+  `shutdown.timeout: 300` kept PID 1 (and, under the manager lock, the API)
+  waiting five minutes even when the global `shutdown_timeout` was 30s. The wait
+  now also honors the context deadline the manager derives from
+  `shutdown_timeout`, escalating to the kill signal as soon as either fires.
+  (PID1-5)
+- **A panic in the restored-process watcher no longer crashes PID 1.**
+  `monitorRestored` — the goroutine that watches a warm-tier process brought back
+  from a checkpoint — had no panic recovery, unlike its sibling `monitorInstance`,
+  so a panic in the restart path would take down the init process. It now recovers,
+  marks the instance failed, and always closes its done channel. (CONC-12)
 
 ### Changed
 
