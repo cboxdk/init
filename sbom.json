@@ -1539,11 +1539,11 @@
       "version": "v0.0.0-20260803160001-6ac0973c030d"
     },
     {
-      "bom-ref": "pkg:golang/google.golang.org/grpc@v1.83.0?type=module",
+      "bom-ref": "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "25e35910a2456d0c40ac0325fa18b2b476ae69c0cda8952594d7e620c9a9aa74"
+          "content": "1c83b4f8112d04feaca32aafa82f2c3548d9edb4ecfb484542e145f91032fbe6"
         }
       ],
       "licenses": [
@@ -1554,10 +1554,10 @@
         }
       ],
       "name": "google.golang.org/grpc",
-      "purl": "pkg:golang/google.golang.org/grpc@v1.83.0?type=module",
+      "purl": "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
       "scope": "required",
       "type": "library",
-      "version": "v1.83.0"
+      "version": "v1.83.1"
     },
     {
       "bom-ref": "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module",
@@ -1625,7 +1625,7 @@
         "pkg:golang/go.opentelemetry.io/otel/sdk@v1.45.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.45.0?type=module",
         "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/google.golang.org/grpc@v1.83.0?type=module",
+        "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
         "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
       ],
       "ref": "pkg:golang/github.com/cboxdk/init@0.0.0?type=module"
@@ -1811,7 +1811,7 @@
         "pkg:golang/golang.org/x/text@v0.40.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260803160001-6ac0973c030d?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260803160001-6ac0973c030d?type=module",
-        "pkg:golang/google.golang.org/grpc@v1.83.0?type=module",
+        "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module"
       ],
       "ref": "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.29.0?type=module"
@@ -2027,7 +2027,7 @@
         "pkg:golang/golang.org/x/text@v0.40.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260803160001-6ac0973c030d?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260803160001-6ac0973c030d?type=module",
-        "pkg:golang/google.golang.org/grpc@v1.83.0?type=module",
+        "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module",
         "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
       ],
@@ -2092,7 +2092,7 @@
         "pkg:golang/golang.org/x/text@v0.40.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260803160001-6ac0973c030d?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260803160001-6ac0973c030d?type=module",
-        "pkg:golang/google.golang.org/grpc@v1.83.0?type=module",
+        "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module"
       ],
       "ref": "pkg:golang/go.opentelemetry.io/proto/otlp@v1.11.0?type=module"
@@ -2116,7 +2116,7 @@
         "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
         "pkg:golang/golang.org/x/text@v0.40.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260803160001-6ac0973c030d?type=module",
-        "pkg:golang/google.golang.org/grpc@v1.83.0?type=module",
+        "pkg:golang/google.golang.org/grpc@v1.83.1?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module"
       ],
       "ref": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260803160001-6ac0973c030d?type=module"
@@ -2145,7 +2145,7 @@
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260803160001-6ac0973c030d?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module"
       ],
-      "ref": "pkg:golang/google.golang.org/grpc@v1.83.0?type=module"
+      "ref": "pkg:golang/google.golang.org/grpc@v1.83.1?type=module"
     },
     {
       "ref": "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module"
