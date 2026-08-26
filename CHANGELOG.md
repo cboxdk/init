@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Graceful shutdown now actually happens.** Every managed process is launched
+  with `exec.CommandContext`, and `Supervisor.Stop` cancelled that context
+  *before* running the pre-stop hook and sending the configured shutdown signal.
+  Go's os/exec watchdog SIGKILLs a child the instant its context is cancelled, so
+  on every stop path — `docker stop`, `cbox-init stop`/`restart`, hot-reload,
+  scale-to-zero — the child was force-killed before it ever saw SIGTERM. The
+  configured `shutdown.signal`, pre-stop hooks, graceful timeout, and SIGKILL
+  escalation were all dead code; PHP-FPM and nginx lost in-flight requests on
+  every deploy. Context cancellation no longer kills children (`cmd.Cancel` is a
+  no-op); `stopInstance` is the sole stop authority (pre-stop hook → configured
+  signal → timeout → SIGKILL), and aborted-start cleanup force-kills survivors
+  explicitly. Regression tests now assert a child actually *receives* SIGTERM and
+  that a child ignoring it is force-killed after the timeout — the assertion no
+  test made before, which is why this survived.
+
 ### Added
 
 - Global lifecycle hooks can be defined entirely via environment variables —

@@ -378,7 +378,19 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		instance, err := s.startInstance(s.ctx, instanceID, i)
 		if err != nil {
 			s.state = StateFailed
+			// Cancel first to suppress restarts, then force-kill the instances
+			// already started in this loop. Context cancellation no longer kills
+			// children (see startInstance), so the cleanup must be explicit or a
+			// partial-start failure would leak the survivors.
 			s.cancel()
+			for _, started := range s.instances {
+				if kerr := s.signalProcessGroup(started, syscall.SIGKILL, "aborted start cleanup"); kerr != nil {
+					s.logger.Warn("Failed to kill instance during aborted start",
+						"instance_id", started.id,
+						"error", kerr,
+					)
+				}
+			}
 			return fmt.Errorf("failed to start instance %s: %w", instanceID, err)
 		}
 
@@ -445,6 +457,18 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 
 	// Create command
 	cmd := exec.CommandContext(ctx, s.config.Command[0], s.config.Command[1:]...)
+
+	// Context cancellation must NOT kill the child. By default CommandContext
+	// makes ctx-cancel call Process.Kill (SIGKILL); because every instance is
+	// bound to s.ctx, Stop()'s s.cancel() would then SIGKILL every child before
+	// the pre-stop hook and the configured shutdown signal ever run — defeating
+	// graceful shutdown entirely. Graceful stop is driven explicitly by
+	// stopInstance (pre-stop hook → configured signal → timeout → SIGKILL); a
+	// no-op Cancel with the default zero WaitDelay leaves the process untouched
+	// on cancel and hands sole stop authority to stopInstance. Aborted-start
+	// cleanup (see Start) force-kills survivors explicitly for the same reason.
+	cmd.Cancel = func() error { return nil }
+
 	if s.config.WorkingDir != "" {
 		cmd.Dir = s.config.WorkingDir
 	}
