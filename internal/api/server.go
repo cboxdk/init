@@ -1085,7 +1085,7 @@ var secretEnvKeyPattern = regexp.MustCompile(
 // shortSecretKeyPattern covers the abbreviated forms (DB_PASS, MYSQL_PWD).
 // These need a boundary on BOTH sides, or COMPASS_DIR and PASSENGER_ROOT would
 // be masked.
-var shortSecretKeyPattern = regexp.MustCompile(`(?i)(^|[^a-z])(pass|pwd)([^a-z]|$)`)
+var shortSecretKeyPattern = regexp.MustCompile(`(?i)((^|[^a-z])(pass|pwd)([^a-z]|$)|(pass|pwd)$)`)
 
 // ambiguousSecretKeyPattern covers words that are only a secret when they end
 // the name: API_AUTH and APP_KEY are secrets, AUTH_DRIVER and KEYSPACE are not.
@@ -1128,6 +1128,12 @@ func shouldRedactEnv(key, value string) bool {
 	if value == "" {
 		return false
 	}
+	// A value that actually carries credentials is a secret whatever the name
+	// says — SITE_URL=https://user:pw@host and VITE_DATABASE_URL are secrets even
+	// though "site" and the VITE_ prefix would otherwise exempt them.
+	if credentialURLKeyPattern.MatchString(key) && urlHasCredentials(value) {
+		return true
+	}
 	// Framework-published variables can't hold a server-side secret.
 	if frontendPublicPattern.MatchString(key) {
 		return false
@@ -1142,10 +1148,7 @@ func shouldRedactEnv(key, value string) bool {
 	if publicWordPattern.MatchString(key) {
 		return false
 	}
-	if ambiguousSecretKeyPattern.MatchString(key) {
-		return true
-	}
-	return credentialURLKeyPattern.MatchString(key) && urlHasCredentials(value)
+	return ambiguousSecretKeyPattern.MatchString(key)
 }
 
 // findRedactedEnvKey reports the first env var whose value is the redaction

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A credential-bearing URL is redacted whatever its name.** The public/frontend
+  exemptions were checked first, so `SITE_URL=https://user:pw@host` and
+  `VITE_DATABASE_URL=postgres://user:pw@db/app` were returned in cleartext. A
+  value carrying real credentials now always wins. Compact password names
+  (`DBPASS`, `SMTPPASS`) are covered too.
+- **Aborting a reload really leaves the stack untouched.** When a process refused
+  to stop, the reload aborted after having already stopped the ones before it,
+  leaving half the stack down while reporting the configuration unchanged. It now
+  restores what it stopped before returning, and says so if it could not.
+- **The rollback no longer orphans a process it could not stop.** It counted the
+  failure but still dropped the supervisor, leaving a live process with nothing
+  managing it — and then started a second copy. It now keeps the supervisor and
+  skips restoring that name.
+
+### Fixed
+
 - **A "public" name no longer exempts a real secret.** The public-value
   exemption was checked first, so `RECAPTCHA_SITE_SECRET`, `SITE_PRIVATE_KEY`
   and `PUBLIC_SECRET_KEY` were returned in cleartext. An explicit secret word now
