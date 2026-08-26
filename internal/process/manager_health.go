@@ -41,6 +41,31 @@ func (m *Manager) NotifyProcessDeath(processName string) {
 	}
 }
 
+// TerminalExitCode returns the exit code PID 1 should use when all managed
+// processes have died. It is 0 only when the container's death is "clean" —
+// every process that ran was a oneshot that completed with exit 0. It is
+// non-zero (1) when the death is abnormal, so an orchestrator restarts the
+// container: any process exited non-zero or was killed by a signal, or a
+// long-running process (which is meant to keep running) is now dead even if it
+// exited 0. Processes that never ran are ignored.
+func (m *Manager) TerminalExitCode() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for name, sup := range m.processes {
+		code, exited := sup.LastExitCode()
+		if !exited {
+			continue
+		}
+		if code != 0 {
+			return 1 // crashed or signalled
+		}
+		if procCfg, ok := m.config.Processes[name]; ok && procCfg.Type != "oneshot" {
+			return 1 // a longrun workload is dead
+		}
+	}
+	return 0
+}
+
 // checkAllProcessesDead checks if all processes are dead and signals if so.
 func (m *Manager) checkAllProcessesDead() {
 	m.mu.RLock()
