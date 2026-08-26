@@ -137,20 +137,25 @@ type Supervisor struct {
 	snapshotStreams        bool                          // own the children's stdio pipes so they can survive a checkpoint
 	ctx                    context.Context
 	cancel                 context.CancelFunc
-	readinessCh            chan struct{}  // Closed when service becomes ready
-	readinessOnce          sync.Once      // CRITICAL: Ensures readinessCh closed exactly once
-	readyFailedCh          chan struct{}  // Closed when the process can never become ready (oneshot exited non-zero)
-	readyFailedOnce        sync.Once      // Ensures readyFailedCh is closed exactly once
-	readyFailReason        string         // Why readiness became impossible (guarded by mu)
-	isReady                bool           // Track readiness state
-	healthKnown            bool           // Whether at least one health check result has been observed
-	healthHealthy          bool           // Liveness health after thresholds/hysteresis
-	lastCheckSucceeded     bool           // Raw result from the most recent health check
-	lastExitCode           int            // Exit code of the most recent instance death (see lastExitSet)
-	lastExitSet            bool           // Whether an instance has ever exited (distinguishes "exited 0" from "never ran")
-	goroutines             sync.WaitGroup // CRITICAL: Track all goroutines for clean shutdown
-	mu                     sync.RWMutex
-	operationMu            sync.Mutex // Serializes lifecycle/scale operations so reads can proceed
+	// Readiness signalling. These are re-armed on each run (see resetReadiness),
+	// so they are guarded by their own mutex rather than s.mu: markReady is
+	// called from Start, which already holds s.mu, so reusing s.mu here would
+	// self-deadlock.
+	readinessMu        sync.RWMutex
+	readinessCh        chan struct{}  // Closed when service becomes ready
+	readinessOnce      sync.Once      // Ensures readinessCh is closed exactly once per run
+	readyFailedCh      chan struct{}  // Closed when the process can never become ready (oneshot exited non-zero)
+	readyFailedOnce    sync.Once      // Ensures readyFailedCh is closed exactly once per run
+	readyFailReason    string         // Why readiness became impossible
+	isReady            bool           // Track readiness state
+	healthKnown        bool           // Whether at least one health check result has been observed
+	healthHealthy      bool           // Liveness health after thresholds/hysteresis
+	lastCheckSucceeded bool           // Raw result from the most recent health check
+	lastExitCode       int            // Exit code of the most recent instance death (see lastExitSet)
+	lastExitSet        bool           // Whether an instance has ever exited (distinguishes "exited 0" from "never ran")
+	goroutines         sync.WaitGroup // CRITICAL: Track all goroutines for clean shutdown
+	mu                 sync.RWMutex
+	operationMu        sync.Mutex // Serializes lifecycle/scale operations so reads can proceed
 }
 
 // Instance represents a single running process instance within a Supervisor.
@@ -324,15 +329,36 @@ func (s *Supervisor) MarkReadyImmediately() {
 // CRITICAL: Does NOT acquire locks - caller must manage locking if needed
 // The sync.Once ensures the channel is closed exactly once regardless of concurrent calls
 func (s *Supervisor) markReady(reason string) {
+	s.readinessMu.Lock()
+	defer s.readinessMu.Unlock()
 	s.readinessOnce.Do(func() {
 		close(s.readinessCh)
-		// NOTE: No lock here - isReady is just a status flag for debugging
-		// The readinessCh close is the actual synchronization mechanism
 		s.isReady = true
 		s.logger.Debug("Service marked as ready",
 			"reason", reason,
 		)
 	})
+}
+
+// resetReadiness re-arms the readiness signals for a fresh run. Readers take
+// the channels under readinessMu, so replacing them here is safe.
+func (s *Supervisor) resetReadiness() {
+	s.readinessMu.Lock()
+	defer s.readinessMu.Unlock()
+	s.readinessCh = make(chan struct{})
+	s.readinessOnce = sync.Once{}
+	s.isReady = false
+	s.readyFailedCh = make(chan struct{})
+	s.readyFailedOnce = sync.Once{}
+	s.readyFailReason = ""
+}
+
+// readinessChannels returns the current readiness signals under the lock, so a
+// waiter cannot race a concurrent re-arm in Start.
+func (s *Supervisor) readinessChannels() (ready <-chan struct{}, failed <-chan struct{}) {
+	s.readinessMu.RLock()
+	defer s.readinessMu.RUnlock()
+	return s.readinessCh, s.readyFailedCh
 }
 
 // markReadinessImpossible records that this process can never become ready, so
@@ -341,10 +367,10 @@ func (s *Supervisor) markReady(reason string) {
 // non-zero: readiness for a oneshot means "completed successfully", and a failed
 // run will never produce that. Thread-safe and idempotent.
 func (s *Supervisor) markReadinessImpossible(reason string) {
+	s.readinessMu.Lock()
+	defer s.readinessMu.Unlock()
 	s.readyFailedOnce.Do(func() {
-		s.mu.Lock()
 		s.readyFailReason = reason
-		s.mu.Unlock()
 		close(s.readyFailedCh)
 		s.logger.Debug("Readiness marked impossible", "reason", reason)
 	})
@@ -352,8 +378,8 @@ func (s *Supervisor) markReadinessImpossible(reason string) {
 
 // readinessFailure returns the recorded reason readiness became impossible.
 func (s *Supervisor) readinessFailure() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.readinessMu.RLock()
+	defer s.readinessMu.RUnlock()
 	if s.readyFailReason == "" {
 		return "process cannot become ready"
 	}
@@ -396,11 +422,12 @@ func (s *Supervisor) WaitForReadiness(ctx context.Context, timeout time.Duration
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
+	readyCh, failedCh := s.readinessChannels()
 	select {
-	case <-s.readinessCh:
+	case <-readyCh:
 		s.logger.Info("Service ready")
 		return nil
-	case <-s.readyFailedCh:
+	case <-failedCh:
 		return fmt.Errorf("service can never become ready: %s", s.readinessFailure())
 	case <-timer.C:
 		return fmt.Errorf("service did not become ready within %v", timeout)
@@ -431,6 +458,13 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	// Create context for this supervisor's lifetime
 	s.ctx, s.cancel = context.WithCancel(ctx)
+
+	// A new run gets fresh readiness state. Without this the signals are sticky
+	// for the supervisor's whole life: a restarted service would count as ready
+	// before it had proven anything, and — worse — a oneshot that failed once
+	// would keep failing its dependents forever, even after a successful re-run
+	// (both channels closed, and select would pick between them at random).
+	s.resetReadiness()
 
 	s.state = StateStarting
 

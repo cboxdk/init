@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Readiness is re-armed on every run.** The readiness signals were sticky for
+  a supervisor's whole lifetime, so a restarted service counted as ready before
+  it had proven anything, and — with readiness now also carrying a failure
+  signal — a oneshot that failed once would keep failing its dependents forever,
+  even after a successful re-run (both signals closed, the waiter picking between
+  them at random). A new run now resets readiness, and the signals moved to their
+  own mutex so a waiter cannot race the re-arm. (CONC-16 / PID1-7)
 ### Security
 
 - **The process-detail API no longer leaks — or destroys — secrets.** Two

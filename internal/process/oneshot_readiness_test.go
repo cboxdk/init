@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -110,5 +111,49 @@ func TestSupervisor_FailedOneshotFailsWaitersFast(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "never become ready") {
 		t.Errorf("error = %q, want it to explain readiness is impossible", err)
+	}
+}
+
+// Readiness state must be re-armed for each run. Without it the signals are
+// sticky for the supervisor's lifetime: a restarted service counts as ready
+// before proving anything, and a oneshot that failed once keeps failing its
+// dependents forever — even after a successful re-run, where both the ready and
+// the failed channel would be closed and select would pick at random.
+func TestSupervisor_ReadinessRearmsOnRestart(t *testing.T) {
+	dir := t.TempDir()
+	flag := filepath.Join(dir, "ok")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	// Fails while the flag file is absent; succeeds once it exists.
+	sup := NewSupervisor("migrate", &config.Process{
+		Enabled:      true,
+		Type:         "oneshot",
+		InitialState: "running",
+		Command:      []string{"sh", "-c", "test -f " + flag},
+		Restart:      "never",
+		Scale:        1,
+	}, &config.GlobalConfig{LogLevel: "error", MaxRestartAttempts: 1, RestartBackoff: 1},
+		logger, audit.NewLogger(logger, false), nil)
+
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("start (run 1): %v", err)
+	}
+	if err := sup.WaitForReadiness(context.Background(), 5*time.Second); err == nil {
+		t.Fatal("expected the first, failing run to fail its waiters")
+	}
+
+	// Fix the cause and re-run the same supervisor.
+	if err := os.WriteFile(flag, []byte("x"), 0600); err != nil {
+		t.Fatalf("write flag: %v", err)
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = sup.Stop(stopCtx)
+
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("start (run 2): %v", err)
+	}
+	if err := sup.WaitForReadiness(context.Background(), 5*time.Second); err != nil {
+		t.Errorf("after a successful re-run the supervisor must be ready, got: %v", err)
 	}
 }
