@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Per-process CPU% is now the recent usage, not a lifetime average.** The
+  resource sampler created a fresh gopsutil handle every tick, and gopsutil
+  computes `CPUPercent` as busy-time since the handle was created — so the
+  `cbox_init_process_cpu_percent` gauge reported each process's lifetime-average
+  CPU and sat nearly flat instead of tracking load. The collector now reuses the
+  handle across ticks (recreating it if the instance restarts with a new PID and
+  evicting it when the instance stops), so the gauge reflects usage since the
+  previous sample. (PERF-3)
+
+### Fixed
+
 - **A failed reload no longer leaves services down — it rolls back.** Hot reload
   stopped the removed/changed processes and swapped the config *before* the new
   configuration was proven to start. If a new or changed process then failed to

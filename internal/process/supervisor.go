@@ -2075,8 +2075,10 @@ func (s *Supervisor) collectInstanceMetrics() {
 			continue
 		}
 
-		// Collect process metrics
-		sample, err := metrics.CollectProcessMetrics(pid, s.name, instanceID)
+		// Collect process metrics. Use the collector's Collect (not the package
+		// CollectProcessMetrics) so the gopsutil handle is reused across ticks and
+		// CPUPercent reflects recent usage, not the lifetime average (PERF-3).
+		sample, err := s.resourceCollector.Collect(pid, s.name, instanceID)
 		if err != nil {
 			metrics.ResourceCollectionErrors.WithLabelValues(s.name, instanceID).Inc()
 			s.logger.Debug("Failed to collect metrics",
