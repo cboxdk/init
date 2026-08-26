@@ -7,16 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **TUI restart/stop now actually ask for confirmation, and Stop is `x`
-  everywhere.** The help promised "(with confirmation)" for restart, start, and
-  stop, but restart and stop fired immediately with no prompt. Worse, `s` meant
-  Start in the process list but Stop in the detail view — so the same key started
-  a service in one view and stopped it in another. Restart and stop now open the
-  confirmation dialog in both views, Stop is bound to `x` consistently (Start
-  stays `s`, and runs immediately since it is not destructive), and the help text
-  matches the real behavior. (DX-4)
 ## [3.0.0] - 2026-08-26
 
 ### Added
@@ -163,6 +153,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have made the drift gate above either wrong or littered with special cases.
 
 ### Fixed
+
+- **TUI restart/stop now actually ask for confirmation, and Stop is `x`
+  everywhere.** The help promised "(with confirmation)" for restart, start, and
+  stop, but restart and stop fired immediately with no prompt. Worse, `s` meant
+  Start in the process list but Stop in the detail view — so the same key started
+  a service in one view and stopped it in another. Restart and stop now open the
+  confirmation dialog in both views, Stop is bound to `x` consistently (Start
+  stays `s`, and runs immediately since it is not destructive), and the help text
+  matches the real behavior. (DX-4)
 
 - **The live SSE log pipeline is now tested end to end.** `handleLogStream`,
   `SubscribeLogs`, and the log broadcaster had almost no coverage — the SSE
