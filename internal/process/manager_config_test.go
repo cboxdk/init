@@ -2208,3 +2208,64 @@ func TestManager_ListProcesses_WithDesiredAndMaxScale(t *testing.T) {
 		t.Errorf("Expected MaxScale 10, got %d", p.MaxScale)
 	}
 }
+
+// TestManager_ReloadConfig_RollbackOnStartFailure verifies that when a reload
+// cannot bring up the new configuration (a new process with a bad command), the
+// previously-running processes are restored rather than left stopped (CDX-10).
+func TestManager_ReloadConfig_RollbackOnStartFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cbox-init.yaml")
+
+	// Initial config: one long-running process "web".
+	initial := "version: \"1.0\"\n" +
+		"global:\n  shutdown_timeout: 5\n  log_level: error\n" +
+		"processes:\n" +
+		"  web:\n    enabled: true\n    type: longrun\n    command: [\"sh\", \"-c\", \"sleep 30\"]\n    restart: never\n    scale: 1\n"
+	if err := os.WriteFile(path, []byte(initial), 0600); err != nil {
+		t.Fatalf("write initial config: %v", err)
+	}
+
+	cfg, err := config.LoadWithEnvExpansion(path)
+	if err != nil {
+		t.Fatalf("load initial: %v", err)
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	m := NewManager(cfg, logger, audit.NewLogger(logger, false))
+	m.SetConfigPath(path)
+
+	ctx := context.Background()
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		sctx, c := context.WithTimeout(context.Background(), 3*time.Second)
+		defer c()
+		_ = m.Shutdown(sctx)
+	}()
+
+	// New config: "web" changed (new command) AND a new "broken" process whose
+	// command does not exist, so the reload fails to bring the new config up.
+	broken := "version: \"1.0\"\n" +
+		"global:\n  shutdown_timeout: 5\n  log_level: error\n" +
+		"processes:\n" +
+		"  web:\n    enabled: true\n    type: longrun\n    command: [\"sh\", \"-c\", \"sleep 60\"]\n    restart: never\n    scale: 1\n" +
+		"  broken:\n    enabled: true\n    type: longrun\n    command: [\"/nonexistent/binary_xyz\"]\n    restart: never\n    scale: 1\n"
+	if err := os.WriteFile(path, []byte(broken), 0600); err != nil {
+		t.Fatalf("write broken config: %v", err)
+	}
+
+	if err := m.ReloadConfig(ctx); err == nil {
+		t.Fatal("expected ReloadConfig to fail on the broken process")
+	}
+
+	// After the failed reload, "web" must be running again (rolled back) and
+	// "broken" must not exist.
+	if sup, ok := m.processes["web"]; !ok {
+		t.Error("web was not restored after the failed reload (rollback did not restart it)")
+	} else if sup.GetState() != StateRunning {
+		t.Errorf("web state after rollback = %v, want running", sup.GetState())
+	}
+	if _, ok := m.processes["broken"]; ok {
+		t.Error("broken should not be present after a rolled-back reload")
+	}
+}
