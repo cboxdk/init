@@ -63,6 +63,51 @@ func TestSupervisor_ForwardSignal_ReachesChild(t *testing.T) {
 	}
 }
 
+// SignalProcess targets one named process and validates the signal name.
+func TestManager_SignalProcess(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	dir := t.TempDir()
+	ready := filepath.Join(dir, "ready")
+	got := filepath.Join(dir, "got")
+
+	script := "trap 'echo x > " + got + "' USR1; touch " + ready + "; while true; do sleep 0.05; done"
+	cfg := &config.Config{
+		Global: config.GlobalConfig{LogLevel: "error", MaxRestartAttempts: 1, RestartBackoff: 1},
+		Processes: map[string]*config.Process{
+			"web": {Enabled: true, InitialState: "running", Type: "longrun",
+				Command: []string{"sh", "-c", script}, Restart: "never", Scale: 1},
+		},
+	}
+	m := NewManager(cfg, logger, audit.NewLogger(logger, false))
+	if err := m.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = m.Shutdown(ctx)
+	}()
+
+	testutil.Eventually(t, func() bool { _, err := os.Stat(ready); return err == nil },
+		"child to install trap", 2*time.Second)
+
+	// Unknown process -> error.
+	if err := m.SignalProcess("nope", "SIGUSR1"); err == nil {
+		t.Error("SignalProcess(unknown) = nil, want not-found error")
+	}
+	// Invalid signal -> error.
+	if err := m.SignalProcess("web", "SIGBOGUS"); err == nil {
+		t.Error("SignalProcess(invalid signal) = nil, want error")
+	}
+	// Valid: bare spelling accepted, reaches the child.
+	if err := m.SignalProcess("web", "USR1"); err != nil {
+		t.Fatalf("SignalProcess(web, USR1) = %v, want nil", err)
+	}
+	testutil.Eventually(t, func() bool { _, err := os.Stat(got); return err == nil },
+		"child to receive SIGUSR1", 2*time.Second)
+}
+
 // Forwarding to a supervisor with no running instances must be a safe no-op.
 func TestManager_ForwardSignal_NoProcessesIsSafe(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))

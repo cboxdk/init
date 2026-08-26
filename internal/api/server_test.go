@@ -4771,3 +4771,50 @@ func generateTestCertificate(certFile, keyFile string) error {
 
 	return nil
 }
+
+// TestServer_HandleSignal_Validation covers the signal endpoint's input checks.
+// Valid delivery is covered at the manager layer (TestManager_SignalProcess).
+func TestServer_HandleSignal_Validation(t *testing.T) {
+	server := createTestServer(t, "", nil)
+
+	cases := []struct {
+		name string
+		body string
+		want int
+	}{
+		{"invalid json", `{`, http.StatusBadRequest},
+		{"empty signal", `{"signal":""}`, http.StatusBadRequest},
+		{"unknown signal", `{"signal":"SIGBOGUS"}`, http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/processes/web/signal", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			server.handleSignal(w, req, "web")
+
+			if w.Code != tc.want {
+				t.Errorf("handleSignal(%s) code = %d, want %d (body: %s)", tc.name, w.Code, tc.want, w.Body.String())
+			}
+		})
+	}
+}
+
+// The signal action must be reachable through the POST router.
+func TestServer_RoutePostRequest_SignalAction(t *testing.T) {
+	server := createTestServer(t, "", nil)
+
+	// A well-formed but unknown-process signal should reach handleSignal and
+	// come back as a not-found (404) or similar error status — crucially not a
+	// 400 "unknown action", which would mean the route wasn't wired.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/processes/web/signal", strings.NewReader(`{"signal":"SIGHUP"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.handleProcessAction(w, req)
+
+	if w.Code == http.StatusBadRequest && strings.Contains(w.Body.String(), "unknown action") {
+		t.Errorf("signal action not routed: %s", w.Body.String())
+	}
+}
