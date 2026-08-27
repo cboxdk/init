@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A successful hook, health check or job is no longer reported as failed.** The
+  PID-1 reaper collected the child and *then* took the lock to stash its status,
+  so the supervisor's own `Wait()` could see the child gone and check for a
+  status before it was recorded — reporting a successful run as a failure. That
+  meant a *passing* exec health check could trigger a restart and a *successful*
+  pre-start hook could abort container startup. Measured at ~7% under a tight
+  reaper; the wait-and-stash is now a single atomic step, along with the
+  symmetric start-and-register (a child that exited instantly could be reaped
+  before it was registered). The checkpoint drain, which runs its own wildcard
+  wait, now hands statuses to the same place instead of discarding them.
+- **A crashing process's last log line is no longer lost.** Output waiting for
+  its newline was never flushed when a process exited, so an unterminated final
+  line — the usual shape of a crash message, and with multiline enabled the whole
+  buffered stack trace — was dropped. Exactly the log needed to debug a crash
+  loop. The writers are now flushed when the process exits.
+
 ### Security
 
 - **A publicly-bound API is no longer accepted with an ACL that restricts

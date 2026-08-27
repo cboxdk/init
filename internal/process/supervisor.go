@@ -762,16 +762,14 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		cmd.Stderr = io.Discard
 	}
 
-	// Start the process
-	if err := cmd.Start(); err != nil {
+	// Start the process and register it with the zombie reaper atomically, so
+	// that if the wildcard reaper wins the race to reap this child it captures
+	// the exit status for us instead of leaving cmd.Wait() with a nil
+	// ProcessState — and so a child that exits immediately cannot be reaped in
+	// the gap between starting and registering. See signals.StartSupervised.
+	if err := signals.StartSupervised(cmd); err != nil {
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
-
-	// Register the pid with the zombie reaper so that, if the wildcard reaper
-	// wins the race to reap this child, it captures the exit status for us
-	// instead of leaving cmd.Wait() with a nil ProcessState. See
-	// signals.RegisterSupervised for the full rationale.
-	signals.RegisterSupervised(cmd.Process.Pid)
 
 	startTime := time.Now()
 	instance := &Instance{
@@ -910,6 +908,19 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 	}()
 
 	err := instance.cmd.Wait()
+
+	// The process is gone: flush whatever its writers still hold. A crash
+	// message is characteristically an UNTERMINATED final line ("fatal: ..."
+	// then abort, or a line cut short by SIGKILL), and with multiline enabled
+	// the whole buffered stack trace sits there too. Without this flush that
+	// last output — the one log you actually need to debug a crash loop — is
+	// silently dropped.
+	if instance.stdoutWriter != nil {
+		instance.stdoutWriter.Flush()
+	}
+	if instance.stderrWriter != nil {
+		instance.stderrWriter.Flush()
+	}
 
 	instance.mu.Lock()
 	pid := instance.pid
