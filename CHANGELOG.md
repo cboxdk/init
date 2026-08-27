@@ -7,258 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **A process added in the stopped state is visible and startable.** Honoring
-  `initial_state: stopped` on the API path skipped creating its supervisor
-  altogether, so the process existed only in the configuration — absent from the
-  process list and impossible to start. It now gets a registered (unstarted)
-  supervisor, exactly as at startup.
-- **A oneshot that completed is not reported as failed.** Marking a supervisor
-  with no live instances as failed also caught oneshots, for which finishing is
-  success.
-- **A failed update restores the previous process on its own deadline.** The
-  restore reused the update's context — often the very thing that had just
-  expired — so it could fail immediately and leave the service down.
-
-### Fixed
-
-- **Adding a process at runtime honors `schedule` and `initial_state`.** A
-  process added through the API with a cron `schedule` was started as a
-  long-running supervisor — running the job continuously instead of on its
-  schedule — and one added with `initial_state: stopped` started immediately.
-  Both now behave as they do at startup.
-- **Removing a process also removes its scheduled job.** Deleting a scheduled
-  process dropped only its config entry, leaving the cron job firing against a
-  process that no longer existed.
-- **A rejected process update no longer leaves the service down.** If the new
-  configuration failed to start, only the config was rolled back — the old
-  supervisor had already been stopped, so the process stayed down. The previous
-  configuration is now restarted.
-- **A container whose restored workload dies exits non-zero.** A process brought
-  back from a checkpoint recorded no exit status when it died, so PID 1 could
-  exit 0 after its entire workload disappeared.
-- **A process whose instances have all died no longer reports itself running.**
-  The supervisor kept its `running` state, so readiness and the API reported a
-  dead service as healthy.
-
-### Fixed
-
-- **Stopping an instance that just exited can no longer resurrect it.** If an
-  instance died on its own moments before it was stopped (a scale-down, or a
-  shutdown), the stop returned early without recording that the instance must
-  stay down — so its monitor could still start a replacement, which the caller
-  had already dropped from the instance list, leaving a live process nothing was
-  tracking. The intent is now recorded whatever state the instance is in.
-
-### Fixed
-
-- **Scaling down keeps track of an instance that would not stop.** `ScaleDown`
-  truncated its instance list even when stopping had failed, so a process that
-  survived the shutdown was left running with nothing tracking it — and a later
-  scale-up would start a replacement on the same instance index and port,
-  alongside the orphan. It now keeps the instance and reports the failure.
-
-### Fixed
-
-- **A force-kill can no longer hang PID 1.** `shutdown.kill_signal` is
-  operator-configurable, so it can name a signal the process ignores (a trapped
-  `SIGTERM`, or `SIGSTOP`, which never terminates). The force-kill then waited
-  for the process to exit *forever*, with the manager lock held — freezing
-  shutdown, reload and the API. The wait is now bounded and escalates to a real
-  `SIGKILL`, which cannot be caught, blocked or ignored.
-- **A supervisor that failed to stop stays authoritative for its process.**
-  `Stop` cleared the instance list and marked itself stopped even when it was
-  returning errors, so the manager lost track of a still-running child — and
-  could then start a second copy alongside it. On failure it now keeps its
-  instances and reports a failed state.
-- **Webhook URLs are redacted.** `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` and
-  similar carry their secret in the URL path rather than as userinfo, so the
-  credential check did not catch them.
-
-### Fixed
-
-- **A credential-bearing URL is redacted whatever its name.** The public/frontend
-  exemptions were checked first, so `SITE_URL=https://user:pw@host` and
-  `VITE_DATABASE_URL=postgres://user:pw@db/app` were returned in cleartext. A
-  value carrying real credentials now always wins. Compact password names
-  (`DBPASS`, `SMTPPASS`) are covered too.
-- **Aborting a reload really leaves the stack untouched.** When a process refused
-  to stop, the reload aborted after having already stopped the ones before it,
-  leaving half the stack down while reporting the configuration unchanged. It now
-  restores what it stopped before returning, and says so if it could not.
-- **The rollback no longer orphans a process it could not stop.** It counted the
-  failure but still dropped the supervisor, leaving a live process with nothing
-  managing it — and then started a second copy. It now keeps the supervisor and
-  skips restoring that name.
-
-### Fixed
-
-- **A "public" name no longer exempts a real secret.** The public-value
-  exemption was checked first, so `RECAPTCHA_SITE_SECRET`, `SITE_PRIVATE_KEY`
-  and `PUBLIC_SECRET_KEY` were returned in cleartext. An explicit secret word now
-  always wins; the exemption only overrides the weak "ends in key" match.
-- **A readiness-only health check no longer restarts the process.** `mode:
-  readiness` is documented as gating dependents, but a failing probe still killed
-  and restarted the service. It now only gates readiness; `liveness` and the
-  default `both` still restart.
-- **A failed restart no longer strands its dependents.** When a replacement
-  instance could not be started, readiness was left re-armed but never resolved
-  and the all-processes-dead sweep was not run, so dependents waited out the full
-  dependency timeout and the container could idle with no workload. The failure
-  now resolves readiness and triggers the sweep.
-- **A dead long-running dependency is no longer reported ready.** A process with
-  no health check answered "ready" immediately even when all its instances had
-  exited; it now reports that readiness is impossible.
-- **A reload that cannot stop a process aborts instead of duplicating it.** The
-  stop failure was logged and the reload continued, replacing the supervisor
-  entry — leaving the old process running with nothing managing it, alongside a
-  new copy. The reload now refuses and leaves the running configuration in place.
-
-### Fixed
-
-- **Public keys are no longer masked as secrets.** `PUBLIC_KEY`,
-  `STRIPE_PUBLISHABLE_KEY`, `RECAPTCHA_SITE_KEY` and frontend-exposed variables
-  (`MIX_*`, `VITE_*`, `NEXT_PUBLIC_*`) are published by definition, so hiding
-  them in the API only cost the operator information.
-
-### Fixed
-
-- **Erlang/RabbitMQ cluster cookies are redacted** (`RABBITMQ_ERLANG_COOKIE`),
-  while ordinary cookie settings (`COOKIE_DOMAIN`, `SESSION_COOKIE_NAME`) stay
-  readable.
-- **A long-running process that has died stops advertising itself as ready.**
-  Readiness was only re-armed when a process started or auto-restarted, so one
-  that exited without a restart (`restart: never`, or an exhausted restart
-  budget) kept its previous run's readiness — a dependent started later saw a
-  dead service as ready. A oneshot is unaffected: for it, finishing IS the
-  success condition.
-
-### Fixed
-
-- **More secret env vars are redacted.** The abbreviated forms (`DB_PASS`,
-  `MYSQL_PWD`), separator-less compounds (`SECRETKEY`) and registry credentials
-  (`DOCKER_AUTH_CONFIG`) were still returned in cleartext. The short forms
-  require a boundary on both sides, so `COMPASS_DIR` and `PASSENGER_ROOT` stay
-  readable.
-- **A restarted process is no longer treated as ready from its previous run.**
-  Readiness was only re-armed on an explicit start, so a dependency that became
-  ready, crashed, and was auto-restarted still looked ready — a dependent started
-  afterwards (by a reload or scale-up) launched against a process that was only
-  just booting. Automatic restarts now re-arm it too.
-- **A readiness signal from a superseded run is ignored.** A waiter that
-  sampled the signals just as the process restarted could observe the retired
-  run's "ready" and release its dependents against the new, unproven one.
-  Signals now carry a generation, and a waiter ignores any that is not from the
-  current run.
-- **The reload rollback counts processes it could not stop.** Stop failures were
-  logged but not counted, so a rollback could report success while a process from
-  the failed configuration was still running.
-
-### Changed
-
-- **BREAKING: REST log responses now use the same field names as the SSE
-  stream.** `GET /api/v1/logs` and `GET /api/v1/processes/{name}/logs`
-  serialized Go field names (`Timestamp`, `ProcessName`, `InstanceID`) while
-  `/logs/stream` emitted `timestamp`, `process`, `instance` — two parsers for one
-  concept. Both now emit the stream's spelling, from a single shared type, and
-  the OpenAPI spec documents it. Consumers of the REST log endpoints must update
-  their field names.
-- **A oneshot can no longer be configured with `restart: on-failure`.** A
-  oneshot's exit is handled by the completion path, which never consults the
-  restart policy, so the setting silently did nothing — it is now rejected at
-  config load with a pointer to `restart: never`.
-
-### Fixed
-
-- **More secrets are redacted, and a few settings are readable again.** The
-  previous pass over the secret-name pattern fixed its false positives but
-  introduced false negatives: `AWS_ACCESS_KEY_ID`, `PRIVATE_KEY_PEM`, WordPress's
-  `*_SALT` values, separator-less names (`DBPASSWORD`) and camelCase
-  (`jwtSecret`) were all returned in cleartext. Matching now requires a secret
-  word to be followed by a non-letter (or end), which catches those while still
-  leaving `TOKENIZER_PATH` and `SECRETARY_EMAIL` visible. Password-only URLs
-  (`redis://:secret@host`, common for Redis and AMQP) are detected too.
-- **Creating a process rejects the redaction placeholder.** `POST /processes`
-  had no equivalent of the update path's guard, so cloning a process read from
-  the API started it with `***REDACTED***` as its password — which
-  `config/save` would then write to the YAML. It is now a 400.
-- **The reload rollback budgets the whole rollback, waits for dependencies, and
-  counts accurately.** It used a per-process timeout for the entire sequence, so
-  it could report processes as down while their start was still in flight; it
-  restarted processes without honoring `depends_on`, so a rolled-back stack could
-  start a service before its migration finished; and its error path over-counted
-  failures.
-- **A waiter is no longer stranded when a process restarts underneath it.** If a
-  supervisor re-armed its readiness signals while a dependent was already
-  waiting, the waiter kept watching the retired channel until its timeout. It is
-  now woken to watch the new run.
-- **The API client escapes process names in URLs** (paths and the log-stream
-  query), so a name containing a space or `&` no longer misroutes.
-- **A completed oneshot releases its resource-sampling handle** instead of
-  keeping a handle to a dead PID for the container's lifetime; its metrics
-  history is retained.
-
-### Fixed
-
-- **Readiness is re-armed on every run.** The readiness signals were sticky for
-  a supervisor's whole lifetime, so a restarted service counted as ready before
-  it had proven anything, and — with readiness now also carrying a failure
-  signal — a oneshot that failed once would keep failing its dependents forever,
-  even after a successful re-run (both signals closed, the waiter picking between
-  them at random). A new run now resets readiness, and the signals moved to their
-  own mutex so a waiter cannot race the re-arm. (CONC-16 / PID1-7)
-### Security
-
-- **The process-detail API no longer leaks — or destroys — secrets.** Two
-  problems with the env redaction: (1) a client that read a process (secrets
-  masked), changed one field and PUT the whole config back wrote the literal
-  `***REDACTED***` over the real secret and restarted the service with a broken
-  environment — the TUI's edit flow did exactly this; the API now treats the
-  placeholder as "keep the configured value". (2) The secret-name pattern both
-  over- and under-matched: it masked ordinary settings (`AUTH_DRIVER`,
-  `OAUTH_ENABLED`, `TOKENIZER_PATH`) while missing the ones that matter most for
-  the frameworks this targets — Laravel's `APP_KEY`, and credential-bearing
-  `DATABASE_URL`/`MAIL_DSN` values. Generic words now need word boundaries, the
-  ambiguous ones (`auth`, `key`, `pat`) only count at the end of a name, and
-  URL/DSN variables are masked when their value actually carries credentials.
-
-### Fixed
-
-- **A failed oneshot no longer stalls startup for the dependency timeout.** With
-  oneshot readiness gated on successful completion, a oneshot that *failed* never
-  signalled anything, so its dependents waited out the full `dependency_timeout`
-  (5 minutes by default) — with the manager's write lock held, during which PID 1
-  also could not act on SIGTERM. A failed oneshot now immediately signals that
-  readiness is impossible, and dependents fail in milliseconds with an error
-  naming the exit code.
-- **A failed reload's rollback no longer runs on a dead context.** The rollback
-  reused the reload's context, but the failures that trigger a rollback (a
-  dependency wait timing out, a cancelled request) are exactly the ones that
-  exhaust it — so the rollback force-killed the old processes and then refused to
-  start any of them, turning a failed reload into an outage while reporting
-  success. It now runs on a detached, separately-bounded context, tears down in
-  reverse dependency order, and reports how many processes it could not restore
-  instead of always claiming a clean rollback.
-- **Per-process CPU% now really is recent usage.** The previous change cached the
-  gopsutil handle but still called `CPUPercent()`, which divides total CPU time
-  by the process's *lifetime* — so the gauge kept reporting a historical average
-  no matter how the handle was managed (measured: an idle process still reported
-  72.8%). The collector now uses the interval-based reading that the cached
-  handle actually enables, so an idle process reads ~0%. The first sample after a
-  process starts or restarts reports 0; the scale is unchanged (100 = one core).
-- **`POST /processes` returns the right status code.** It hardcoded 500, so a
-  duplicate name returned 500 instead of 409 and an invalid definition 500
-  instead of 400, defeating the typed errors added earlier.
-- **TUI: the detail view's footer advertised a dead key.** It still said
-  `<s> Stop` after Stop moved to `x`, so pressing `s` there did nothing.
-- **The log-stream endpoint's 405 is JSON like every other endpoint** (it was
-  `text/plain`), and the API client no longer treats an empty 2xx body as a
-  decode error.
-- **The OpenAPI spec's `PUT /processes/{name}` body was wrong** — it declared a
-  bare process object, but the endpoint requires a `{"process": {…}}` wrapper, so
-  a generated client got a 400.
-
 ## [3.0.0] - 2026-08-26
 
 ### Added
@@ -327,6 +75,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   misspelled key now fails CI instead of silently misleading a reader.
 
 ### Changed
+
+- **BREAKING: REST log responses now use the same field names as the SSE
+  stream.** `GET /api/v1/logs` and `GET /api/v1/processes/{name}/logs`
+  serialized Go field names (`Timestamp`, `ProcessName`, `InstanceID`) while
+  `/logs/stream` emitted `timestamp`, `process`, `instance` — two parsers for one
+  concept. Both now emit the stream's spelling, from a single shared type, and
+  the OpenAPI spec documents it. Consumers of the REST log endpoints must update
+  their field names.
+- **A oneshot can no longer be configured with `restart: on-failure`.** A
+  oneshot's exit is handled by the completion path, which never consults the
+  restart policy, so the setting silently did nothing — it is now rejected at
+  config load with a pointer to `restart: never`.
 
 - **Shared, typed DTOs for the API's data responses.** The server built the
   process-list, process-detail, logs, and oneshot-history responses as ad-hoc
@@ -405,6 +165,204 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have made the drift gate above either wrong or littered with special cases.
 
 ### Fixed
+
+- **A process added in the stopped state is visible and startable.** Honoring
+  `initial_state: stopped` on the API path skipped creating its supervisor
+  altogether, so the process existed only in the configuration — absent from the
+  process list and impossible to start. It now gets a registered (unstarted)
+  supervisor, exactly as at startup.
+- **A oneshot that completed is not reported as failed.** Marking a supervisor
+  with no live instances as failed also caught oneshots, for which finishing is
+  success.
+- **A failed update restores the previous process on its own deadline.** The
+  restore reused the update's context — often the very thing that had just
+  expired — so it could fail immediately and leave the service down.
+
+- **Adding a process at runtime honors `schedule` and `initial_state`.** A
+  process added through the API with a cron `schedule` was started as a
+  long-running supervisor — running the job continuously instead of on its
+  schedule — and one added with `initial_state: stopped` started immediately.
+  Both now behave as they do at startup.
+- **Removing a process also removes its scheduled job.** Deleting a scheduled
+  process dropped only its config entry, leaving the cron job firing against a
+  process that no longer existed.
+- **A rejected process update no longer leaves the service down.** If the new
+  configuration failed to start, only the config was rolled back — the old
+  supervisor had already been stopped, so the process stayed down. The previous
+  configuration is now restarted.
+- **A container whose restored workload dies exits non-zero.** A process brought
+  back from a checkpoint recorded no exit status when it died, so PID 1 could
+  exit 0 after its entire workload disappeared.
+- **A process whose instances have all died no longer reports itself running.**
+  The supervisor kept its `running` state, so readiness and the API reported a
+  dead service as healthy.
+
+- **Stopping an instance that just exited can no longer resurrect it.** If an
+  instance died on its own moments before it was stopped (a scale-down, or a
+  shutdown), the stop returned early without recording that the instance must
+  stay down — so its monitor could still start a replacement, which the caller
+  had already dropped from the instance list, leaving a live process nothing was
+  tracking. The intent is now recorded whatever state the instance is in.
+
+- **Scaling down keeps track of an instance that would not stop.** `ScaleDown`
+  truncated its instance list even when stopping had failed, so a process that
+  survived the shutdown was left running with nothing tracking it — and a later
+  scale-up would start a replacement on the same instance index and port,
+  alongside the orphan. It now keeps the instance and reports the failure.
+
+- **A force-kill can no longer hang PID 1.** `shutdown.kill_signal` is
+  operator-configurable, so it can name a signal the process ignores (a trapped
+  `SIGTERM`, or `SIGSTOP`, which never terminates). The force-kill then waited
+  for the process to exit *forever*, with the manager lock held — freezing
+  shutdown, reload and the API. The wait is now bounded and escalates to a real
+  `SIGKILL`, which cannot be caught, blocked or ignored.
+- **A supervisor that failed to stop stays authoritative for its process.**
+  `Stop` cleared the instance list and marked itself stopped even when it was
+  returning errors, so the manager lost track of a still-running child — and
+  could then start a second copy alongside it. On failure it now keeps its
+  instances and reports a failed state.
+- **Webhook URLs are redacted.** `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` and
+  similar carry their secret in the URL path rather than as userinfo, so the
+  credential check did not catch them.
+
+- **A credential-bearing URL is redacted whatever its name.** The public/frontend
+  exemptions were checked first, so `SITE_URL=https://user:pw@host` and
+  `VITE_DATABASE_URL=postgres://user:pw@db/app` were returned in cleartext. A
+  value carrying real credentials now always wins. Compact password names
+  (`DBPASS`, `SMTPPASS`) are covered too.
+- **Aborting a reload really leaves the stack untouched.** When a process refused
+  to stop, the reload aborted after having already stopped the ones before it,
+  leaving half the stack down while reporting the configuration unchanged. It now
+  restores what it stopped before returning, and says so if it could not.
+- **The rollback no longer orphans a process it could not stop.** It counted the
+  failure but still dropped the supervisor, leaving a live process with nothing
+  managing it — and then started a second copy. It now keeps the supervisor and
+  skips restoring that name.
+
+- **A "public" name no longer exempts a real secret.** The public-value
+  exemption was checked first, so `RECAPTCHA_SITE_SECRET`, `SITE_PRIVATE_KEY`
+  and `PUBLIC_SECRET_KEY` were returned in cleartext. An explicit secret word now
+  always wins; the exemption only overrides the weak "ends in key" match.
+- **A readiness-only health check no longer restarts the process.** `mode:
+  readiness` is documented as gating dependents, but a failing probe still killed
+  and restarted the service. It now only gates readiness; `liveness` and the
+  default `both` still restart.
+- **A failed restart no longer strands its dependents.** When a replacement
+  instance could not be started, readiness was left re-armed but never resolved
+  and the all-processes-dead sweep was not run, so dependents waited out the full
+  dependency timeout and the container could idle with no workload. The failure
+  now resolves readiness and triggers the sweep.
+- **A dead long-running dependency is no longer reported ready.** A process with
+  no health check answered "ready" immediately even when all its instances had
+  exited; it now reports that readiness is impossible.
+- **A reload that cannot stop a process aborts instead of duplicating it.** The
+  stop failure was logged and the reload continued, replacing the supervisor
+  entry — leaving the old process running with nothing managing it, alongside a
+  new copy. The reload now refuses and leaves the running configuration in place.
+
+- **Public keys are no longer masked as secrets.** `PUBLIC_KEY`,
+  `STRIPE_PUBLISHABLE_KEY`, `RECAPTCHA_SITE_KEY` and frontend-exposed variables
+  (`MIX_*`, `VITE_*`, `NEXT_PUBLIC_*`) are published by definition, so hiding
+  them in the API only cost the operator information.
+
+- **Erlang/RabbitMQ cluster cookies are redacted** (`RABBITMQ_ERLANG_COOKIE`),
+  while ordinary cookie settings (`COOKIE_DOMAIN`, `SESSION_COOKIE_NAME`) stay
+  readable.
+- **A long-running process that has died stops advertising itself as ready.**
+  Readiness was only re-armed when a process started or auto-restarted, so one
+  that exited without a restart (`restart: never`, or an exhausted restart
+  budget) kept its previous run's readiness — a dependent started later saw a
+  dead service as ready. A oneshot is unaffected: for it, finishing IS the
+  success condition.
+
+- **More secret env vars are redacted.** The abbreviated forms (`DB_PASS`,
+  `MYSQL_PWD`), separator-less compounds (`SECRETKEY`) and registry credentials
+  (`DOCKER_AUTH_CONFIG`) were still returned in cleartext. The short forms
+  require a boundary on both sides, so `COMPASS_DIR` and `PASSENGER_ROOT` stay
+  readable.
+- **A restarted process is no longer treated as ready from its previous run.**
+  Readiness was only re-armed on an explicit start, so a dependency that became
+  ready, crashed, and was auto-restarted still looked ready — a dependent started
+  afterwards (by a reload or scale-up) launched against a process that was only
+  just booting. Automatic restarts now re-arm it too.
+- **A readiness signal from a superseded run is ignored.** A waiter that
+  sampled the signals just as the process restarted could observe the retired
+  run's "ready" and release its dependents against the new, unproven one.
+  Signals now carry a generation, and a waiter ignores any that is not from the
+  current run.
+- **The reload rollback counts processes it could not stop.** Stop failures were
+  logged but not counted, so a rollback could report success while a process from
+  the failed configuration was still running.
+
+- **More secrets are redacted, and a few settings are readable again.** The
+  previous pass over the secret-name pattern fixed its false positives but
+  introduced false negatives: `AWS_ACCESS_KEY_ID`, `PRIVATE_KEY_PEM`, WordPress's
+  `*_SALT` values, separator-less names (`DBPASSWORD`) and camelCase
+  (`jwtSecret`) were all returned in cleartext. Matching now requires a secret
+  word to be followed by a non-letter (or end), which catches those while still
+  leaving `TOKENIZER_PATH` and `SECRETARY_EMAIL` visible. Password-only URLs
+  (`redis://:secret@host`, common for Redis and AMQP) are detected too.
+- **Creating a process rejects the redaction placeholder.** `POST /processes`
+  had no equivalent of the update path's guard, so cloning a process read from
+  the API started it with `***REDACTED***` as its password — which
+  `config/save` would then write to the YAML. It is now a 400.
+- **The reload rollback budgets the whole rollback, waits for dependencies, and
+  counts accurately.** It used a per-process timeout for the entire sequence, so
+  it could report processes as down while their start was still in flight; it
+  restarted processes without honoring `depends_on`, so a rolled-back stack could
+  start a service before its migration finished; and its error path over-counted
+  failures.
+- **A waiter is no longer stranded when a process restarts underneath it.** If a
+  supervisor re-armed its readiness signals while a dependent was already
+  waiting, the waiter kept watching the retired channel until its timeout. It is
+  now woken to watch the new run.
+- **The API client escapes process names in URLs** (paths and the log-stream
+  query), so a name containing a space or `&` no longer misroutes.
+- **A completed oneshot releases its resource-sampling handle** instead of
+  keeping a handle to a dead PID for the container's lifetime; its metrics
+  history is retained.
+
+- **Readiness is re-armed on every run.** The readiness signals were sticky for
+  a supervisor's whole lifetime, so a restarted service counted as ready before
+  it had proven anything, and — with readiness now also carrying a failure
+  signal — a oneshot that failed once would keep failing its dependents forever,
+  even after a successful re-run (both signals closed, the waiter picking between
+  them at random). A new run now resets readiness, and the signals moved to their
+  own mutex so a waiter cannot race the re-arm. (CONC-16 / PID1-7)
+
+- **A failed oneshot no longer stalls startup for the dependency timeout.** With
+  oneshot readiness gated on successful completion, a oneshot that *failed* never
+  signalled anything, so its dependents waited out the full `dependency_timeout`
+  (5 minutes by default) — with the manager's write lock held, during which PID 1
+  also could not act on SIGTERM. A failed oneshot now immediately signals that
+  readiness is impossible, and dependents fail in milliseconds with an error
+  naming the exit code.
+- **A failed reload's rollback no longer runs on a dead context.** The rollback
+  reused the reload's context, but the failures that trigger a rollback (a
+  dependency wait timing out, a cancelled request) are exactly the ones that
+  exhaust it — so the rollback force-killed the old processes and then refused to
+  start any of them, turning a failed reload into an outage while reporting
+  success. It now runs on a detached, separately-bounded context, tears down in
+  reverse dependency order, and reports how many processes it could not restore
+  instead of always claiming a clean rollback.
+- **Per-process CPU% now really is recent usage.** The previous change cached the
+  gopsutil handle but still called `CPUPercent()`, which divides total CPU time
+  by the process's *lifetime* — so the gauge kept reporting a historical average
+  no matter how the handle was managed (measured: an idle process still reported
+  72.8%). The collector now uses the interval-based reading that the cached
+  handle actually enables, so an idle process reads ~0%. The first sample after a
+  process starts or restarts reports 0; the scale is unchanged (100 = one core).
+- **`POST /processes` returns the right status code.** It hardcoded 500, so a
+  duplicate name returned 500 instead of 409 and an invalid definition 500
+  instead of 400, defeating the typed errors added earlier.
+- **TUI: the detail view's footer advertised a dead key.** It still said
+  `<s> Stop` after Stop moved to `x`, so pressing `s` there did nothing.
+- **The log-stream endpoint's 405 is JSON like every other endpoint** (it was
+  `text/plain`), and the API client no longer treats an empty 2xx body as a
+  decode error.
+- **The OpenAPI spec's `PUT /processes/{name}` body was wrong** — it declared a
+  bare process object, but the endpoint requires a `{"process": {…}}` wrapper, so
+  a generated client got a 400.
 
 - **TUI restart/stop now actually ask for confirmation, and Stop is `x`
   everywhere.** The help promised "(with confirmation)" for restart, start, and
@@ -723,6 +681,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a configuration warning.
 
 ### Security
+
+- **The process-detail API no longer leaks — or destroys — secrets.** Two
+  problems with the env redaction: (1) a client that read a process (secrets
+  masked), changed one field and PUT the whole config back wrote the literal
+  `***REDACTED***` over the real secret and restarted the service with a broken
+  environment — the TUI's edit flow did exactly this; the API now treats the
+  placeholder as "keep the configured value". (2) The secret-name pattern both
+  over- and under-matched: it masked ordinary settings (`AUTH_DRIVER`,
+  `OAUTH_ENABLED`, `TOKENIZER_PATH`) while missing the ones that matter most for
+  the frameworks this targets — Laravel's `APP_KEY`, and credential-bearing
+  `DATABASE_URL`/`MAIL_DSN` values. Generic words now need word boundaries, the
+  ambiguous ones (`auth`, `key`, `pat`) only count at the end of a name, and
+  URL/DSN variables are masked when their value actually carries credentials.
 
 - **The process-detail API redacts secret-looking environment variables.**
   `GET /api/v1/processes/{name}` returned the process's full `env` in cleartext,
