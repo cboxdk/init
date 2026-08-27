@@ -39,3 +39,30 @@ func TestNotReadyAfterStop(t *testing.T) {
 		t.Error("readiness file still present after Stop")
 	}
 }
+
+// A readiness file removed from underneath us — a tmpfs cleaner, a sidecar, an
+// operator — was never recreated, because the file was only written on a
+// ready-state TRANSITION. The container then looked not-ready to a file-based
+// probe for the rest of its life, with nothing in the logs to explain it.
+func TestReadinessFileIsRecreatedIfRemoved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ready")
+	lg := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	m := NewManager(&config.ReadinessConfig{Enabled: true, Path: path, Mode: "all_running"}, lg)
+
+	m.UpdateProcessState("web", StateRunning, "healthy")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("precondition: readiness file should exist: %v", err)
+	}
+
+	// Something deletes it.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+
+	// The next evaluation must put it back.
+	m.UpdateProcessState("web", StateRunning, "healthy")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("readiness file was not recreated after external removal: %v", err)
+	}
+}

@@ -379,17 +379,32 @@ func (m *Manager) isProcessReady(status ProcessStatus) bool {
 //
 // Must be called with the mutex lock held.
 func (m *Manager) setReady(ready bool) {
-	if m.isReady == ready {
-		return
-	}
-
+	// Reconcile the file on every evaluation, not only on a change. Acting only
+	// on transitions meant a readiness file removed from underneath us — a
+	// tmpfs cleaner, a sidecar, an operator — was never recreated, so the
+	// container stayed "not ready" to a file-based probe for the rest of its
+	// life with nothing in the logs to explain it.
+	changed := m.isReady != ready
 	m.isReady = ready
 
 	if ready {
-		m.createReadinessFile()
-	} else {
+		if changed || !m.readinessFileExists() {
+			m.createReadinessFile()
+		}
+		return
+	}
+	if changed {
 		m.removeReadinessFile()
 	}
+}
+
+// readinessFileExists reports whether the configured readiness file is present.
+func (m *Manager) readinessFileExists() bool {
+	if m.config == nil || m.config.Path == "" {
+		return true // nothing to reconcile
+	}
+	_, err := os.Stat(m.config.Path)
+	return err == nil
 }
 
 // createReadinessFile creates the readiness indicator file.
@@ -401,6 +416,11 @@ func (m *Manager) setReady(ready bool) {
 // The file is created with 0644 permissions. Errors are logged but do not
 // cause the readiness state to revert.
 func (m *Manager) createReadinessFile() {
+	// A nil config means readiness is disabled; an empty path means "no file"
+	// (documented). Neither should reach os.WriteFile.
+	if m.config == nil || m.config.Path == "" {
+		return
+	}
 	content := m.config.Content
 	if content == "" {
 		content = fmt.Sprintf("ready\ntimestamp=%d\n", time.Now().Unix())
@@ -428,6 +448,12 @@ func (m *Manager) createReadinessFile() {
 // Logs "Container is not ready" only if the container was previously ready,
 // to avoid spurious messages during initialization.
 func (m *Manager) removeReadinessFile() {
+	// NewManager documents that a nil config is supported (readiness disabled),
+	// so every path that touches config.Path must tolerate it rather than
+	// panicking on a nil dereference.
+	if m.config == nil || m.config.Path == "" {
+		return
+	}
 	if err := os.Remove(m.config.Path); err != nil && !os.IsNotExist(err) {
 		m.logger.Error("Failed to remove readiness file",
 			"path", m.config.Path,
