@@ -26,6 +26,7 @@ type Server struct {
 	logger     *slog.Logger
 	aclConfig  *config.ACLConfig
 	aclChecker *acl.Checker
+	aclInitErr error // ACL was enabled but its checker failed to build; fail closed at Start
 	tlsConfig  *config.TLSConfig
 	tlsManager *tlsmgr.Manager
 }
@@ -38,10 +39,16 @@ func NewServer(port int, path string, aclCfg *config.ACLConfig, tlsCfg *config.T
 
 	// Create ACL checker if enabled
 	var aclChecker *acl.Checker
+	var aclInitErr error
 	if aclCfg != nil && aclCfg.Enabled {
 		checker, err := acl.NewChecker(aclCfg)
 		if err != nil {
+			// Logging and carrying on served metrics — which include process
+			// names, command lines and resource figures — to everyone, from a
+			// config that explicitly asked for an allow-list. Refuse to listen
+			// instead; Start returns this.
 			log.Error("Failed to create ACL checker", "error", err)
+			aclInitErr = fmt.Errorf("invalid metrics ACL configuration: %w", err)
 		} else {
 			aclChecker = checker
 			log.Info("ACL enabled for metrics", "mode", aclCfg.Mode, "allow_count", len(aclCfg.AllowList), "deny_count", len(aclCfg.DenyList))
@@ -53,6 +60,7 @@ func NewServer(port int, path string, aclCfg *config.ACLConfig, tlsCfg *config.T
 		path:       path,
 		aclConfig:  aclCfg,
 		aclChecker: aclChecker,
+		aclInitErr: aclInitErr,
 		tlsConfig:  tlsCfg,
 		logger:     log,
 	}
@@ -75,6 +83,10 @@ func (s *Server) listenAddr() string {
 
 // Start starts the metrics server
 func (s *Server) Start(ctx context.Context) error {
+	if s.aclInitErr != nil {
+		return s.aclInitErr
+	}
+
 	mux := http.NewServeMux()
 
 	// Prometheus metrics endpoint

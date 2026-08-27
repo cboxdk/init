@@ -27,6 +27,17 @@ func NewChecker(cfg *config.ACLConfig) (*Checker, error) {
 		return nil, nil // ACL disabled
 	}
 
+	// An unrecognised mode used to fall through to deny-mode semantics, which
+	// with an empty deny_list means "allow everyone" — so a typo like
+	// mode: "Allow" or "whitelist" silently turned a whitelist into allow-all.
+	switch cfg.Mode {
+	case "allow", "deny":
+	case "":
+		// Empty is filled in by SetDefaults; treat it as the safe direction.
+	default:
+		return nil, fmt.Errorf("invalid acl mode %q (valid: allow, deny)", cfg.Mode)
+	}
+
 	checker := &Checker{
 		config:     cfg,
 		trustProxy: cfg.TrustProxy,
@@ -125,12 +136,19 @@ func (c *Checker) IsAllowed(ip net.IP) bool {
 		return true // ACL disabled
 	}
 
+	// An explicit deny always wins, in both modes. Previously deny_list was
+	// parsed and then ignored in allow mode, so the natural
+	// "allow 10.0.0.0/8 except 10.0.0.66" config silently allowed 10.0.0.66.
+	if c.isInDenyList(ip) {
+		return false
+	}
+
 	// Mode: "allow" (whitelist) - deny all except allowed
 	// Mode: "deny" (blacklist) - allow all except denied
 	if c.config.Mode == "allow" {
 		return c.isInAllowList(ip)
 	}
-	return !c.isInDenyList(ip)
+	return true
 }
 
 // isInAllowList checks if IP is in allow list (IPs or CIDRs)
@@ -186,17 +204,54 @@ func (c *Checker) ExtractIP(r *http.Request) (net.IP, error) {
 	// IP and bypass the ACL. When trusted_proxies is empty, no peer is trusted,
 	// so the header is ignored (fail closed).
 	if c != nil && c.trustProxy && c.isTrustedProxy(peer) {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			// "client, proxy1, proxy2" — the leftmost is the original client.
-			ips := strings.Split(xff, ",")
-			clientIP := strings.TrimSpace(ips[0])
-			if ip := net.ParseIP(clientIP); ip != nil {
-				return ip, nil
-			}
+		if ip := c.clientFromXFF(r.Header.Get("X-Forwarded-For")); ip != nil {
+			return ip, nil
 		}
 	}
 
 	return peer, nil
+}
+
+// maxXFFHops bounds how far back through X-Forwarded-For we will walk, so a
+// header stuffed with thousands of entries cannot turn each request into a long
+// scan.
+const maxXFFHops = 32
+
+// clientFromXFF picks the real client out of an X-Forwarded-For chain, reading
+// RIGHT TO LEFT.
+//
+// The list is "client, proxy1, proxy2": every standard proxy APPENDS the peer it
+// saw (nginx's proxy_add_x_forwarded_for, HAProxy, ingress-nginx), so everything
+// to the left of the entries our own trusted proxies added is supplied by the
+// client and can say anything. Taking the leftmost value therefore let an
+// attacker pick their own source address: sending `X-Forwarded-For: 10.0.0.1`
+// through the proxy yields `10.0.0.1, <attacker>` and the ACL saw 10.0.0.1.
+//
+// Walking from the right and discarding addresses that are themselves trusted
+// proxies leaves the first address we did not vouch for — the closest untrusted
+// hop, which is the real client. If every entry is a trusted proxy, there is no
+// client address to believe and the caller falls back to the peer.
+func (c *Checker) clientFromXFF(xff string) net.IP {
+	if xff == "" {
+		return nil
+	}
+	parts := strings.Split(xff, ",")
+	if len(parts) > maxXFFHops {
+		parts = parts[len(parts)-maxXFFHops:]
+	}
+	for i := len(parts) - 1; i >= 0; i-- {
+		ip := net.ParseIP(strings.TrimSpace(parts[i]))
+		if ip == nil {
+			// A malformed entry is not something to trust past: stop here rather
+			// than skipping over it into client-controlled territory.
+			return nil
+		}
+		if c.isTrustedProxy(ip) {
+			continue // one of ours; keep walking left
+		}
+		return ip
+	}
+	return nil
 }
 
 // Middleware returns an HTTP middleware that enforces ACL rules

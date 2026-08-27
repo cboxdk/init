@@ -2168,6 +2168,27 @@ func TestSecurityStack_XForwardedFor(t *testing.T) {
 			xForwardedFor:  "192.168.1.100",
 			expectedStatus: http.StatusForbidden, // Uses X-Forwarded-For which is not in 10.0.0.0/8
 		},
+		{
+			// Proxies APPEND the peer they saw, so a client that sends its own
+			// X-Forwarded-For gets its forgery placed to the LEFT of its real
+			// address. Reading the leftmost entry let an outsider claim any
+			// source address it liked; the real client is the rightmost entry
+			// that is not one of our own proxies.
+			name:           "x_forwarded_for_spoofed_leftmost",
+			trustProxy:     true,
+			remoteAddr:     "127.0.0.1:12345",
+			xForwardedFor:  "10.0.0.100, 192.168.1.100",
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			// A multi-hop chain: the rightmost entry is our own second proxy, so
+			// it is skipped and the client behind it is used.
+			name:           "x_forwarded_for_multi_hop",
+			trustProxy:     true,
+			remoteAddr:     "127.0.0.1:12345",
+			xForwardedFor:  "10.0.0.100, 10.0.0.1",
+			expectedStatus: http.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2180,7 +2201,13 @@ func TestSecurityStack_XForwardedFor(t *testing.T) {
 				// The direct peers in these cases (127.0.0.1, 10.0.0.1) are the
 				// trusted proxies whose X-Forwarded-For we honor. Ignored when
 				// trustProxy is false.
-				TrustedProxies: []string{"127.0.0.1/32", "10.0.0.0/8"},
+				//
+				// These are deliberately narrow. X-Forwarded-For is read
+				// right-to-left, discarding trusted-proxy hops, so listing the
+				// whole 10.0.0.0/8 client range as trusted proxies would make
+				// every forwarded client address indistinguishable from a proxy
+				// and collapse to the peer.
+				TrustedProxies: []string{"127.0.0.1/32", "10.0.0.1/32"},
 			}
 
 			server := createTestServer(t, "test-token", aclConfig)

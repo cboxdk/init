@@ -83,6 +83,36 @@ func (m *Manager) loadCertificates() error {
 
 	m.certificate = &cert
 
+	// Report an expired or not-yet-valid certificate. LoadX509KeyPair does not
+	// check validity, so an expired cert loaded silently and every client then
+	// failed the handshake with an error that says nothing about why — the
+	// server log showed a clean startup. Loading it anyway is deliberate: the
+	// operator may be mid-rotation, and refusing to start would turn a warning
+	// into an outage.
+	if leaf, perr := x509.ParseCertificate(cert.Certificate[0]); perr == nil {
+		now := time.Now()
+		switch {
+		case now.After(leaf.NotAfter):
+			m.logger.Error("TLS certificate has EXPIRED; clients will fail the handshake",
+				"cert_file", m.certFile,
+				"expired_at", leaf.NotAfter.Format(time.RFC3339),
+				"subject", leaf.Subject.CommonName,
+			)
+		case now.Before(leaf.NotBefore):
+			m.logger.Error("TLS certificate is not valid yet; clients will fail the handshake",
+				"cert_file", m.certFile,
+				"valid_from", leaf.NotBefore.Format(time.RFC3339),
+				"subject", leaf.Subject.CommonName,
+			)
+		case time.Until(leaf.NotAfter) < certExpiryWarning:
+			m.logger.Warn("TLS certificate expires soon",
+				"cert_file", m.certFile,
+				"expires_at", leaf.NotAfter.Format(time.RFC3339),
+				"in", time.Until(leaf.NotAfter).Round(time.Hour).String(),
+			)
+		}
+	}
+
 	m.logger.Info("TLS certificates loaded",
 		"cert_file", m.certFile,
 		"key_file", m.keyFile,
@@ -127,15 +157,46 @@ func (m *Manager) GetTLSConfig() (*tls.Config, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	clientAuth := m.parseClientAuth(m.config.ClientAuth)
+
+	// client_auth: "verify" with no ca_file used to leave ClientCAs nil, and Go
+	// then verifies client certificates against the SYSTEM ROOT POOL — so any
+	// certificate issued by any public CA satisfied "verify". That is the exact
+	// opposite of what mTLS is configured for. Refuse the combination.
+	if clientAuth == tls.RequireAndVerifyClientCert && m.certPool == nil {
+		return nil, fmt.Errorf("tls client_auth %q requires ca_file: without it client certificates would be verified against the system root pool, accepting any publicly-issued certificate", m.config.ClientAuth)
+	}
+
 	tlsConfig := &tls.Config{
 		GetCertificate: m.GetCertificate,
 		MinVersion:     m.parseTLSVersion(m.config.MinVersion),
-		ClientAuth:     m.parseClientAuth(m.config.ClientAuth),
+		ClientAuth:     clientAuth,
 	}
 
-	// Set CA pool for client certificate verification (mTLS)
+	// Set CA pool for client certificate verification (mTLS).
+	//
+	// ClientCAs is read once, when the handshake config is built — so a pool
+	// assigned here is frozen for the life of the server and auto-reload never
+	// reached the listener: a revoked/rotated CA kept being trusted until
+	// restart. GetConfigForClient is consulted per handshake, so the pool is
+	// re-read from the manager on every connection instead.
 	if m.certPool != nil {
 		tlsConfig.ClientCAs = m.certPool
+		tlsConfig.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			m.mu.RLock()
+			pool := m.certPool
+			m.mu.RUnlock()
+
+			if pool == nil {
+				// The CA file was reloaded into an unusable state; keep the last
+				// good pool rather than silently dropping to the system roots.
+				return nil, nil
+			}
+			cloned := tlsConfig.Clone()
+			cloned.ClientCAs = pool
+			cloned.GetConfigForClient = nil // avoid recursing on the clone
+			return cloned, nil
+		}
 	}
 
 	// Set cipher suites if specified
@@ -226,11 +287,31 @@ func (m *Manager) parseCipherSuites(suites []string) ([]uint16, error) {
 	return ciphers, nil
 }
 
+// certExpiryWarning is how far ahead of expiry the loader starts warning. Long
+// enough that auto-reload has many chances to pick up a renewal first.
+const certExpiryWarning = 14 * 24 * time.Hour
+
+// defaultAutoReloadInterval mirrors config.SetDefaults; used when the configured
+// value is non-positive and would otherwise panic NewTicker.
+const defaultAutoReloadInterval = 300 * time.Second
+
 // autoReloadLoop periodically checks for certificate changes and reloads
 func (m *Manager) autoReloadLoop() {
 	defer m.wg.Done()
 
-	ticker := time.NewTicker(time.Duration(m.config.AutoReloadInterval) * time.Second)
+	// time.NewTicker panics on a non-positive duration, and this runs inside
+	// PID 1 — a stray `auto_reload_interval: -1` in the config took the whole
+	// container down at startup. Fall back to the documented default instead.
+	interval := time.Duration(m.config.AutoReloadInterval) * time.Second
+	if interval <= 0 {
+		m.logger.Warn("Invalid TLS auto_reload_interval; using default",
+			"configured", m.config.AutoReloadInterval,
+			"using_seconds", int(defaultAutoReloadInterval/time.Second),
+		)
+		interval = defaultAutoReloadInterval
+	}
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	m.logger.Info("TLS auto-reload enabled",

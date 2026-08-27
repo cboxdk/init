@@ -101,7 +101,30 @@ func (c *Config) validateGlobal() error {
 	if err := c.validateAPIExposure(); err != nil {
 		return err
 	}
+	if err := validateACL("api_acl", c.Global.APIACL); err != nil {
+		return err
+	}
+	if err := validateACL("metrics_acl", c.Global.MetricsACL); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validateACL rejects an unrecognised ACL mode. A typo — mode: "Allow",
+// "whitelist", "allowlist" — used to fall through to deny-mode semantics, so a
+// config that clearly intended a whitelist silently allowed everyone. Catching
+// it here means check-config reports it instead of the operator discovering it
+// from an access log.
+func validateACL(key string, acl *ACLConfig) error {
+	if acl == nil || !acl.Enabled {
+		return nil
+	}
+	switch acl.Mode {
+	case "", "allow", "deny":
+		return nil
+	default:
+		return fmt.Errorf("invalid %s mode %q (valid: allow, deny)", key, acl.Mode)
+	}
 }
 
 // validateAPIExposure refuses to start an unauthenticated management API on a
