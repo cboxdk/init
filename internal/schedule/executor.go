@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -153,10 +152,18 @@ func (e *ProcessExecutor) setupCommand(ctx context.Context, processName string, 
 	cmd.Env = append(cmd.Env, fmt.Sprintf("CBOX_INIT_PROCESS=%s", processName))
 	cmd.Env = append(cmd.Env, "CBOX_INIT_SCHEDULED=true")
 
-	// Setup output writers
+	// Route output through the ProcessWriter ONLY.
+	//
+	// The writer applies logging.redaction before anything else, but copying the
+	// same bytes straight to os.Stdout published them unredacted to `docker
+	// logs` and every log collector — a scheduled job printing a token had it
+	// masked in the API and TUI and leaked in the container log. Nothing is lost
+	// by dropping the direct copy: the ProcessWriter already emits through slog
+	// to stdout. Long-running processes have always routed only through the
+	// writer; this makes scheduled jobs consistent with them.
 	if logWriter != nil {
-		cmd.Stdout = io.MultiWriter(os.Stdout, logWriter)
-		cmd.Stderr = io.MultiWriter(os.Stderr, logWriter)
+		cmd.Stdout = logWriter
+		cmd.Stderr = logWriter
 	} else {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

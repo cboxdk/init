@@ -361,8 +361,14 @@ func (c *Config) validateProcessSchedule(name string, proc *Process) error {
 	}
 
 	// Validate timezone
-	if proc.ScheduleTimezone != "" && proc.ScheduleTimezone != "UTC" && proc.ScheduleTimezone != "Local" {
-		return fmt.Errorf("process %s has invalid schedule_timezone: %s (must be UTC or Local)", name, proc.ScheduleTimezone)
+	// Accept UTC, Local, or any IANA location the runtime can resolve — the
+	// documentation has always shown names like "America/New_York", and
+	// rejecting them meant the documented example refused to start. Resolution
+	// needs tzdata in the image; the error says so when it is missing.
+	if tz := proc.ScheduleTimezone; tz != "" && tz != "UTC" && tz != "Local" {
+		if _, err := time.LoadLocation(tz); err != nil {
+			return fmt.Errorf("process %s has invalid schedule_timezone %q: %w (use UTC, Local, or an IANA name such as Europe/Copenhagen; IANA names need tzdata in the image)", name, tz, err)
+		}
 	}
 
 	// Validate timeout duration

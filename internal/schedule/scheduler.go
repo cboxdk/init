@@ -41,9 +41,17 @@ type Scheduler struct {
 // NewScheduler creates a new Scheduler
 func NewScheduler(executor JobExecutor, historySize int, logger *slog.Logger) *Scheduler {
 	// Create cron with second-level precision disabled (standard cron format)
-	c := cron.New(cron.WithParser(cron.NewParser(
-		cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
-	)))
+	// Recover panics from job runs. robfig/cron's default chain is empty, so a
+	// panic anywhere reachable from a cron tick — the executor, a redaction
+	// regex, the log pipeline — propagates out of the cron goroutine and takes
+	// PID 1, and the whole container, down. The supervisor's own monitors carry
+	// the same protection.
+	c := cron.New(
+		cron.WithParser(cron.NewParser(
+			cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow,
+		)),
+		cron.WithChain(cron.Recover(cronPanicLogger{log: logger})),
+	)
 
 	return &Scheduler{
 		cron:        c,
@@ -357,4 +365,16 @@ func (s *Scheduler) Stats() SchedulerStats {
 	}
 
 	return stats
+}
+
+// cronPanicLogger adapts our slog logger to the cron.Logger interface so
+// recovered panics are reported through the normal logging pipeline.
+type cronPanicLogger struct{ log *slog.Logger }
+
+func (l cronPanicLogger) Info(msg string, keysAndValues ...any) {
+	l.log.Debug(msg, keysAndValues...)
+}
+
+func (l cronPanicLogger) Error(err error, msg string, keysAndValues ...any) {
+	l.log.Error(msg, append([]any{"error", err}, keysAndValues...)...)
 }

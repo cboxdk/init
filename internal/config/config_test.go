@@ -629,7 +629,7 @@ func TestValidate_ProcessSchedule(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid schedule timezone",
+			name: "IANA schedule timezone is valid",
 			config: &Config{
 				Version: "1.0",
 				Processes: map[string]*Process{
@@ -638,7 +638,24 @@ func TestValidate_ProcessSchedule(t *testing.T) {
 						Type:             "oneshot",
 						Command:          []string{"echo", "hello"},
 						Schedule:         "0 * * * *",
-						ScheduleTimezone: "America/New_York", // Not UTC or Local
+						ScheduleTimezone: "America/New_York", // IANA names are supported
+						Restart:          "never",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "unknown schedule timezone",
+			config: &Config{
+				Version: "1.0",
+				Processes: map[string]*Process{
+					"bad-tz-job": {
+						Enabled:          true,
+						Type:             "oneshot",
+						Command:          []string{"echo", "hello"},
+						Schedule:         "0 * * * *",
+						ScheduleTimezone: "Mars/Olympus_Mons",
 						Restart:          "never",
 					},
 				},
