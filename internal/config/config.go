@@ -107,6 +107,9 @@ func (c *Config) validateGlobal() error {
 	if err := validateACL("metrics_acl", c.Global.MetricsACL); err != nil {
 		return err
 	}
+	if err := c.validateTracing(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -124,6 +127,26 @@ func validateACL(key string, acl *ACLConfig) error {
 		return nil
 	default:
 		return fmt.Errorf("invalid %s mode %q (valid: allow, deny)", key, acl.Mode)
+	}
+}
+
+// validateTracing rejects an exporter the tracing provider cannot build.
+//
+// otlp-http, jaeger and zipkin were advertised in the field's own comment and
+// given default endpoints, but createExporter implements only otlp-grpc and
+// stdout — so check-config passed a config that made serve exit 1 at startup
+// with "unsupported trace exporter". A config the validator calls valid must
+// boot.
+func (c *Config) validateTracing() error {
+	if !c.Global.TracingEnabled {
+		return nil
+	}
+
+	switch c.Global.TracingExporter {
+	case "", "otlp-grpc", "stdout":
+		return nil
+	default:
+		return fmt.Errorf("invalid tracing_exporter %q (valid: otlp-grpc, stdout)", c.Global.TracingExporter)
 	}
 }
 

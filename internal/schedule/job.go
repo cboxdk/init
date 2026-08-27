@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -351,6 +352,42 @@ func (j *ScheduledJob) executeSync(ctx context.Context, triggered string) (int, 
 	j.CurrentExecID = execID
 	j.mu.Unlock()
 
+	// Restore the state whatever happens below, including a panic.
+	//
+	// The state was reset only on the normal path, so a panicking executor left
+	// the job in JobStateExecuting for good — and the overlap check above then
+	// refused every subsequent run with "already executing". A recovered panic
+	// (the cron chain recovers, so the process survives) silently retired the
+	// job. The flag says whether the normal path already ran, so the happy case
+	// is untouched.
+	completed := false
+	defer func() {
+		if completed {
+			return
+		}
+
+		r := recover()
+
+		j.mu.Lock()
+		j.State = JobStateIdle
+		j.CurrentExecID = 0
+		j.mu.Unlock()
+
+		if r != nil {
+			j.logger.Error("job execution panicked",
+				"execution_id", execID,
+				"panic", r,
+				"stack", string(debug.Stack()),
+			)
+			j.History.EndExecution(execID, -1, false, fmt.Sprintf("panic: %v", r))
+
+			panic(r) // let the cron chain's recoverer log and contain it
+		}
+
+		// Not a panic: an early return that skipped the normal completion path.
+		j.History.EndExecution(execID, -1, false, "execution ended without recording a result")
+	}()
+
 	j.logger.Info("job execution started",
 		"execution_id", execID,
 		"triggered", triggered,
@@ -373,6 +410,8 @@ func (j *ScheduledJob) executeSync(ctx context.Context, triggered string) (int, 
 	j.State = JobStateIdle
 	j.CurrentExecID = 0
 	j.mu.Unlock()
+
+	completed = true
 
 	success := execErr == nil && exitCode == 0
 	errMsg := ""

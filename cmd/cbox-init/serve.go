@@ -171,7 +171,7 @@ func runServe(cmd *cobra.Command, args []string) {
 		Enabled:     cfg.Global.TracingEnabled,
 		Exporter:    cfg.Global.TracingExporter,
 		Endpoint:    cfg.Global.TracingEndpoint,
-		SampleRate:  cfg.Global.TracingSampleRate,
+		SampleRate:  cfg.Global.TracingSampleRateValue(),
 		ServiceName: cfg.Global.TracingServiceName,
 		Version:     version,
 		UseTLS:      cfg.Global.TracingUseTLS,
