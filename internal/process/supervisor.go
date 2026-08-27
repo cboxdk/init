@@ -84,6 +84,11 @@ const (
 	// DefaultGoroutineStopTimeout is the timeout for supervisor goroutines to stop during shutdown.
 	DefaultGoroutineStopTimeout = 5 * time.Second
 
+	// forceKillGrace bounds how long a force-kill waits for the process to be
+	// reaped before escalating to SIGKILL (or giving up after it). The kernel
+	// delivers SIGKILL promptly, so this only needs to cover reaping.
+	forceKillGrace = 5 * time.Second
+
 	// DefaultInstanceShutdownTimeout is the timeout for graceful instance shutdown.
 	DefaultInstanceShutdownTimeout = 30 * time.Second
 )
@@ -1516,15 +1521,23 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 
+	if len(errs) > 0 {
+		// At least one instance could not be stopped, so it may still be running.
+		// Do NOT clear the instance list or mark the supervisor stopped: callers
+		// (the reload abort and the rollback) rely on a failed stop leaving this
+		// supervisor authoritative for the live process. Wiping it here would
+		// orphan that process and let a second copy be started alongside it.
+		s.mu.Lock()
+		s.state = StateFailed
+		s.mu.Unlock()
+		return fmt.Errorf("stop completed with %d errors: %v", len(errs), errs)
+	}
+
 	s.mu.Lock()
 	s.state = StateStopped
 	s.instances = nil
 	s.ctx = nil
 	s.mu.Unlock()
-
-	if len(errs) > 0 {
-		return fmt.Errorf("stop completed with %d errors: %v", len(errs), errs)
-	}
 
 	return nil
 }
@@ -1628,11 +1641,48 @@ func (s *Supervisor) forceKillInstance(instance *Instance, pid int, reason strin
 		return fmt.Errorf("failed to force kill process group: %w", err)
 	}
 
-	// Wait for monitorInstance to detect the exit and close doneCh.
-	<-instance.doneCh
+	// Wait for monitorInstance to observe the exit. shutdown.kill_signal is
+	// operator-configurable and may be something the process can ignore (a
+	// SIGTERM it traps, or SIGSTOP, which does not terminate at all), so this
+	// wait must be bounded: an unbounded wait here hangs PID 1 while the manager
+	// lock is held. If the configured signal did not do it, escalate to a real
+	// SIGKILL, which cannot be caught, blocked or ignored.
+	if s.waitForInstanceExit(instance, forceKillGrace) {
+		s.cleanupInstanceResources(instance, pid, reason)
+		return nil
+	}
 
-	s.cleanupInstanceResources(instance, pid, reason)
-	return nil
+	if killSig != syscall.SIGKILL {
+		s.logger.Warn("Configured kill signal did not stop the instance; escalating to SIGKILL",
+			"instance_id", instance.id,
+			"pid", pid,
+			"kill_signal", killSig,
+		)
+		if err := s.signalProcessGroup(instance, syscall.SIGKILL, "force kill (escalated)"); err != nil {
+			return fmt.Errorf("failed to SIGKILL process group: %w", err)
+		}
+		if s.waitForInstanceExit(instance, forceKillGrace) {
+			s.cleanupInstanceResources(instance, pid, reason)
+			return nil
+		}
+	}
+
+	// SIGKILL was delivered and the process still has not been reaped. Do not
+	// block the manager any longer; report it so the caller can decide.
+	return fmt.Errorf("instance %s (pid %d) did not exit after SIGKILL", instance.id, pid)
+}
+
+// waitForInstanceExit waits up to d for monitorInstance to close doneCh,
+// reporting whether the instance exited.
+func (s *Supervisor) waitForInstanceExit(instance *Instance, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-instance.doneCh:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 // executePreStopHook executes the configured pre-stop hook if present
