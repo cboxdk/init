@@ -115,6 +115,11 @@ func (mb *MultilineBuffer) ShouldFlush() bool {
 	return time.Since(mb.startTime) >= mb.timeout
 }
 
+// Timeout is how long a partial entry may sit before it is emitted anyway.
+func (mb *MultilineBuffer) Timeout() time.Duration {
+	return mb.timeout
+}
+
 // Flush returns the buffered entry and clears the buffer
 // Returns empty string if buffer is empty
 func (mb *MultilineBuffer) Flush() string {

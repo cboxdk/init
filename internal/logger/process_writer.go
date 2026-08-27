@@ -40,6 +40,15 @@ type ProcessWriter struct {
 	// once; without this they race on the buffer and can panic.
 	mu     sync.Mutex
 	buffer bytes.Buffer
+
+	// flushTimer fires the multiline timeout when the process has gone quiet.
+	// Without it the timeout was only ever evaluated inside Write, so it was not
+	// a timeout at all: a worker that logged a fatal and its stack trace and
+	// then idled kept that entry buffered indefinitely — invisible in
+	// docker logs, /api/v1/logs and the TUI until the process happened to write
+	// again, or exited.
+	flushTimer *time.Timer
+	closed     bool
 }
 
 // NewProcessWriter creates a new ProcessWriter with advanced logging features
@@ -144,12 +153,54 @@ func (pw *ProcessWriter) processLine(line string) {
 			// Buffer complete and has content, process it
 			pw.processEntry(entry)
 		}
-		// Either still buffering or already processed
+		// Arm (or re-arm) the timeout so a buffer left behind by a process that
+		// then goes quiet is still emitted.
+		pw.armFlushTimerLocked()
+
 		return
 	}
 
 	// No multiline buffering, process line directly
 	pw.processEntry(line)
+}
+
+// armFlushTimerLocked schedules a flush for the pending multiline entry, or
+// cancels a pending one when the buffer is empty.
+//
+// Must be called with pw.mu held.
+func (pw *ProcessWriter) armFlushTimerLocked() {
+	if pw.closed || pw.multiline == nil {
+		return
+	}
+
+	if pw.multiline.BufferSize() == 0 {
+		if pw.flushTimer != nil {
+			pw.flushTimer.Stop()
+			pw.flushTimer = nil
+		}
+
+		return
+	}
+
+	if pw.flushTimer != nil {
+		pw.flushTimer.Stop()
+	}
+	pw.flushTimer = time.AfterFunc(pw.multiline.Timeout(), pw.flushOnTimeout)
+}
+
+// flushOnTimeout emits a multiline entry whose process has stopped writing.
+func (pw *ProcessWriter) flushOnTimeout() {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+
+	if pw.closed || pw.multiline == nil || pw.multiline.BufferSize() == 0 {
+		return
+	}
+
+	if entry := pw.multiline.Flush(); entry != "" {
+		pw.processEntry(entry)
+	}
+	pw.flushTimer = nil
 }
 
 // processEntry handles a complete log entry (single line or multiline)
@@ -268,6 +319,11 @@ func (pw *ProcessWriter) Flush() {
 		if entry := pw.multiline.Flush(); entry != "" {
 			pw.processEntry(entry)
 		}
+	}
+
+	if pw.flushTimer != nil {
+		pw.flushTimer.Stop()
+		pw.flushTimer = nil
 	}
 }
 

@@ -56,6 +56,24 @@ func NewLogBuffer(size int) *LogBuffer {
 // stdout and to live subscribers; it is just not accumulated.
 const MaxStoredMessageBytes = 8 * 1024
 
+// truncateAtRuneBoundary cuts s to at most n bytes without splitting a UTF-8
+// rune. Slicing on a byte index alone left a partial rune at the end, which
+// renders as a replacement character and — because the API serialises these
+// entries as JSON — produces invalid UTF-8 that a strict client rejects.
+func truncateAtRuneBoundary(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+
+	// Walk back to the start of the rune that straddles the cut. A UTF-8
+	// continuation byte is 10xxxxxx; the start of a sequence is anything else.
+	for n > 0 && s[n]&0xC0 == 0x80 {
+		n--
+	}
+
+	return s[:n]
+}
+
 // Add adds a log entry to the buffer
 func (lb *LogBuffer) Add(entry LogEntry) {
 	// Broadcast the entry in full: streaming is transient, so it costs no
@@ -63,7 +81,7 @@ func (lb *LogBuffer) Add(entry LogEntry) {
 	stored := entry
 	if len(stored.Message) > MaxStoredMessageBytes {
 		truncated := len(stored.Message) - MaxStoredMessageBytes
-		stored.Message = stored.Message[:MaxStoredMessageBytes] +
+		stored.Message = truncateAtRuneBoundary(stored.Message, MaxStoredMessageBytes) +
 			fmt.Sprintf("… [truncated %d bytes]", truncated)
 	}
 
