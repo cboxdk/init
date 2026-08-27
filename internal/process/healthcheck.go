@@ -15,6 +15,12 @@ import (
 	"github.com/cboxdk/init/internal/signals"
 )
 
+// DefaultHealthCheckPeriod is used when a health check's configured period is
+// missing or not positive. time.NewTicker panics on a non-positive interval, and
+// the health loop runs in a goroutine, so falling back is the difference between
+// a warning and a dead container.
+const DefaultHealthCheckPeriod = 10 * time.Second
+
 // HealthChecker defines the interface for health checks.
 // Implementations probe service health and return nil on success
 // or an error describing the failure.
@@ -194,7 +200,18 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 			return
 		}
 
-		ticker := time.NewTicker(time.Duration(hm.config.Period) * time.Second)
+		// A non-positive period panics time.NewTicker, and this runs in a
+		// goroutine — an unrecovered panic here takes PID 1, and the whole
+		// container, down over a config typo. Config validation rejects it, but
+		// this path is also reachable from a process added at runtime, so clamp
+		// defensively rather than trusting the caller.
+		period := time.Duration(hm.config.Period) * time.Second
+		if period <= 0 {
+			period = DefaultHealthCheckPeriod
+			hm.logger.Warn("Health check period is not positive; using the default",
+				"configured", hm.config.Period, "using", period)
+		}
+		ticker := time.NewTicker(period)
 		defer ticker.Stop()
 
 		for {

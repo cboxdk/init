@@ -116,11 +116,25 @@ func (c *Config) validateAPIExposure() error {
 	if isLoopbackHost(c.Global.APIHost) {
 		return nil
 	}
-	aclEnabled := c.Global.APIACL != nil && c.Global.APIACL.Enabled
-	if c.Global.APIAuth == "" && !aclEnabled {
-		return fmt.Errorf("api_host %q exposes the management API beyond loopback with no authentication: "+
-			"set api_auth (bearer token) or api_acl (IP allowlist), or bind api_host to 127.0.0.1",
-			c.Global.APIHost)
+	// Only an ACL that actually restricts who may connect counts. "enabled" is
+	// not enough: a deny-mode ACL permits everyone except the listed addresses,
+	// and an allow-mode ACL with an empty list is either a lock-out or (with the
+	// deny default) no restriction at all — neither is a substitute for auth on
+	// a publicly bound control plane.
+	acl := c.Global.APIACL
+	aclRestricts := acl != nil && acl.Enabled && acl.Mode == "allow" && len(acl.AllowList) > 0
+
+	if c.Global.APIAuth == "" && !aclRestricts {
+		reason := "no authentication"
+		if acl != nil && acl.Enabled && acl.Mode != "allow" {
+			reason = fmt.Sprintf("only a %q-mode ACL, which does not restrict who may connect", acl.Mode)
+		} else if acl != nil && acl.Enabled && len(acl.AllowList) == 0 {
+			reason = "an allow-mode ACL with an empty allow_list"
+		}
+		return fmt.Errorf("api_host %q exposes the management API beyond loopback with %s: "+
+			"set api_auth (bearer token) or an api_acl with mode: allow and a non-empty allow_list, "+
+			"or bind api_host to 127.0.0.1",
+			c.Global.APIHost, reason)
 	}
 	return nil
 }
@@ -308,6 +322,29 @@ func (c *Config) validateProcessHealthCheck(name string, proc *Process) error {
 	}
 	if hc.Type == "exec" && len(hc.Command) == 0 {
 		return fmt.Errorf("process %s has exec health check but no command", name)
+	}
+	// Numeric fields must be sane. A non-positive period is not merely odd: the
+	// health loop builds a time.Ticker from it, and a non-positive interval
+	// panics — in a goroutine, so it takes PID 1 and the whole container down.
+	if hc.Period < 0 {
+		return fmt.Errorf("process %s has negative health_check.period (%d)", name, hc.Period)
+	}
+	if hc.Timeout < 0 {
+		return fmt.Errorf("process %s has negative health_check.timeout (%d)", name, hc.Timeout)
+	}
+	if hc.InitialDelay < 0 {
+		return fmt.Errorf("process %s has negative health_check.initial_delay (%d)", name, hc.InitialDelay)
+	}
+	if hc.FailureThreshold < 0 {
+		return fmt.Errorf("process %s has negative health_check.failure_threshold (%d)", name, hc.FailureThreshold)
+	}
+	if hc.SuccessThreshold < 0 {
+		return fmt.Errorf("process %s has negative health_check.success_threshold (%d)", name, hc.SuccessThreshold)
+	}
+	switch hc.Mode {
+	case "", "liveness", "readiness", "both":
+	default:
+		return fmt.Errorf("process %s has invalid health_check.mode %q (valid: liveness, readiness, both)", name, hc.Mode)
 	}
 	return nil
 }

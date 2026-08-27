@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A publicly-bound API is no longer accepted with an ACL that restricts
+  nothing.** The exposure check treated any enabled `api_acl` as sufficient, so
+  `api_host: 0.0.0.0` with no `api_auth` and a **deny-mode** ACL — which permits
+  everyone except the listed addresses — passed validation and served the full
+  control plane to the world. Only a bearer token, or an `allow`-mode ACL with a
+  non-empty `allow_list`, now counts; the error names which of the two is missing.
+
+### Fixed
+
+- **A health-check typo no longer kills the container.** `health_check.period: -1`
+  (or `0`) reached `time.NewTicker`, which panics on a non-positive interval — in
+  a goroutine, so it took PID 1 and the whole container down. Config validation
+  now rejects negative periods, timeouts, delays and thresholds and an unknown
+  `mode`, and the health loop falls back to a default period rather than panicking
+  if one reaches it anyway (a process added through the API, say).
+
 ### Fixed
 
 - **`--watch` no longer stops working after the first save.** The config watcher
