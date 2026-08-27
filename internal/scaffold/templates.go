@@ -54,8 +54,30 @@ type Config struct {
 	MetricsPort int
 
 	// Paths
-	WorkDir  string
+	WorkDir string
+	// DocRoot is the web server document root. It is NOT always WorkDir/public:
+	// WordPress serves from the application root, Drupal from web/ and Magento
+	// from pub/. Hardcoding /public made every real request 404 on those three,
+	// which the nginx /health stub then hid — cbox-init reported the process
+	// healthy forever. Empty means WorkDir/public.
+	DocRoot  string
 	LogLevel string
+}
+
+// docRootFor returns the conventional web document root for a framework,
+// relative to the application directory.
+func docRootFor(framework, workDir string) string {
+	switch framework {
+	case "wordpress":
+		// WordPress serves index.php from the install root.
+		return workDir
+	case "drupal":
+		return workDir + "/web"
+	case "magento":
+		return workDir + "/pub"
+	default:
+		return workDir + "/public"
+	}
 }
 
 // DefaultConfig returns default configuration for a preset
@@ -132,6 +154,10 @@ func DefaultConfig(preset Preset) *Config {
 		cfg.Framework = "drupal"
 		cfg.EnableNginx = true
 		cfg.EnableScheduler = true // Drush cron
+	}
+
+	if cfg.DocRoot == "" {
+		cfg.DocRoot = docRootFor(cfg.Framework, cfg.WorkDir)
 	}
 
 	return cfg
@@ -411,7 +437,7 @@ processes:
         command: ["php", "artisan", "horizon:terminate"]
         timeout: 60
   {{- end }}
-  {{- if and .EnableQueue (not .EnableHorizon) (or (eq .Framework "laravel") (eq .Framework "symfony")) }}
+  {{- if and .EnableQueue (not .EnableHorizon) (eq .Framework "laravel") }}
 
   # Raw queue worker. Omitted when Horizon is enabled: Horizon supervises its own
   # workers for every queue, so running queue:work on the same (default) queue
@@ -419,6 +445,21 @@ processes:
   queue-default:
     enabled: true
     command: ["php", "artisan", "queue:work", "{{ .QueueConnection }}", "--queue=default", "--tries=3"]
+    type: longrun
+    restart: always
+    scale: {{ .QueueWorkers }}
+    working_dir: {{ .WorkDir }}
+    stdout: true
+    stderr: true
+  {{- end }}
+  {{- if and .EnableQueue (eq .Framework "symfony") }}
+
+  # Symfony Messenger consumer. --time-limit lets the worker exit and be restarted
+  # periodically, which is Symfony's recommended way to bound memory growth in a
+  # long-running consumer; restart: always brings it straight back.
+  messenger-consume:
+    enabled: true
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600"]
     type: longrun
     restart: always
     scale: {{ .QueueWorkers }}
@@ -457,7 +498,21 @@ processes:
     stdout: true
     stderr: true
   {{- end }}
-  {{- if and .EnableScheduler (or (eq .Framework "laravel") (eq .Framework "symfony")) }}
+  {{- if and .EnableScheduler (eq .Framework "symfony") }}
+
+  # Symfony Scheduler (symfony/scheduler) runs as a Messenger transport, not as
+  # its own daemon. Adjust the transport name to match your #[AsSchedule].
+  scheduler:
+    enabled: true
+    command: ["php", "bin/console", "messenger:consume", "scheduler_default"]
+    type: longrun
+    restart: always
+    scale: 1
+    working_dir: {{ .WorkDir }}
+    stdout: true
+    stderr: true
+  {{- end }}
+  {{- if and .EnableScheduler (eq .Framework "laravel") }}
 
   scheduler:
     enabled: true
@@ -537,13 +592,17 @@ services:
       - "80:80"
       {{- end }}
       {{- if .EnableAPI }}
-      - "{{ .APIPort }}:{{ .APIPort }}"
+      # Publishing the API port only works if you also set global.api_host to
+      # 0.0.0.0 in cbox-init.yaml — it defaults to 127.0.0.1, which is not
+      # reachable from outside the container. Do that only together with
+      # api_auth or an api_acl; cbox-init refuses to start otherwise.
+      # - "{{ .APIPort }}:{{ .APIPort }}"
       {{- end }}
       {{- if .EnableMetrics }}
       - "{{ .MetricsPort }}:{{ .MetricsPort }}"
       {{- end }}
     volumes:
-      - ./cbox-init.yaml:/etc/cbox-init/config.yaml:ro
+      - ./cbox-init.yaml:/etc/cbox-init/cbox-init.yaml:ro
       {{- if .EnableNginx }}
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       {{- end }}
@@ -594,10 +653,14 @@ services:
     container_name: {{ .AppName }}-db
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=secret
+      # Set these in a .env file next to this compose file. The ${VAR:?...} form
+      # makes "docker compose up" fail with that message when they are unset,
+      # rather than starting a database with a password that ships in a
+      # generator template.
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
       - MYSQL_DATABASE={{ .AppName }}
       - MYSQL_USER={{ .AppName }}
-      - MYSQL_PASSWORD=secret
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
     volumes:
       - db-data:/var/lib/mysql
     networks:
@@ -620,7 +683,8 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=secret
+      # See the note on the mysql service: set this in .env.
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB={{ .AppName }}
     volumes:
       - db-data:/var/lib/postgresql/data
@@ -665,9 +729,11 @@ services:
     container_name: {{ .AppName }}-grafana
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      # Bound to loopback: this dashboard has no auth worth exposing on a shared
+      # host. Drop the 127.0.0.1 prefix only once you have set a real password.
+      - "127.0.0.1:3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
     volumes:
       - grafana-data:/var/lib/grafana
     networks:
@@ -756,7 +822,7 @@ COPY --from=builder --chown=node:node /app/package*.json ./
 {{- end }}
 
 # Copy configuration files
-COPY --chown=node:node cbox-init.yaml /etc/cbox-init/config.yaml
+COPY --chown=node:node cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 {{- if .EnableNginx }}
 COPY --chown=node:node nginx.conf /etc/nginx/nginx.conf
 {{- end }}
@@ -782,7 +848,7 @@ EXPOSE {{ .MetricsPort }}
 
 # Use tini as init system, Cbox Init as process manager
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["/usr/local/bin/cbox-init", "serve", "--config", "/etc/cbox-init/config.yaml"]
+CMD ["/usr/local/bin/cbox-init", "serve", "--config", "/etc/cbox-init/cbox-init.yaml"]
 {{- else -}}
 # =============================================================================
 # PHP Application Dockerfile using cboxdk/php-fpm-nginx base image
@@ -819,8 +885,14 @@ RUN composer dump-autoload --optimize && \
     php bin/console cache:warmup --env=prod
 {{- end }}
 
-# Copy Cbox Init configuration (overrides default)
-COPY cbox-init.yaml /etc/cbox-init/config.yaml
+# Copy Cbox Init configuration (overrides default).
+#
+# The filename matters: cbox-init looks for $CBOX_INIT_CONFIG, then
+# /etc/cbox-init/cbox-init.yaml, then ./cbox-init.yaml. This Dockerfile relies
+# on the base image's PID-1 auto-detection with no --config flag, so a config
+# installed under any other name is silently ignored and the base image's
+# default runs instead.
+COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
 
 # The base image already exposes ports 80, 443, 9180 (API), 9090 (metrics)
 # and uses Cbox Init as PID 1 with auto-detection for Laravel/Symfony/WordPress
@@ -913,7 +985,7 @@ http {
 
         # Next.js public files
         location /public {
-            alias {{ .WorkDir }}/public;
+            alias {{ .DocRoot }};
             expires 1d;
             access_log off;
         }
@@ -995,7 +1067,7 @@ http {
     server {
         listen 80;
         server_name _;
-        root {{ .WorkDir }}/public;
+        root {{ .DocRoot }};
         index index.php index.html;
 
         # Health check

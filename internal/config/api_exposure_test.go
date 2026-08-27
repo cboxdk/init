@@ -65,3 +65,55 @@ func TestValidateProcessHealthCheck_RejectsBadNumerics(t *testing.T) {
 		t.Errorf("a valid health check was rejected: %v", err)
 	}
 }
+
+// TestLoopbackAPIWarningsAreSuggestions: an unauthenticated API bound to
+// loopback was reported as a WARNING, so `check-config --strict` — the
+// documented CI gate — failed on the default configuration and on every config
+// the scaffold generates. Loopback is not the same exposure as a public bind,
+// and Validate() already hard-refuses the unauthenticated non-loopback case, so
+// it belongs in suggestions.
+func TestLoopbackAPIWarningsAreSuggestions(t *testing.T) {
+	apiEnabled := true
+
+	loopback := &Config{Version: "1.0"}
+	loopback.Global.APIEnabled = &apiEnabled
+	loopback.Global.APIHost = "127.0.0.1"
+	loopback.Global.APIPort = 9180
+	loopback.SetDefaults()
+
+	res, _ := loopback.ValidateComprehensive()
+	for _, w := range res.Warnings {
+		if w.Field == "global.api_auth" || w.Field == "security.api" {
+			t.Errorf("loopback API produced warning %q (%s); --strict fails on the default config",
+				w.Field, w.Message)
+		}
+	}
+	if !hasEntry(res.Suggestions, "global.api_auth") {
+		t.Error("the loopback case should still be surfaced as a suggestion")
+	}
+
+	// Bound beyond loopback it stays a warning — and Validate() refuses it
+	// outright, which is the actual protection.
+	public := &Config{Version: "1.0"}
+	public.Global.APIEnabled = &apiEnabled
+	public.Global.APIHost = "0.0.0.0"
+	public.Global.APIPort = 9180
+	public.SetDefaults()
+
+	if err := public.Validate(); err == nil {
+		t.Error("an unauthenticated API on 0.0.0.0 must not validate")
+	}
+	publicRes, _ := public.ValidateComprehensive()
+	if !hasEntry(publicRes.Warnings, "global.api_auth") {
+		t.Error("a non-loopback unauthenticated API should still warn")
+	}
+}
+
+func hasEntry(entries []ValidationIssue, field string) bool {
+	for _, e := range entries {
+		if e.Field == field {
+			return true
+		}
+	}
+	return false
+}

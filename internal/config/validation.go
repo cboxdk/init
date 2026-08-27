@@ -296,7 +296,19 @@ func (c *Config) validateGlobalAPISettings(result *ValidationResult) {
 		result.AddError("global.api_port", fmt.Sprintf("Privileged port %d requires root", c.Global.APIPort), "Use port >= 1024 or run as root")
 	}
 	if c.Global.APIAuth == "" && c.Global.APIACL == nil {
-		result.AddWarning("global.api_auth", "API running without authentication or ACL", "Consider enabling API token auth or IP ACL for security")
+		// A loopback-bound API is reachable only from inside the container, and
+		// Validate() already refuses to start an unauthenticated API on any
+		// other interface. Reporting it as a WARNING made --strict — the
+		// documented CI gate — fail on the default configuration, including
+		// every config the scaffold generates. It is still worth saying, so it
+		// stays as a suggestion.
+		if isLoopbackHost(c.Global.APIHost) {
+			result.AddSuggestion("global.api_auth",
+				"API bound to loopback without authentication",
+				"Any process inside the container can control cbox-init; set api_auth if the container runs untrusted code")
+		} else {
+			result.AddWarning("global.api_auth", "API running without authentication or ACL", "Consider enabling API token auth or IP ACL for security")
+		}
 	}
 	if c.Global.APITLS == nil {
 		result.AddSuggestion("global.api_tls", "API running without TLS/HTTPS", "Enable TLS for production to encrypt API traffic")
@@ -626,7 +638,15 @@ func (c *Config) validateSecurity(result *ValidationResult) {
 	// Check for production security best practices
 	if c.Global.APIEnabledValue() {
 		if c.Global.APIAuth == "" && c.Global.APIACL == nil && c.Global.APITLS == nil {
-			result.AddWarning("security.api", "API running without any security (auth/ACL/TLS)", "Enable at least one security measure for production")
+			// See validateGlobalAPISettings: loopback is not the same exposure,
+			// and Validate() hard-refuses the unauthenticated non-loopback case.
+			if isLoopbackHost(c.Global.APIHost) {
+				result.AddSuggestion("security.api",
+					"API bound to loopback without auth, ACL or TLS",
+					"Sufficient for a single-tenant container; add api_auth before binding beyond 127.0.0.1")
+			} else {
+				result.AddWarning("security.api", "API running without any security (auth/ACL/TLS)", "Enable at least one security measure for production")
+			}
 		}
 	}
 
