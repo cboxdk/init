@@ -2242,11 +2242,15 @@ func (s *Supervisor) checkAllInstancesDead() {
 		// Reflect it in the supervisor's own state: readiness and the API derive
 		// health from it, so a supervisor still claiming StateRunning with no
 		// live instance reports a dead service as healthy.
-		s.mu.Lock()
-		if s.state == StateRunning || s.state == StateStarting {
-			s.state = StateFailed
+		// A oneshot that finished is not a failure — that is its whole job — so
+		// only a long-running process moves to Failed here.
+		if s.config.Type != "oneshot" {
+			s.mu.Lock()
+			if s.state == StateRunning || s.state == StateStarting {
+				s.state = StateFailed
+			}
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
 
 		// A long-running process with no live instance cannot serve anything, so
 		// stop advertising it as ready: otherwise a dependent started later (a

@@ -58,10 +58,16 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 		return nil
 	}
 
-	// initial_state: stopped means "defined but not running" — respect it here as
-	// startup does, instead of starting the process immediately.
+	// initial_state: stopped means "defined but not running". Register a
+	// supervisor for it anyway — exactly as startup does — so the process is
+	// visible in ListProcesses and can be started later; only skip starting it.
 	if procCfg.Enabled && procCfg.InitialState == "stopped" {
-		m.logger.Info("Process added in stopped state", "name", name)
+		sup := m.newConfiguredSupervisor(name, procCfg)
+		m.processes[name] = sup
+		// Ready immediately, so anything depending on it does not deadlock
+		// waiting for a process the operator has chosen not to start.
+		sup.MarkReadyImmediately()
+		m.logger.Info("Process added in stopped state (start it via the API or TUI)", "name", name)
 		m.auditLogger.LogProcessAdded(name, procCfg.Command, procCfg.Scale)
 		return nil
 	}
@@ -176,8 +182,18 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 				m.config.Processes[name] = oldCfg
 				delete(m.processes, name)
 				if oldCfg.Enabled {
+					// Restore on a detached, separately-bounded context: the update's
+					// own context may be exactly what expired, and reusing it would
+					// guarantee the restore fails too.
+					budget := m.processStartTimeout
+					if budget <= 0 {
+						budget = DefaultProcessStartTimeout
+					}
+					restoreCtx, cancelRestore := context.WithTimeout(context.WithoutCancel(ctx), budget)
+					defer cancelRestore()
+
 					restored := m.newConfiguredSupervisor(name, oldCfg)
-					if rerr := m.startSupervisor(ctx, restored); rerr != nil {
+					if rerr := m.startSupervisor(restoreCtx, restored); rerr != nil {
 						m.logger.Error("Update failed and the previous configuration could not be restarted",
 							"name", name, "start_error", err, "restore_error", rerr)
 						return fmt.Errorf("failed to start process with new config (%w) and could not restore the previous one: %w", err, rerr)

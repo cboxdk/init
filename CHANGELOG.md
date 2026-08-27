@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A process added in the stopped state is visible and startable.** Honoring
+  `initial_state: stopped` on the API path skipped creating its supervisor
+  altogether, so the process existed only in the configuration — absent from the
+  process list and impossible to start. It now gets a registered (unstarted)
+  supervisor, exactly as at startup.
+- **A oneshot that completed is not reported as failed.** Marking a supervisor
+  with no live instances as failed also caught oneshots, for which finishing is
+  success.
+- **A failed update restores the previous process on its own deadline.** The
+  restore reused the update's context — often the very thing that had just
+  expired — so it could fail immediately and leave the service down.
+
+### Fixed
+
 - **Adding a process at runtime honors `schedule` and `initial_state`.** A
   process added through the API with a cron `schedule` was started as a
   long-running supervisor — running the job continuously instead of on its
