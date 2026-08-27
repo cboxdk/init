@@ -83,6 +83,36 @@ func (m *Manager) loadCertificates() error {
 
 	m.certificate = &cert
 
+	// Report an expired or not-yet-valid certificate. LoadX509KeyPair does not
+	// check validity, so an expired cert loaded silently and every client then
+	// failed the handshake with an error that says nothing about why — the
+	// server log showed a clean startup. Loading it anyway is deliberate: the
+	// operator may be mid-rotation, and refusing to start would turn a warning
+	// into an outage.
+	if leaf, perr := x509.ParseCertificate(cert.Certificate[0]); perr == nil {
+		now := time.Now()
+		switch {
+		case now.After(leaf.NotAfter):
+			m.logger.Error("TLS certificate has EXPIRED; clients will fail the handshake",
+				"cert_file", m.certFile,
+				"expired_at", leaf.NotAfter.Format(time.RFC3339),
+				"subject", leaf.Subject.CommonName,
+			)
+		case now.Before(leaf.NotBefore):
+			m.logger.Error("TLS certificate is not valid yet; clients will fail the handshake",
+				"cert_file", m.certFile,
+				"valid_from", leaf.NotBefore.Format(time.RFC3339),
+				"subject", leaf.Subject.CommonName,
+			)
+		case time.Until(leaf.NotAfter) < certExpiryWarning:
+			m.logger.Warn("TLS certificate expires soon",
+				"cert_file", m.certFile,
+				"expires_at", leaf.NotAfter.Format(time.RFC3339),
+				"in", time.Until(leaf.NotAfter).Round(time.Hour).String(),
+			)
+		}
+	}
+
 	m.logger.Info("TLS certificates loaded",
 		"cert_file", m.certFile,
 		"key_file", m.keyFile,
@@ -256,6 +286,10 @@ func (m *Manager) parseCipherSuites(suites []string) ([]uint16, error) {
 
 	return ciphers, nil
 }
+
+// certExpiryWarning is how far ahead of expiry the loader starts warning. Long
+// enough that auto-reload has many chances to pick up a renewal first.
+const certExpiryWarning = 14 * 24 * time.Hour
 
 // defaultAutoReloadInterval mirrors config.SetDefaults; used when the configured
 // value is non-positive and would otherwise panic NewTicker.
