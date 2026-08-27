@@ -64,10 +64,15 @@ func (jp *JSONParser) Parse(input string) (isJSON bool, data map[string]any) {
 	return true, data
 }
 
-// ToLogAttrs converts parsed JSON data to slog attributes
+// ToLogAttrs converts parsed JSON data to slog attributes.
+//
+// levelFound reports whether the line stated its own level. Callers need that
+// to tell an explicit {"level":"info"} from the "assume info" fallback —
+// otherwise pattern-based level detection overrides what the application said
+// about its own log line.
 // Extracts level and message fields if configured
 // Returns (message, level, attrs)
-func (jp *JSONParser) ToLogAttrs(data map[string]any) (message string, level slog.Level, attrs []slog.Attr) {
+func (jp *JSONParser) ToLogAttrs(data map[string]any) (message string, level slog.Level, attrs []slog.Attr, levelFound bool) {
 	attrs = make([]slog.Attr, 0, len(data))
 
 	// Default level
@@ -86,6 +91,7 @@ func (jp *JSONParser) ToLogAttrs(data map[string]any) (message string, level slo
 		if levelStr, ok := data["level"].(string); ok {
 			if parsedLevel, err := parseLevel(levelStr); err == nil {
 				level = parsedLevel
+				levelFound = true
 			}
 			delete(data, "level") // Don't duplicate in attrs
 		}
@@ -98,7 +104,7 @@ func (jp *JSONParser) ToLogAttrs(data map[string]any) (message string, level slo
 		}
 	}
 
-	return message, level, attrs
+	return message, level, attrs, levelFound
 }
 
 // IsEnabled returns whether JSON parsing is enabled
