@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -170,7 +171,7 @@ func (w *Watcher) reload() {
 
 	w.logger.Info("Config file changed, triggering reload")
 
-	if err := w.handler(); err != nil {
+	if err := w.runHandler(); err != nil {
 		w.logger.Error("Config reload failed", "error", err)
 		// Don't update lastReload on failure to allow retry
 		return
@@ -178,6 +179,27 @@ func (w *Watcher) reload() {
 
 	w.lastReload = time.Now()
 	w.logger.Info("Config reload successful")
+}
+
+// runHandler calls the reload handler, converting a panic into an error.
+//
+// This runs on a timer goroutine, so a panic here is not recoverable by
+// anything upstream: it takes the whole process down, and this process is PID 1.
+// A container that had been running happily for weeks died the moment somebody
+// saved a config with a typo in it — no graceful shutdown, no pre-stop hooks,
+// in-flight work lost. A bad config must fail the reload, never the container.
+func (w *Watcher) runHandler() (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			w.logger.Error("Config reload handler panicked; keeping the previous configuration",
+				"panic", r,
+				"stack", string(debug.Stack()),
+			)
+			err = fmt.Errorf("reload handler panicked: %v", r)
+		}
+	}()
+
+	return w.handler()
 }
 
 // Stop stops the file watcher

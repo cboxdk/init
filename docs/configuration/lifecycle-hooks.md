@@ -199,18 +199,18 @@ processes:
 4. Horizon exits gracefully
 5. If timeout expires, Cbox Init sends SIGTERM
 
-## Process Post-Stop Hooks
+## Post-Stop Hooks
 
-Execute **after** stopping an individual process.
+There is no per-process post-stop hook. Cleanup that must run after a process
+has stopped goes in the **global** `post_stop` list, which runs once, after all
+processes are down:
 
 ```yaml
-processes:
-  app:
-    command: ["./my-app"]
-    shutdown:
-      post_stop_hook:
-        command: ["./cleanup.sh"]
-        timeout: 30
+hooks:
+  post-stop:
+    - name: cleanup
+      command: ["./cleanup.sh"]
+      timeout: 30
 ```
 
 **Use Cases:**
@@ -240,7 +240,7 @@ Process Pre-Stop Hooks (parallel, per process)
     ↓
 Process Shutdown (reverse priority order)
     ↓
-Process Post-Stop Hooks (parallel, per process)
+Global Post-Stop Hooks (sequential)
     ↓
 Container Exit
 ```

@@ -83,8 +83,10 @@ global:
 
   # Optional: IP ACL
   api_acl:
-    allow: ["127.0.0.1", "10.0.0.0/8"]
-    deny: []
+    enabled: true
+    mode: allow
+    allow_list: ["127.0.0.1", "10.0.0.0/8"]
+    deny_list: []
 ```
 
 ### Auto-Detection Logic
@@ -344,8 +346,10 @@ global:
 
   # IP ACL for additional security
   api_acl:
-    allow: ["127.0.0.1", "10.0.0.0/8"]
-    deny: []
+    enabled: true
+    mode: allow
+    allow_list: ["127.0.0.1", "10.0.0.0/8"]
+    deny_list: []
 ```
 
 ## Security Considerations
@@ -390,8 +394,10 @@ global:
     key_file: "/etc/cbox-init/tls/server.key"
 
   api_acl:
-    allow: ["10.0.0.0/8"]  # VPN network only
-    deny: []
+    enabled: true
+    mode: allow
+    allow_list: ["10.0.0.0/8"]  # VPN network only
+    deny_list: []
 ```
 
 ## Troubleshooting

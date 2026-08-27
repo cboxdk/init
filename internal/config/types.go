@@ -630,8 +630,22 @@ func (c *Config) SetDefaults() {
 	// Hook defaults
 	c.setHookDefaults()
 
-	// Process defaults
+	// Process defaults.
+	//
+	// A YAML key with no body decodes to a nil *Process:
+	//
+	//   processes:
+	//     app:          # <- nil
+	//
+	// which is what you get by commenting out a process while debugging, or by
+	// adding a name before filling it in. Dereferencing it here SIGSEGV'd — at
+	// boot, and worse, in the watcher's reload goroutine, where nothing
+	// recovers: a running container died the moment its config was edited.
+	// Validate() reports it properly; defaults just has to not crash first.
 	for name, proc := range c.Processes {
+		if proc == nil {
+			continue
+		}
 		c.setProcessDefaults(name, proc)
 	}
 }

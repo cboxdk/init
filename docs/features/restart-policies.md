@@ -148,13 +148,20 @@ Max wait: 60 seconds
 
 ### Configuration
 
+Backoff is configured **globally**, not per process — one schedule applies to
+every restart in the container:
+
 ```yaml
+global:
+  restart_backoff_initial: 5s   # First wait after a crash
+  restart_backoff_max: 300s     # Ceiling (5 minutes)
+  max_restart_attempts: 10      # Give up after this many, 0 = unlimited
+  restart_stability_window: 60s # Uptime after which the budget resets
+
 processes:
   unstable-service:
     command: ["./flaky-app"]
     restart: always
-    restart_delay: 5  # Initial delay (seconds)
-    max_restart_delay: 300  # Maximum delay (5 minutes)
 ```
 
 **Behavior:**
@@ -173,24 +180,23 @@ Crash 7+: Wait 300s (max), restart
 ### Long-Running Services
 
 ```yaml
+global:
+  restart_backoff_initial: 1s
+  restart_backoff_max: 60s
+
 processes:
   # Always restart critical services
   php-fpm:
     command: ["php-fpm", "-F", "-R"]
     restart: always
-    restart_delay: 1
-    max_restart_delay: 60
 
   nginx:
     command: ["nginx", "-g", "daemon off;"]
     restart: always
-    restart_delay: 1
 
   horizon:
     command: ["php", "artisan", "horizon"]
     restart: always
-    restart_delay: 5
-    max_restart_delay: 300  # Allow longer backoff for horizon
 ```
 
 ### Queue Workers
@@ -201,7 +207,6 @@ processes:
   queue-default:
     command: ["php", "artisan", "queue:work", "--tries=3"]
     restart: on-failure
-    restart_delay: 2
 ```
 
 **Why on-failure:**
@@ -239,11 +244,13 @@ processes:
 ### Maximum Restarts
 
 ```yaml
+global:
+  max_restart_attempts: 10  # Stop after 10 restarts (0 = unlimited)
+
 processes:
   problematic-service:
     command: ["./unstable-app"]
     restart: always
-    max_restarts: 10  # Stop after 10 restarts
 ```
 
 **Behavior:**
@@ -254,18 +261,22 @@ processes:
 ### Backoff Threshold
 
 ```yaml
+global:
+  restart_backoff_initial: 10s
+  restart_backoff_max: 600s        # 10 minutes max
+  restart_stability_window: 60s    # Uptime that resets the backoff
+
 processes:
   flaky-service:
     command: ["./flaky-app"]
     restart: always
-    restart_delay: 10
-    max_restart_delay: 600  # 10 minutes max
-    restart_threshold: 60  # If restarts within 60s, increase backoff
 ```
 
 **Behavior:**
-- If process runs > 60 seconds, backoff resets
-- If process crashes < 60 seconds, backoff increases
+- If a process stays up longer than `restart_stability_window`, its backoff and
+  restart budget reset
+- If it crashes sooner than that, the backoff grows toward `restart_backoff_max`
+- A negative `restart_stability_window` disables the reset entirely
 
 ## Metrics and Monitoring
 
@@ -345,20 +356,18 @@ docker logs -f app | grep restart
 
 **Solutions:**
 ```yaml
-# Option 1: Increase restart delay
-processes:
-  unstable-app:
-    restart_delay: 30  # Wait 30s before retry
+# Option 1: Increase the backoff (global — one schedule for the container)
+global:
+  restart_backoff_initial: 30s  # Wait 30s before the first retry
 
-# Option 2: Change policy
+# Option 2: Change the policy for this process
 processes:
   unstable-app:
     restart: on-failure  # Was always
 
-# Option 3: Add max restarts
-processes:
-  unstable-app:
-    max_restarts: 5  # Stop after 5 attempts
+# Option 3: Cap the number of attempts (global)
+global:
+  max_restart_attempts: 5  # Stop after 5 attempts
 ```
 
 ### Process Won't Restart
@@ -405,10 +414,13 @@ migration:
 
 **Use backoff for unstable services:**
 ```yaml
-flaky-service:
-  restart: always
-  restart_delay: 10
-  max_restart_delay: 300
+global:
+  restart_backoff_initial: 10s
+  restart_backoff_max: 300s
+
+processes:
+  flaky-service:
+    restart: always
 ```
 
 **Monitor restart rates:**
@@ -419,9 +431,12 @@ rate(cbox_init_process_restarts_total[5m]) > 0.1
 
 **Set max restarts for safety:**
 ```yaml
-experimental-service:
-  restart: always
-  max_restarts: 20  # Prevent infinite loops
+global:
+  max_restart_attempts: 20  # Prevent infinite loops
+
+processes:
+  experimental-service:
+    restart: always
 ```
 
 ### ❌ Don't

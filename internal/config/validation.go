@@ -360,6 +360,15 @@ func (c *Config) validateProcesses(result *ValidationResult) {
 	}
 
 	for name, proc := range c.Processes {
+		if proc == nil {
+			// A key with no body. Report it here too, so check-config's report
+			// names it rather than leaving the operator with a bare load error.
+			result.AddError("processes."+name,
+				"Process has no definition (the key is present but its body is empty)",
+				"Remove the name, or give it a command")
+
+			continue
+		}
 		c.validateSingleProcess(name, proc, result)
 	}
 }
@@ -522,6 +531,9 @@ func (c *Config) validateDependencies(result *ValidationResult) {
 
 	// Check for missing dependencies
 	for name, proc := range c.Processes {
+		if proc == nil {
+			continue // reported by Validate; see validateProcess
+		}
 		for _, dep := range proc.DependsOn {
 			if _, exists := c.Processes[dep]; !exists {
 				result.AddProcessError(name, "depends_on", fmt.Sprintf("Dependency '%s' not defined", dep), fmt.Sprintf("Add process '%s' or remove from depends_on", dep))
@@ -536,7 +548,9 @@ func (c *Config) detectCycle(name string, visited, recStack map[string]bool, pat
 	recStack[name] = true
 
 	proc, exists := c.Processes[name]
-	if !exists {
+	if !exists || proc == nil {
+		// A name present with an empty body is a nil entry; Validate reports it
+		// separately, and it cannot participate in a cycle.
 		return false
 	}
 
@@ -567,6 +581,9 @@ func (c *Config) lintConfiguration(result *ValidationResult) {
 
 	// Check for enabled but unused processes
 	for name, proc := range c.Processes {
+		if proc == nil {
+			continue // reported by Validate; see validateProcess
+		}
 		if !proc.Enabled {
 			result.AddSuggestion(name, "Process defined but disabled", "Remove from config or enable to reduce clutter")
 		}
