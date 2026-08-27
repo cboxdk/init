@@ -495,7 +495,7 @@ func (m Model) renderProcessTable() string {
 	headerStyles := buildHeaderStyles(len(headers), usePlain)
 	headerLine := formatRow(headers, headerStyles, m.tableColumnWidths, alignLeft)
 	if usePlain {
-		b.WriteString(headerLine)
+		b.WriteString(plainUnselectedPrefix + headerLine)
 	} else {
 		b.WriteString(tableHeaderStyle.Render(headerLine))
 	}
@@ -521,13 +521,12 @@ func (m Model) renderProcessTable() string {
 			alignLeft,
 		)
 
+		if usePlain && i != m.selectedIndex {
+			line = plainUnselectedPrefix + line
+		}
 		if i == m.selectedIndex {
 			if usePlain {
-				if len(line) >= 2 {
-					line = "> " + line[2:]
-				} else {
-					line = "> " + line
-				}
+				line = plainSelectedPrefix + line
 			} else {
 				line = tableSelectedStyle.Render(line)
 			}
@@ -541,6 +540,17 @@ func (m Model) renderProcessTable() string {
 
 	return b.String()
 }
+
+// The plain (dialog-open) renderer marks the selected row with a leading "> ".
+// It used to overwrite the row's first two characters — so php-fpm rendered as
+// "> p-fpm", mangling the name exactly when the user is confirming which process
+// they are about to stop, and byte-slicing could also split a multi-byte rune.
+// Every row and the header now carry a same-width gutter instead, so the marker
+// costs no content and nothing shifts.
+const (
+	plainSelectedPrefix   = "> "
+	plainUnselectedPrefix = "  "
+)
 
 func buildHeaderStyles(count int, usePlain bool) []lipgloss.Style {
 	styles := make([]lipgloss.Style, count)
@@ -826,6 +836,11 @@ func (m *Model) updateScheduledTable(processes []process.ProcessInfo) {
 	if m.scheduledIndex < 0 {
 		m.scheduledIndex = 0
 	}
+	// The offset needs clamping too. Clamping only the cursor left a stale
+	// offset behind: scroll to the bottom of a long list, reload into a short
+	// one, and the viewport started past the end — a header and zero rows until
+	// the user happened to press a nav key.
+	m.ensureScheduledCursorVisible()
 }
 
 // renderScheduledTable renders the scheduled jobs table for the Scheduled tab
@@ -860,7 +875,7 @@ func (m Model) renderScheduledTable() string {
 	headerStyles := buildHeaderStyles(len(headers), usePlain)
 	headerLine := formatRow(headers, headerStyles, colWidths, alignLeft)
 	if usePlain {
-		b.WriteString(headerLine)
+		b.WriteString(plainUnselectedPrefix + headerLine)
 	} else {
 		b.WriteString(tableHeaderStyle.Render(headerLine))
 	}
@@ -887,13 +902,12 @@ func (m Model) renderScheduledTable() string {
 			alignLeft,
 		)
 
+		if usePlain && i != m.scheduledIndex {
+			line = plainUnselectedPrefix + line
+		}
 		if i == m.scheduledIndex {
 			if usePlain {
-				if len(line) >= 2 {
-					line = "> " + line[2:]
-				} else {
-					line = "> " + line
-				}
+				line = plainSelectedPrefix + line
 			} else {
 				line = tableSelectedStyle.Render(line)
 			}
@@ -948,7 +962,7 @@ func (m Model) renderOneshotTable() string {
 	headerStyles := buildHeaderStyles(len(headers), usePlain)
 	headerLine := formatRow(headers, headerStyles, colWidths, alignLeft)
 	if usePlain {
-		b.WriteString(headerLine)
+		b.WriteString(plainUnselectedPrefix + headerLine)
 	} else {
 		b.WriteString(tableHeaderStyle.Render(headerLine))
 	}
@@ -975,13 +989,12 @@ func (m Model) renderOneshotTable() string {
 			alignLeft,
 		)
 
+		if usePlain && i != m.oneshotIndex {
+			line = plainUnselectedPrefix + line
+		}
 		if i == m.oneshotIndex {
 			if usePlain {
-				if len(line) >= 2 {
-					line = "> " + line[2:]
-				} else {
-					line = "> " + line
-				}
+				line = plainSelectedPrefix + line
 			} else {
 				line = tableSelectedStyle.Render(line)
 			}
