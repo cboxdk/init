@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Adding a process at runtime honors `schedule` and `initial_state`.** A
+  process added through the API with a cron `schedule` was started as a
+  long-running supervisor — running the job continuously instead of on its
+  schedule — and one added with `initial_state: stopped` started immediately.
+  Both now behave as they do at startup.
+- **Removing a process also removes its scheduled job.** Deleting a scheduled
+  process dropped only its config entry, leaving the cron job firing against a
+  process that no longer existed.
+- **A rejected process update no longer leaves the service down.** If the new
+  configuration failed to start, only the config was rolled back — the old
+  supervisor had already been stopped, so the process stayed down. The previous
+  configuration is now restarted.
+- **A container whose restored workload dies exits non-zero.** A process brought
+  back from a checkpoint recorded no exit status when it died, so PID 1 could
+  exit 0 after its entire workload disappeared.
+- **A process whose instances have all died no longer reports itself running.**
+  The supervisor kept its `running` state, so readiness and the API reported a
+  dead service as healthy.
+
+### Fixed
+
 - **Stopping an instance that just exited can no longer resurrect it.** If an
   instance died on its own moments before it was stopped (a scale-down, or a
   shutdown), the stop returned early without recording that the instance must
