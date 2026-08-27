@@ -379,6 +379,19 @@ func (m *Manager) isProcessReady(status ProcessStatus) bool {
 //
 // Must be called with the mutex lock held.
 func (m *Manager) setReady(ready bool) {
+	// A stopped manager never becomes ready again. IsReady and Snapshot already
+	// return false once stopped, but the FILE was still being written — so a
+	// late evaluation racing shutdown recreated the readiness file after Stop
+	// had removed it, and a file-based probe went on reporting the container
+	// ready while it was tearing itself down. Traffic kept arriving.
+	if m.stopped {
+		if ready {
+			m.logger.Debug("Ignoring readiness transition after stop")
+		}
+
+		return
+	}
+
 	// Reconcile the file on every evaluation, not only on a change. Acting only
 	// on transitions meant a readiness file removed from underneath us — a
 	// tmpfs cleaner, a sidecar, an operator — was never recreated, so the

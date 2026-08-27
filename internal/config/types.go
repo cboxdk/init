@@ -18,52 +18,56 @@ type Config struct {
 
 // GlobalConfig contains global settings for the process manager
 type GlobalConfig struct {
-	ShutdownTimeout           int              `yaml:"shutdown_timeout" json:"shutdown_timeout"`                         // seconds
-	HealthCheckInterval       int              `yaml:"health_check_interval" json:"health_check_interval"`               // seconds
-	RestartPolicy             string           `yaml:"restart_policy" json:"restart_policy"`                             // always | on-failure | never
-	MaxRestartAttempts        int              `yaml:"max_restart_attempts" json:"max_restart_attempts"`                 //
-	RestartBackoff            int              `yaml:"restart_backoff" json:"restart_backoff"`                           // seconds (legacy, prefer restart_backoff_initial/max)
-	RestartBackoffInitial     time.Duration    `yaml:"restart_backoff_initial" json:"restart_backoff_initial"`           // initial duration (supports "5s" style)
-	RestartBackoffMax         time.Duration    `yaml:"restart_backoff_max" json:"restart_backoff_max"`                   // max duration
-	RestartStabilityWindow    time.Duration    `yaml:"restart_stability_window" json:"restart_stability_window"`         // uptime after which the restart budget resets (default 60s; negative disables)
-	AutotuneMemoryThreshold   float64          `yaml:"autotune_memory_threshold" json:"autotune_memory_threshold"`       // 0.0-2.0, overrides profile MaxMemoryUsage
-	LogFormat                 string           `yaml:"log_format" json:"log_format"`                                     // json | text
-	LogLevel                  string           `yaml:"log_level" json:"log_level"`                                       // debug | info | warn | error
-	LogTimestamps             bool             `yaml:"log_timestamps" json:"log_timestamps"`                             //
-	MetricsEnabled            *bool            `yaml:"metrics_enabled" json:"metrics_enabled"`                           //
-	MetricsPort               int              `yaml:"metrics_port" json:"metrics_port"`                                 //
-	MetricsPath               string           `yaml:"metrics_path" json:"metrics_path"`                                 //
-	MetricsHost               string           `yaml:"metrics_host" json:"metrics_host"`                                 // Bind host for metrics (default: all interfaces)
-	APIEnabled                *bool            `yaml:"api_enabled" json:"api_enabled"`                                   //
-	APIPort                   int              `yaml:"api_port" json:"api_port"`                                         //
-	APIHost                   string           `yaml:"api_host" json:"api_host"`                                         // Bind host for the management API (default: 127.0.0.1, loopback-only; set 0.0.0.0 to expose — requires api_auth or api_acl)
-	APISocket                 string           `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/cbox-init.sock)
-	APIAuth                   string           `yaml:"api_auth" json:"api_auth"`                                         // Bearer token
-	APITLS                    *TLSConfig       `yaml:"api_tls" json:"api_tls"`                                           // TLS configuration for API
-	APIACL                    *ACLConfig       `yaml:"api_acl" json:"api_acl"`                                           // IP ACL for API
-	MetricsTLS                *TLSConfig       `yaml:"metrics_tls" json:"metrics_tls"`                                   // TLS configuration for metrics
-	MetricsACL                *ACLConfig       `yaml:"metrics_acl" json:"metrics_acl"`                                   // IP ACL for metrics
-	ResourceMetricsEnabled    *bool            `yaml:"resource_metrics_enabled" json:"resource_metrics_enabled"`         // Enable CPU/RAM collection
-	ResourceMetricsInterval   int              `yaml:"resource_metrics_interval" json:"resource_metrics_interval"`       // seconds (default: 5)
-	ResourceMetricsMaxSamples int              `yaml:"resource_metrics_max_samples" json:"resource_metrics_max_samples"` // Per-instance buffer size (default: 720 = 1h at 5s)
-	AuditEnabled              bool             `yaml:"audit_enabled" json:"audit_enabled"`                               // Enable audit logging
-	TracingEnabled            bool             `yaml:"tracing_enabled" json:"tracing_enabled"`                           // Enable distributed tracing
-	TracingExporter           string           `yaml:"tracing_exporter" json:"tracing_exporter"`                         // otlp-grpc | otlp-http | stdout | jaeger | zipkin
-	TracingEndpoint           string           `yaml:"tracing_endpoint" json:"tracing_endpoint"`                         // Exporter endpoint (e.g., localhost:4317)
-	TracingSampleRate         float64          `yaml:"tracing_sample_rate" json:"tracing_sample_rate"`                   // 0.0-1.0 (default: 1.0 = 100%)
-	TracingServiceName        string           `yaml:"tracing_service_name" json:"tracing_service_name"`                 // Service name for traces (default: cbox-init)
-	TracingUseTLS             bool             `yaml:"tracing_use_tls" json:"tracing_use_tls"`                           // Enable TLS for production (default: false)
-	ScheduleHistorySize       int              `yaml:"schedule_history_size" json:"schedule_history_size"`               // Max execution history entries per job (default: 100)
-	OneshotHistoryMaxEntries  int              `yaml:"oneshot_history_max_entries" json:"oneshot_history_max_entries"`   // Max oneshot history entries per process (default: 5000)
-	OneshotHistoryMaxAge      time.Duration    `yaml:"oneshot_history_max_age" json:"oneshot_history_max_age"`           // Max age of oneshot history entries (default: 24h)
-	Readiness                 *ReadinessConfig `yaml:"readiness" json:"readiness"`                                       // Container readiness file config for K8s
-	HealthCheckStrict         bool             `yaml:"health_check_strict" json:"health_check_strict"`                   // Fail process startup if health monitor creation fails (default: false)
-	DependencyTimeout         time.Duration    `yaml:"dependency_timeout" json:"dependency_timeout"`                     // Max time to wait for dependencies to become ready (default: 5m)
-	ProcessStartTimeout       time.Duration    `yaml:"process_start_timeout" json:"process_start_timeout"`               // Timeout for starting a single process (default: 30s)
-	ProcessStopTimeout        time.Duration    `yaml:"process_stop_timeout" json:"process_stop_timeout"`                 // Timeout for stopping a single process (default: 60s)
-	MaxProcessScale           int              `yaml:"max_process_scale" json:"max_process_scale"`                       // Maximum instances per process (default: 100)
-	APIMaxRequestBody         int64            `yaml:"api_max_request_body" json:"api_max_request_body"`                 // Max request body size in bytes (default: 8MB)
-	ZombieReapInterval        time.Duration    `yaml:"zombie_reap_interval" json:"zombie_reap_interval"`                 // Interval for zombie process reaping (default: 1s)
+	ShutdownTimeout           int           `yaml:"shutdown_timeout" json:"shutdown_timeout"`                         // seconds
+	HealthCheckInterval       int           `yaml:"health_check_interval" json:"health_check_interval"`               // seconds
+	RestartPolicy             string        `yaml:"restart_policy" json:"restart_policy"`                             // always | on-failure | never
+	MaxRestartAttempts        int           `yaml:"max_restart_attempts" json:"max_restart_attempts"`                 //
+	RestartBackoff            int           `yaml:"restart_backoff" json:"restart_backoff"`                           // seconds (legacy, prefer restart_backoff_initial/max)
+	RestartBackoffInitial     time.Duration `yaml:"restart_backoff_initial" json:"restart_backoff_initial"`           // initial duration (supports "5s" style)
+	RestartBackoffMax         time.Duration `yaml:"restart_backoff_max" json:"restart_backoff_max"`                   // max duration
+	RestartStabilityWindow    time.Duration `yaml:"restart_stability_window" json:"restart_stability_window"`         // uptime after which the restart budget resets (default 60s; negative disables)
+	AutotuneMemoryThreshold   float64       `yaml:"autotune_memory_threshold" json:"autotune_memory_threshold"`       // 0.0-2.0, overrides profile MaxMemoryUsage
+	LogFormat                 string        `yaml:"log_format" json:"log_format"`                                     // json | text
+	LogLevel                  string        `yaml:"log_level" json:"log_level"`                                       // debug | info | warn | error
+	LogTimestamps             bool          `yaml:"log_timestamps" json:"log_timestamps"`                             //
+	MetricsEnabled            *bool         `yaml:"metrics_enabled" json:"metrics_enabled"`                           //
+	MetricsPort               int           `yaml:"metrics_port" json:"metrics_port"`                                 //
+	MetricsPath               string        `yaml:"metrics_path" json:"metrics_path"`                                 //
+	MetricsHost               string        `yaml:"metrics_host" json:"metrics_host"`                                 // Bind host for metrics (default: all interfaces)
+	APIEnabled                *bool         `yaml:"api_enabled" json:"api_enabled"`                                   //
+	APIPort                   int           `yaml:"api_port" json:"api_port"`                                         //
+	APIHost                   string        `yaml:"api_host" json:"api_host"`                                         // Bind host for the management API (default: 127.0.0.1, loopback-only; set 0.0.0.0 to expose — requires api_auth or api_acl)
+	APISocket                 string        `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/cbox-init.sock)
+	APIAuth                   string        `yaml:"api_auth" json:"api_auth"`                                         // Bearer token
+	APITLS                    *TLSConfig    `yaml:"api_tls" json:"api_tls"`                                           // TLS configuration for API
+	APIACL                    *ACLConfig    `yaml:"api_acl" json:"api_acl"`                                           // IP ACL for API
+	MetricsTLS                *TLSConfig    `yaml:"metrics_tls" json:"metrics_tls"`                                   // TLS configuration for metrics
+	MetricsACL                *ACLConfig    `yaml:"metrics_acl" json:"metrics_acl"`                                   // IP ACL for metrics
+	ResourceMetricsEnabled    *bool         `yaml:"resource_metrics_enabled" json:"resource_metrics_enabled"`         // Enable CPU/RAM collection
+	ResourceMetricsInterval   int           `yaml:"resource_metrics_interval" json:"resource_metrics_interval"`       // seconds (default: 5)
+	ResourceMetricsMaxSamples int           `yaml:"resource_metrics_max_samples" json:"resource_metrics_max_samples"` // Per-instance buffer size (default: 720 = 1h at 5s)
+	AuditEnabled              bool          `yaml:"audit_enabled" json:"audit_enabled"`                               // Enable audit logging
+	TracingEnabled            bool          `yaml:"tracing_enabled" json:"tracing_enabled"`                           // Enable distributed tracing
+	TracingExporter           string        `yaml:"tracing_exporter" json:"tracing_exporter"`                         // otlp-grpc | stdout
+	TracingEndpoint           string        `yaml:"tracing_endpoint" json:"tracing_endpoint"`                         // Exporter endpoint (e.g., localhost:4317)
+	// TracingSampleRate is a pointer so an explicit 0.0 — the documented way to
+	// sample nothing — can be told from an absent key. Treating 0 as "unset"
+	// turned it into 100% sampling, the exact opposite of what was asked for.
+	// Read it through TracingSampleRateValue, which applies the 1.0 default.
+	TracingSampleRate        *float64         `yaml:"tracing_sample_rate" json:"tracing_sample_rate"`                 // 0.0-1.0 (default: 1.0 = 100%)
+	TracingServiceName       string           `yaml:"tracing_service_name" json:"tracing_service_name"`               // Service name for traces (default: cbox-init)
+	TracingUseTLS            bool             `yaml:"tracing_use_tls" json:"tracing_use_tls"`                         // Enable TLS for production (default: false)
+	ScheduleHistorySize      int              `yaml:"schedule_history_size" json:"schedule_history_size"`             // Max execution history entries per job (default: 100)
+	OneshotHistoryMaxEntries int              `yaml:"oneshot_history_max_entries" json:"oneshot_history_max_entries"` // Max oneshot history entries per process (default: 5000)
+	OneshotHistoryMaxAge     time.Duration    `yaml:"oneshot_history_max_age" json:"oneshot_history_max_age"`         // Max age of oneshot history entries (default: 24h)
+	Readiness                *ReadinessConfig `yaml:"readiness" json:"readiness"`                                     // Container readiness file config for K8s
+	HealthCheckStrict        bool             `yaml:"health_check_strict" json:"health_check_strict"`                 // Fail process startup if health monitor creation fails (default: false)
+	DependencyTimeout        time.Duration    `yaml:"dependency_timeout" json:"dependency_timeout"`                   // Max time to wait for dependencies to become ready (default: 5m)
+	ProcessStartTimeout      time.Duration    `yaml:"process_start_timeout" json:"process_start_timeout"`             // Timeout for starting a single process (default: 30s)
+	ProcessStopTimeout       time.Duration    `yaml:"process_stop_timeout" json:"process_stop_timeout"`               // Timeout for stopping a single process (default: 60s)
+	MaxProcessScale          int              `yaml:"max_process_scale" json:"max_process_scale"`                     // Maximum instances per process (default: 100)
+	APIMaxRequestBody        int64            `yaml:"api_max_request_body" json:"api_max_request_body"`               // Max request body size in bytes (default: 8MB)
+	ZombieReapInterval       time.Duration    `yaml:"zombie_reap_interval" json:"zombie_reap_interval"`               // Interval for zombie process reaping (default: 1s)
 }
 
 // HooksConfig contains lifecycle hooks
@@ -437,23 +441,16 @@ func (c *Config) setGlobalTracingDefaults() {
 	if c.Global.TracingExporter == "" {
 		c.Global.TracingExporter = "stdout"
 	}
-	if c.Global.TracingSampleRate == 0 {
-		c.Global.TracingSampleRate = 1.0
-	}
+
 	if c.Global.TracingServiceName == "" {
 		c.Global.TracingServiceName = "cbox-init"
 	}
-	if c.Global.TracingEndpoint == "" {
-		switch c.Global.TracingExporter {
-		case "otlp-grpc":
-			c.Global.TracingEndpoint = "localhost:4317"
-		case "otlp-http":
-			c.Global.TracingEndpoint = "localhost:4318"
-		case "jaeger":
-			c.Global.TracingEndpoint = "localhost:14268"
-		case "zipkin":
-			c.Global.TracingEndpoint = "http://localhost:9411/api/v2/spans"
-		}
+	// Only the exporters the tracing provider actually implements get a default
+	// endpoint. Handing otlp-http, jaeger and zipkin a plausible one made them
+	// look supported: check-config passed, and then serve exited 1 on
+	// "unsupported trace exporter". Validate rejects them by name instead.
+	if c.Global.TracingEndpoint == "" && c.Global.TracingExporter == "otlp-grpc" {
+		c.Global.TracingEndpoint = "localhost:4317"
 	}
 }
 
@@ -705,6 +702,17 @@ func (g *GlobalConfig) SetResourceMetricsEnabled(v bool) {
 }
 
 // APIEnabledValue returns true if API enabled (default false)
+// TracingSampleRateValue returns the effective sample rate: the configured
+// value if the key is present (including an explicit 0.0, which samples
+// nothing), or 1.0 when it was never set.
+func (g *GlobalConfig) TracingSampleRateValue() float64 {
+	if g == nil || g.TracingSampleRate == nil {
+		return 1.0
+	}
+
+	return *g.TracingSampleRate
+}
+
 func (g *GlobalConfig) APIEnabledValue() bool {
 	if g == nil || g.APIEnabled == nil {
 		return false

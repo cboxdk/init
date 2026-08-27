@@ -83,8 +83,8 @@ func TestSetDefaults(t *testing.T) {
 				if c.Global.TracingExporter != "stdout" {
 					t.Errorf("TracingExporter = %v, want stdout", c.Global.TracingExporter)
 				}
-				if c.Global.TracingSampleRate != 1.0 {
-					t.Errorf("TracingSampleRate = %v, want 1.0", c.Global.TracingSampleRate)
+				if c.Global.TracingSampleRateValue() != 1.0 {
+					t.Errorf("TracingSampleRate = %v, want 1.0", c.Global.TracingSampleRateValue())
 				}
 				if c.Global.TracingServiceName != "cbox-init" {
 					t.Errorf("TracingServiceName = %v, want cbox-init", c.Global.TracingServiceName)
@@ -389,7 +389,12 @@ func TestSetDefaults(t *testing.T) {
 			},
 		},
 		{
-			name: "tracing endpoint defaults for otlp-http",
+			// Exporters the provider cannot build get NO default endpoint. A
+			// plausible-looking one made otlp-http, jaeger and zipkin appear
+			// supported: check-config passed and then serve exited 1 on
+			// "unsupported trace exporter". Validate rejects them by name now —
+			// see TestUnsupportedTracingExporterIsRejected.
+			name: "no endpoint default for an unsupported exporter",
 			config: &Config{
 				Global: GlobalConfig{
 					TracingExporter: "otlp-http",
@@ -399,40 +404,9 @@ func TestSetDefaults(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, c *Config) {
-				if c.Global.TracingEndpoint != "localhost:4318" {
-					t.Errorf("TracingEndpoint = %v, want localhost:4318", c.Global.TracingEndpoint)
-				}
-			},
-		},
-		{
-			name: "tracing endpoint defaults for jaeger",
-			config: &Config{
-				Global: GlobalConfig{
-					TracingExporter: "jaeger",
-				},
-				Processes: map[string]*Process{
-					"test": {Command: []string{"sleep", "1"}},
-				},
-			},
-			validate: func(t *testing.T, c *Config) {
-				if c.Global.TracingEndpoint != "localhost:14268" {
-					t.Errorf("TracingEndpoint = %v, want localhost:14268", c.Global.TracingEndpoint)
-				}
-			},
-		},
-		{
-			name: "tracing endpoint defaults for zipkin",
-			config: &Config{
-				Global: GlobalConfig{
-					TracingExporter: "zipkin",
-				},
-				Processes: map[string]*Process{
-					"test": {Command: []string{"sleep", "1"}},
-				},
-			},
-			validate: func(t *testing.T, c *Config) {
-				if c.Global.TracingEndpoint != "http://localhost:9411/api/v2/spans" {
-					t.Errorf("TracingEndpoint = %v, want zipkin default", c.Global.TracingEndpoint)
+				if c.Global.TracingEndpoint != "" {
+					t.Errorf("TracingEndpoint = %v, want empty for an unsupported exporter",
+						c.Global.TracingEndpoint)
 				}
 			},
 		},

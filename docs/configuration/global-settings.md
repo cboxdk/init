@@ -158,7 +158,7 @@ global:
 **Settings:**
 - `api_enabled` - Enable/disable TCP REST API (default: `false`)
 - `api_port` - HTTP port for API endpoints (default: `9180`)
-- `api_host` - Bind host for the API listener (default: all interfaces). **Recommended:** set to `127.0.0.1` when you only need local access, so the management API is never reachable from the pod/host network.
+- `api_host` - Bind host for the API listener (default: `127.0.0.1`, loopback only). Binding beyond loopback exposes a control plane that can start, stop and reconfigure every process in the container, so cbox-init refuses to start unless you also set `api_auth` or an `api_acl` with `mode: allow` and a non-empty `allow_list`.
 - `api_auth` - Optional Bearer token for authentication
 
 **API Endpoints:**
