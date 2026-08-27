@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A noisy process can no longer OOM the container through the log buffer.** The
+  per-process ring buffer was bounded by entry count, not size, and a single
+  entry can be large — newline-free output is flushed at a 64KB threshold, and
+  multiline buffering can hold a whole stack trace. At 1000 entries that reached
+  hundreds of megabytes per instance, so an app dumping a base64 blob or a long
+  `var_dump` could grow PID 1 until the cgroup killed the container. Retained
+  messages are now truncated (with a marker); the full line still goes to stdout
+  and to live log subscribers.
+- **A burst of config writes now reloads the final version.** Debouncing fired on
+  the *first* event of a burst and ignored the rest, so an editor or generator
+  that writes a file in several steps had an intermediate version loaded and the
+  final write — the one that mattered — never loaded at all. Debouncing is now
+  trailing-edge, and a pending reload is cancelled when the watcher stops.
+
+### Fixed
+
 - **`schedule_timezone` is finally honored, and IANA names work.** The cron spec
   was parsed with the process's local time, so the setting was stored and then
   ignored: a job configured with the documented default `UTC` fired at the
