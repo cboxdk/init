@@ -1561,6 +1561,12 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 
 	instance.mu.Lock()
 	currentState := instance.state
+	// Record the intent first, whatever the current state: calling stopInstance
+	// means "this instance must not come back". If it exited on its own a moment
+	// ago, its monitor goroutine may not have decided yet — leaving allowRestart
+	// set here let it start a replacement that the caller (ScaleDown, Stop) has
+	// already dropped from the instance list, orphaning a live process.
+	instance.allowRestart = false
 	if currentState != StateRunning {
 		instance.mu.Unlock()
 		s.logger.Debug("Process not running, skipping stop",
@@ -1570,7 +1576,6 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 		return nil
 	}
 	instance.state = StateStopping
-	instance.allowRestart = false
 	pid := instance.pid
 	instance.mu.Unlock()
 

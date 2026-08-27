@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Stopping an instance that just exited can no longer resurrect it.** If an
+  instance died on its own moments before it was stopped (a scale-down, or a
+  shutdown), the stop returned early without recording that the instance must
+  stay down — so its monitor could still start a replacement, which the caller
+  had already dropped from the instance list, leaving a live process nothing was
+  tracking. The intent is now recorded whatever state the instance is in.
+
+### Fixed
+
 - **Scaling down keeps track of an instance that would not stop.** `ScaleDown`
   truncated its instance list even when stopping had failed, so a process that
   survived the shutdown was left running with nothing tracking it — and a later
