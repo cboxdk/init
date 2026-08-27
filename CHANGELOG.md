@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A deleted readiness file is recreated.** The file was written only when
+  readiness *changed*, so one removed from underneath the container — by a tmpfs
+  cleaner, a sidecar, an operator — was never restored, and the container looked
+  not-ready to a file-based probe for the rest of its life with nothing in the
+  logs to explain it. Readiness is now reconciled on every evaluation.
+- **Readiness handles a disabled configuration without panicking.** Creating and
+  removing the readiness file dereferenced the config unconditionally, although a
+  nil config (readiness disabled) is documented as supported. An empty path —
+  documented as "no file" — is now honored too.
+
+### Fixed
+
 - **A process that omits `enabled` now starts, as documented.** The field
   documents a default of `true`, but it decoded to the zero value — so a process
   defined with a command and no `enabled` was silently skipped, and a config
