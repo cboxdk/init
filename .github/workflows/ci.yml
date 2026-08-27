@@ -181,6 +181,14 @@ jobs:
       - name: Make binaries executable
         run: chmod +x build/cbox-init-*
 
+      - name: PID-1 integration test
+        if: matrix.distro == 'debian'
+        run: |
+          docker build -f tests/integration/Dockerfile.pid1 -t cbox-init-pid1 .
+          # The container's exit code IS the result: the verifier runs as a
+          # oneshot, and cbox-init exits non-zero when a oneshot fails.
+          docker run --rm --name cbox-init-pid1 cbox-init-pid1
+
       - name: Run integration tests - ${{ matrix.distro }}
         run: |
           docker build \
