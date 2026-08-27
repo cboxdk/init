@@ -1227,6 +1227,15 @@ func (s *Supervisor) monitorRestored(instance *Instance, pid int, done chan stru
 		s.logger.Warn("Restored process instance exited", "instance_id", instance.id, "pid", pid)
 		metrics.RecordProcessStop(s.name, instance.id, -1)
 
+		// Record the death for the container-level exit decision, exactly as
+		// monitorInstance does. Without this a restored process dying was
+		// invisible to TerminalExitCode, so PID 1 could exit 0 after its whole
+		// workload disappeared. -1 means "died, exit status unknown".
+		s.mu.Lock()
+		s.lastExitCode = -1
+		s.lastExitSet = true
+		s.mu.Unlock()
+
 		if allowRestart && s.config.Type != "oneshot" && s.restartPolicy.ShouldRestart(-1, restartCount) {
 			s.attemptRestart(instance, -1, restartCount)
 		} else {
@@ -2230,6 +2239,15 @@ func (s *Supervisor) checkAllInstancesDead() {
 	s.mu.RUnlock()
 
 	if allDead && len(s.instances) > 0 {
+		// Reflect it in the supervisor's own state: readiness and the API derive
+		// health from it, so a supervisor still claiming StateRunning with no
+		// live instance reports a dead service as healthy.
+		s.mu.Lock()
+		if s.state == StateRunning || s.state == StateStarting {
+			s.state = StateFailed
+		}
+		s.mu.Unlock()
+
 		// A long-running process with no live instance cannot serve anything, so
 		// stop advertising it as ready: otherwise a dependent started later (a
 		// reload, a scale-up) would see the previous run's readiness and launch

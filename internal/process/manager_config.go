@@ -42,6 +42,30 @@ func (m *Manager) AddProcess(ctx context.Context, name string, procCfg *config.P
 	// Add to config
 	m.config.Processes[name] = procCfg
 
+	// A scheduled process belongs to the scheduler, not to a supervisor — starting
+	// it as a long-running supervisor would run the job continuously instead of on
+	// its cron expression.
+	if procCfg.Enabled && procCfg.Schedule != "" {
+		if err := m.registerScheduledProcess(name, procCfg); err != nil {
+			delete(m.config.Processes, name)
+			return fmt.Errorf("failed to register scheduled process: %w", err)
+		}
+		if stats := m.scheduler.Stats(); stats.TotalJobs > 0 && !stats.Started {
+			m.scheduler.Start()
+		}
+		m.logger.Info("Scheduled process added", "name", name, "schedule", procCfg.Schedule)
+		m.auditLogger.LogProcessAdded(name, procCfg.Command, procCfg.Scale)
+		return nil
+	}
+
+	// initial_state: stopped means "defined but not running" — respect it here as
+	// startup does, instead of starting the process immediately.
+	if procCfg.Enabled && procCfg.InitialState == "stopped" {
+		m.logger.Info("Process added in stopped state", "name", name)
+		m.auditLogger.LogProcessAdded(name, procCfg.Command, procCfg.Scale)
+		return nil
+	}
+
 	// If enabled, start the process
 	if procCfg.Enabled {
 		m.logger.Info("Starting new process", "name", name, "command", procCfg.Command, "scale", procCfg.Scale)
@@ -75,6 +99,10 @@ func (m *Manager) RemoveProcess(ctx context.Context, name string) error {
 	if _, exists := m.config.Processes[name]; !exists {
 		return fmt.Errorf("process %q: %w", name, ErrProcessNotFound)
 	}
+
+	// A scheduled process has no supervisor — its registration lives in the
+	// scheduler, and removing only the config entry would leave the job firing.
+	m.unregisterScheduledProcess(name)
 
 	// Stop the process if running
 	if supervisor, running := m.processes[name]; running {
@@ -142,8 +170,21 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 			newSupervisor := m.newConfiguredSupervisor(name, procCfg)
 			// Use background context for supervisor lifetime (independent of API request)
 			if err := m.startSupervisor(ctx, newSupervisor); err != nil {
-				// Rollback config change on error
+				// Roll the config back AND bring the previous process back up: the
+				// old supervisor was already stopped, so returning here would leave
+				// the service down after a merely-rejected edit.
 				m.config.Processes[name] = oldCfg
+				delete(m.processes, name)
+				if oldCfg.Enabled {
+					restored := m.newConfiguredSupervisor(name, oldCfg)
+					if rerr := m.startSupervisor(ctx, restored); rerr != nil {
+						m.logger.Error("Update failed and the previous configuration could not be restarted",
+							"name", name, "start_error", err, "restore_error", rerr)
+						return fmt.Errorf("failed to start process with new config (%w) and could not restore the previous one: %w", err, rerr)
+					}
+					m.processes[name] = restored
+					m.logger.Warn("Update failed; restored the previous configuration", "name", name)
+				}
 				return fmt.Errorf("failed to start process with new config: %w", err)
 			}
 
