@@ -116,6 +116,9 @@ func (lb *LogBuffer) GetRecent(n int) []LogEntry {
 		count = lb.size
 	}
 
+	if n < 0 {
+		n = 0 // a negative request is not a panic (make() would panic on it)
+	}
 	if n > count {
 		n = count
 	}

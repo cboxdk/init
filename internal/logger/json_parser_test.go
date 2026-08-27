@@ -232,7 +232,7 @@ func TestJSONParser_ToLogAttrs_ExtractMessage(t *testing.T) {
 		"user_id": 123,
 	}
 
-	message, level, attrs := parser.ToLogAttrs(data)
+	message, level, attrs, _ := parser.ToLogAttrs(data)
 
 	if message != "Test message" {
 		t.Errorf("expected message='Test message', got %v", message)
@@ -301,7 +301,7 @@ func TestJSONParser_ToLogAttrs_ExtractLevel(t *testing.T) {
 				"level": tt.levelStr,
 			}
 
-			_, level, _ := parser.ToLogAttrs(data)
+			_, level, _, _ := parser.ToLogAttrs(data)
 			if level != tt.wantLevel {
 				t.Errorf("expected level %v, got %v", tt.wantLevel, level)
 			}
@@ -330,7 +330,7 @@ func TestJSONParser_ToLogAttrs_MergeFields(t *testing.T) {
 		"duration": 45.5,
 	}
 
-	message, level, attrs := parser.ToLogAttrs(data)
+	message, level, attrs, _ := parser.ToLogAttrs(data)
 
 	if message != "Test message" {
 		t.Errorf("expected message='Test message', got %v", message)
@@ -389,7 +389,7 @@ func TestJSONParser_ToLogAttrs_NoExtraction(t *testing.T) {
 		"user_id": 123,
 	}
 
-	message, level, attrs := parser.ToLogAttrs(data)
+	message, level, attrs, _ := parser.ToLogAttrs(data)
 
 	if message != "" {
 		t.Errorf("expected empty message, got %v", message)
@@ -417,7 +417,7 @@ func TestJSONParser_ToLogAttrs_NonStringMessage(t *testing.T) {
 		"message": 123,
 	}
 
-	message, _, _ := parser.ToLogAttrs(data)
+	message, _, _, _ := parser.ToLogAttrs(data)
 
 	if message != "" {
 		t.Errorf("expected empty message for non-string, got %v", message)
@@ -441,7 +441,7 @@ func TestJSONParser_ToLogAttrs_NonStringLevel(t *testing.T) {
 		"level": 123,
 	}
 
-	_, level, _ := parser.ToLogAttrs(data)
+	_, level, _, _ := parser.ToLogAttrs(data)
 
 	if level != slog.LevelInfo {
 		t.Errorf("expected default level Info for non-string, got %v", level)
@@ -509,7 +509,7 @@ func TestJSONParser_ToLogAttrs_ComplexTypes(t *testing.T) {
 		"null":  nil,
 	}
 
-	message, level, attrs := parser.ToLogAttrs(data)
+	message, level, attrs, _ := parser.ToLogAttrs(data)
 
 	if message != "Complex data" {
 		t.Errorf("expected message='Complex data', got %v", message)

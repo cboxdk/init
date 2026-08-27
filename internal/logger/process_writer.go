@@ -164,12 +164,17 @@ func (pw *ProcessWriter) processEntry(entry string) {
 	var message string
 	var level slog.Level
 	var attrs []slog.Attr
+	// Whether the level came from the log line itself (parsed JSON) rather than
+	// from the "assume info" fallback. Without this distinction an explicit
+	// {"level":"info"} was indistinguishable from "unknown", and pattern-based
+	// detection below overrode the application's own stated level.
+	levelFromSource := false
 
 	if pw.jsonParser != nil && pw.jsonParser.IsEnabled() {
 		isJSON, data := pw.jsonParser.Parse(entry)
 		if isJSON {
 			// Extract message, level, and attributes from JSON
-			message, level, attrs = pw.jsonParser.ToLogAttrs(data)
+			message, level, attrs, levelFromSource = pw.jsonParser.ToLogAttrs(data)
 
 			// If no message extracted, use original entry
 			if message == "" {
@@ -186,8 +191,8 @@ func (pw *ProcessWriter) processEntry(entry string) {
 		level = slog.LevelInfo
 	}
 
-	// Step 4: Level detection (if level not set by JSON)
-	if pw.levelDetector != nil && pw.levelDetector.IsEnabled() && level == slog.LevelInfo {
+	// Step 4: Level detection, only when the line did not state its own level.
+	if pw.levelDetector != nil && pw.levelDetector.IsEnabled() && !levelFromSource {
 		level = pw.levelDetector.Detect(entry)
 	}
 

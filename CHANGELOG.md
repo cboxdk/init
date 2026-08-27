@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Log-level detection no longer overrides a level the application stated.** An
+  explicit `{"level":"info"}` was indistinguishable from the "assume info"
+  fallback, so pattern matching re-labelled the line — an info message mentioning
+  the word "error" was promoted to error, against the application's own
+  classification. Detection now runs only when the line did not state a level.
+- **Requesting a negative number of log entries no longer panics.**
+
+### Fixed
+
 - **A deleted readiness file is recreated.** The file was written only when
   readiness *changed*, so one removed from underneath the container — by a tmpfs
   cleaner, a sidecar, an operator — was never restored, and the container looked
