@@ -81,11 +81,15 @@ func (s *Scheduler) AddJobWithOptions(name, scheduleExpr, timezone string, opts 
 		return fmt.Errorf("failed to create job: %w", err)
 	}
 
-	// Add to cron scheduler
-	entryID, err := s.cron.AddJob(scheduleExpr, job)
-	if err != nil {
-		return fmt.Errorf("failed to add job to cron: %w", err)
-	}
+	// Register the job's ALREADY-PARSED schedule, not the raw expression.
+	//
+	// cron.AddJob re-parses the string with the cron instance's own default
+	// location, which threw away the CRON_TZ binding that
+	// NewScheduledJobWithOptions had just built — so schedule_timezone had no
+	// effect whatever and every nightly job still fired at the container's local
+	// time. The parsed schedule was computed, stored on the job, and used
+	// nowhere.
+	entryID := s.cron.Schedule(job.CronSchedule(), job)
 
 	job.SetCronID(entryID)
 	// If the scheduler is already running, hand the new job the live run context

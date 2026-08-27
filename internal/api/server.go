@@ -1193,6 +1193,14 @@ const RedactedValue = "***REDACTED***"
 var secretEnvKeyPattern = regexp.MustCompile(
 	`(?i)(password|passwd|secret|secret[_-]?key|token|credentials?|apikey|api[_-]?key|access[_-]?key|private[_-]?key|auth[_-]?config|erlang[_-]?cookie|webhook|dsn|salt|passphrase)([^a-z]|$)`)
 
+// strongSecretKeyPattern is the subset of secret words that mean "secret" no
+// matter what prefix the name carries. It deliberately omits the key-ish
+// alternatives (apikey, api_key, access_key) that a genuinely publishable key
+// legitimately contains, so NEXT_PUBLIC_API_KEY stays readable while
+// NEXT_PUBLIC_API_SECRET does not.
+var strongSecretKeyPattern = regexp.MustCompile(
+	`(?i)(password|passwd|secret|token|credentials?|private[_-]?key|passphrase|salt|erlang[_-]?cookie|dsn)([^a-z]|$)`)
+
 // shortSecretKeyPattern covers the abbreviated forms (DB_PASS, MYSQL_PWD).
 // These need a boundary on BOTH sides, or COMPASS_DIR and PASSENGER_ROOT would
 // be masked.
@@ -1245,9 +1253,19 @@ func shouldRedactEnv(key, value string) bool {
 	if credentialURLKeyPattern.MatchString(key) && urlHasCredentials(value) {
 		return true
 	}
-	// Framework-published variables can't hold a server-side secret.
+	// A framework-published variable is compiled into the browser bundle, so
+	// NEXT_PUBLIC_API_KEY and VITE_API_URL are public by construction and stay
+	// readable — that is what this exemption is for.
+	//
+	// But it used to exempt the name unconditionally, ahead of the secret-word
+	// check below, so VITE_DB_PASSWORD and NEXT_PUBLIC_API_SECRET were served in
+	// cleartext. Naming a password VITE_DB_PASSWORD is a mistake; publishing its
+	// value is not the way to point that out. So the exemption now yields to an
+	// unambiguous secret word — "password", "secret", "token", "private_key" —
+	// while still ignoring the merely key-ish ones a public key legitimately
+	// carries.
 	if frontendPublicPattern.MatchString(key) {
-		return false
+		return strongSecretKeyPattern.MatchString(key) || shortSecretKeyPattern.MatchString(key)
 	}
 	// An explicit secret word always wins, even alongside "public"/"site" —
 	// RECAPTCHA_SITE_SECRET and SITE_PRIVATE_KEY are secrets.

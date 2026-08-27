@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +19,10 @@ type ReloadHandler func() error
 
 // Watcher watches configuration files for changes and triggers reload
 type Watcher struct {
-	configPath    string
+	configPath string
+	// resolvedPath is configPath with symlinks resolved; the two differ for a
+	// linked config, and both directories have to be watched.
+	resolvedPath  string
 	debounceTimer *time.Timer
 	handler       ReloadHandler
 	logger        *slog.Logger
@@ -70,12 +74,26 @@ func New(cfg Config) (*Watcher, error) {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
+	// Resolve symlinks. filepath.Abs does not, so a config reached through a
+	// link — /etc/cbox-init/cbox-init.yaml -> /data/config/app.yaml, or the
+	// ..data indirection a Kubernetes ConfigMap mount uses — put the directory
+	// watch on the LINK's directory, where nothing ever changes. --watch then
+	// silently did nothing on Linux. Both directories are watched below, since
+	// which one sees the event depends on which shape it is: a plain symlink
+	// changes at the target, while a ConfigMap update swaps the ..data link
+	// beside the link itself.
+	resolvedPath := absPath
+	if resolved, rerr := filepath.EvalSymlinks(absPath); rerr == nil {
+		resolvedPath = filepath.Clean(resolved)
+	}
+
 	w := &Watcher{
-		configPath: absPath,
-		handler:    cfg.Handler,
-		logger:     cfg.Logger,
-		watcher:    fsWatcher,
-		debounce:   cfg.Debounce,
+		configPath:   absPath,
+		resolvedPath: resolvedPath,
+		handler:      cfg.Handler,
+		logger:       cfg.Logger,
+		watcher:      fsWatcher,
+		debounce:     cfg.Debounce,
 	}
 
 	return w, nil
@@ -98,8 +116,15 @@ func (w *Watcher) Start(ctx context.Context) error {
 	if _, err := os.Stat(w.configPath); err != nil {
 		return fmt.Errorf("failed to watch config file: %w", err)
 	}
-	if err := w.watcher.Add(filepath.Dir(w.configPath)); err != nil {
-		return fmt.Errorf("failed to watch config directory: %w", err)
+	watched := map[string]bool{}
+	for _, dir := range []string{filepath.Dir(w.configPath), filepath.Dir(w.resolvedPath)} {
+		if watched[dir] {
+			continue
+		}
+		if err := w.watcher.Add(dir); err != nil {
+			return fmt.Errorf("failed to watch config directory %s: %w", dir, err)
+		}
+		watched[dir] = true
 	}
 
 	w.logger.Info("Config watcher started",
@@ -125,8 +150,8 @@ func (w *Watcher) watchLoop(ctx context.Context) {
 				return
 			}
 
-			// The watch is on the directory, so filter to our own file.
-			if filepath.Clean(event.Name) != w.configPath {
+			// The watch is on the directory (or two), so filter to our own file.
+			if !w.isOurs(event.Name) {
 				continue
 			}
 
@@ -145,6 +170,21 @@ func (w *Watcher) watchLoop(ctx context.Context) {
 			w.logger.Warn("Config watcher error", "error", err)
 		}
 	}
+}
+
+// isOurs reports whether a directory event concerns the config we watch.
+//
+// It matches the configured path, the symlink-resolved path, and the "..data"
+// indirection a Kubernetes ConfigMap mount swaps on update — that rename is the
+// only event a ConfigMap change produces in the mount directory, and matching
+// only the file names would miss it entirely.
+func (w *Watcher) isOurs(name string) bool {
+	clean := filepath.Clean(name)
+	if clean == w.configPath || clean == w.resolvedPath {
+		return true
+	}
+
+	return strings.HasPrefix(filepath.Base(clean), "..")
 }
 
 // handleFileChange processes a file change event with trailing-edge debouncing.

@@ -4916,6 +4916,13 @@ func TestShouldRedactEnv(t *testing.T) {
 		"RABBITMQ_ERLANG_COOKIE": "x", "ERLANG_COOKIE": "x",
 		// "public"/"site" must not exempt a name that also says secret.
 		"RECAPTCHA_SITE_SECRET": "x", "SITE_PRIVATE_KEY": "x", "PUBLIC_SECRET_KEY": "x",
+		// Nor must a frontend prefix. The exemption for VITE_/NEXT_PUBLIC_/MIX_
+		// used to return BEFORE the secret-word check, so these were served in
+		// cleartext. Naming a password VITE_DB_PASSWORD is a mistake; publishing
+		// its value is not the way to point that out.
+		"VITE_DB_PASSWORD": "x", "NEXT_PUBLIC_API_SECRET": "x",
+		"MIX_PUSHER_APP_SECRET": "x", "VITE_JWT_SECRET": "x",
+		"REACT_APP_PRIVATE_KEY": "x", "NUXT_PUBLIC_DB_PASS": "x",
 		// Compact forms, and credential-bearing URLs whose name would otherwise
 		// be exempted as public/frontend.
 		"DBPASS": "x", "SMTPPASS": "x",
@@ -4939,6 +4946,11 @@ func TestShouldRedactEnv(t *testing.T) {
 		// Explicitly public values must stay visible even though they contain "key".
 		"PUBLIC_KEY": "pk", "VAPID_PUBLIC_KEY": "pk", "STRIPE_PUBLISHABLE_KEY": "pk_live_x",
 		"RECAPTCHA_SITE_KEY": "6Lx", "MIX_PUSHER_APP_KEY": "abc", "NEXT_PUBLIC_API_KEY": "abc",
+		// Frontend-published variables are compiled into the browser bundle, so
+		// the key-ish words a publishable key legitimately carries must not
+		// trigger redaction — only an unambiguous secret word does.
+		"VITE_API_URL": "https://api.example.com", "NEXT_PUBLIC_STRIPE_KEY": "pk_live_x",
+		"VITE_APP_NAME": "shop", "REACT_APP_API_KEY": "abc", "NUXT_PUBLIC_SITE_URL": "https://x.dev",
 	}
 	for k, v := range secret {
 		if !shouldRedactEnv(k, v) {
