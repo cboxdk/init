@@ -237,12 +237,58 @@ func runServe(cmd *cobra.Command, args []string) {
 		metricsServer = startMetricsServer(ctx, cfg, log)
 	}
 
+	// Act on a shutdown signal DURING startup.
+	//
+	// The signal handler proper only begins consuming sigChan after startup
+	// finishes, so a SIGTERM arriving while processes are still coming up (a
+	// slow dependency wait, a hung migration) sat in the buffer unhandled: the
+	// container ignored `docker stop` until it either finished starting or was
+	// SIGKILLed when the grace period expired. Watch for one here and cancel the
+	// start context so pm.Start unwinds promptly.
+	startupSignalled := make(chan os.Signal, 1)
+	startupDone := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-startupDone:
+				return
+			case sig := <-sigChan:
+				if sig == syscall.SIGTERM || sig == syscall.SIGINT || sig == syscall.SIGQUIT {
+					slog.Warn("Shutdown signal received during startup; aborting startup", "signal", sig)
+					select {
+					case startupSignalled <- sig:
+					default:
+					}
+					cancel()
+					return
+				}
+				// Anything else (reload, forwarded signals) is not actionable
+				// until the workload is up; drop it rather than blocking.
+			}
+		}
+	}()
+
 	// Start all processes
 	err = runStartupPhase("process_start", startupTiming, func() error {
 		return pm.Start(ctx)
 	})
+	close(startupDone)
+
+	select {
+	case sig := <-startupSignalled:
+		// Asked to stop mid-startup: shut down whatever did come up, rather than
+		// exiting and leaving those processes to be killed abruptly.
+		slog.Info("Shutting down after a signal during startup", "signal", sig)
+		shutdownStarted(pm, metricsServer, cfg, log)
+		os.Exit(0)
+	default:
+	}
+
 	if err != nil {
 		slog.Error("Failed to start processes", "error", err)
+		// Some processes may already be running; stop them properly instead of
+		// exiting and leaving the kernel to tear them down when PID 1 dies.
+		shutdownStarted(pm, metricsServer, cfg, log)
 		os.Exit(1)
 	}
 
@@ -777,4 +823,24 @@ func performGracefulShutdown(cfg *config.Config, pm *process.Manager, apiServer 
 	auditLogger.LogSystemShutdown(reason, true) // Graceful = true
 
 	slog.Info("Cbox Init shutdown complete")
+}
+
+// shutdownStarted stops whatever managed to start before startup was abandoned,
+// bounded by the configured shutdown timeout. Startup failures used to call
+// os.Exit directly, so processes that had already started were never asked to
+// stop — they just died with PID 1.
+func shutdownStarted(pm *process.Manager, metricsServer *metrics.Server, cfg *config.Config, log *slog.Logger) {
+	timeout := time.Duration(cfg.Global.ShutdownTimeout) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := pm.Shutdown(ctx); err != nil {
+		log.Error("Failed to shut down partially-started processes", "error", err)
+	}
+	if metricsServer != nil {
+		_ = metricsServer.Stop(ctx)
+	}
 }
