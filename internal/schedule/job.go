@@ -186,6 +186,13 @@ func NewScheduledJobWithOptions(name, scheduleExpr, timezone string, historySize
 	}, nil
 }
 
+// CronSchedule returns the parsed schedule, which carries the job's configured
+// timezone. The scheduler must register THIS rather than re-parsing the raw
+// expression, or the timezone is silently dropped.
+func (j *ScheduledJob) CronSchedule() cron.Schedule {
+	return j.schedule
+}
+
 // GetState returns the current job state (thread-safe)
 func (j *ScheduledJob) GetState() JobState {
 	j.mu.Lock()
