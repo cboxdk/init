@@ -110,6 +110,15 @@ func LoadWithEnvExpansion(path string) (*Config, error) {
 		}
 	}
 
+	// `enabled` defaults to true, as documented. The field is a plain bool, so
+	// once decoded an omitted key is indistinguishable from `enabled: false` —
+	// and the zero value meant a process defined with a command but no `enabled`
+	// was silently skipped, leaving the container running with no workload. Fill
+	// it in on the raw map, where the key's absence is still visible, before it
+	// is decoded. Doing it here (rather than via a custom unmarshaller) keeps the
+	// strict unknown-key check working.
+	defaultProcessEnabled(rawConfig)
+
 	if err := applyEnvOverridesMap(rawConfig); err != nil {
 		return nil, err
 	}
@@ -503,4 +512,42 @@ func decodeProcessName(processes map[string]any, encoded string) string {
 
 func normalizeProcessName(encoded string) string {
 	return strings.ToLower(strings.ReplaceAll(encoded, "_", "-"))
+}
+
+// defaultProcessEnabled sets `enabled: true` on any process entry that does not
+// specify it, matching the documented default.
+func defaultProcessEnabled(raw map[string]any) {
+	procs, ok := raw["processes"].(map[string]any)
+	if !ok {
+		return
+	}
+	for name, entry := range procs {
+		proc, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, present := proc["enabled"]; !present {
+			proc["enabled"] = true
+		}
+
+		// Same problem one level down: logging.stdout/stderr are plain bools, so
+		// an explicit `false` is indistinguishable from "unset" after decoding
+		// and the defaulting turned it back on. Record an explicit false here as
+		// the legacy top-level pointer field, which the defaulting does honour.
+		if lg, ok := proc["logging"].(map[string]any); ok {
+			for _, stream := range []string{"stdout", "stderr"} {
+				v, present := lg[stream]
+				if !present {
+					continue
+				}
+				if enabled, isBool := v.(bool); isBool && !enabled {
+					if _, alreadySet := proc[stream]; !alreadySet {
+						proc[stream] = false
+					}
+				}
+			}
+		}
+
+		procs[name] = proc
+	}
 }
