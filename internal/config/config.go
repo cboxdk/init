@@ -202,6 +202,11 @@ func (c *Config) validateHooks() error {
 
 // validateProcess validates a single process configuration
 func (c *Config) validateProcess(name string, proc *Process) error {
+	if proc == nil {
+		return fmt.Errorf("process %q has no definition: the key is present but its body is empty "+
+			"(a commented-out or not-yet-filled-in process); remove the name or give it a command", name)
+	}
+
 	// Basic validation
 	if err := c.validateProcessBasics(name, proc); err != nil {
 		return err

@@ -57,10 +57,13 @@ Horizon starts (all dependencies met)
 # Simple priority-based ordering
 processes:
   php-fpm:
+    command: ["php-fpm", "-F", "-R"]
 
   nginx:
+    command: ["nginx", "-g", "daemon off;"]
 
   worker:
+    command: ["php", "artisan", "queue:work"]
 ```
 
 **Behavior:** Processes start in priority order, but don't wait for each other.
@@ -94,6 +97,7 @@ processes:
 ```yaml
 processes:
   database:
+    command: ["postgres"]
 
   app:
     depends_on: [database]
@@ -112,8 +116,10 @@ database → app → worker
 ```yaml
 processes:
   database:
+    command: ["postgres"]
 
   cache:
+    command: ["redis-server"]
 
   app:
     depends_on: [database, cache]
@@ -139,8 +145,10 @@ processes:
 ```yaml
 processes:
   postgres:
+    command: ["postgres"]
 
   redis:
+    command: ["redis-server"]
 
   php-fpm:
     depends_on: [postgres, redis]
@@ -306,8 +314,10 @@ processes:
 processes:
   # Stage 1: Infrastructure
   postgres:
+    command: ["postgres"]
 
   redis:
+    command: ["redis-server"]
 
   # Stage 2: Application
   php-fpm:
@@ -337,10 +347,13 @@ processes:
 ```yaml
 processes:
   logger:
+    command: ["/bin/true"]
 
   app:
+    command: ["node", "server.js"]
 
   metrics:
+    command: ["/bin/true"]
 ```
 
 ### When to Use depends_on
@@ -367,8 +380,10 @@ processes:
 processes:
   # Infrastructure (priority 10)
   postgres:
+    command: ["postgres"]
 
   redis:
+    command: ["redis-server"]
 
   # Application depends on infrastructure (priority 20)
   php-fpm:
@@ -385,21 +400,16 @@ processes:
 
 ## Dependency Timeout
 
-### Default Timeout
+`dependency_timeout` is **global** — one budget applies to every process waiting
+on a dependency — and it is a duration, so it needs a unit:
 
 ```yaml
 global:
-  dependency_timeout: 300  # Wait up to 5 minutes for dependencies
+  dependency_timeout: 300s  # Wait up to 5 minutes for dependencies
 ```
 
-### Per-Process Timeout
-
-```yaml
-processes:
-  app:
-    depends_on: [slow-service]
-    dependency_timeout: 600  # Wait up to 10 minutes
-```
+A bare `300` is rejected at load: the field is a duration, and YAML cannot
+unmarshal a plain integer into one. Use `300s` or `5m`.
 
 ## Troubleshooting
 

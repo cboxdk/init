@@ -214,11 +214,15 @@ processes:
 # Edit with error
 processes:
   nginx:
+    command: ["nginx", "-g", "daemon off;"]
     scale: abc  # Invalid! Must be integer
+```
 
-# Result: Error logged, reload aborted ❌
+Result: the error is logged, the reload is aborted, and Cbox Init keeps running
+the previous configuration ❌
+
+```text
 time=2025-11-23T15:24:10.124+01:00 level=ERROR msg="Config reload failed" error="invalid config: scale must be integer"
-# Cbox continues with old config
 ```
 
 ### Circular Dependency Example
@@ -227,11 +231,16 @@ time=2025-11-23T15:24:10.124+01:00 level=ERROR msg="Config reload failed" error=
 # Edit with circular dependency
 processes:
   nginx:
+    command: ["nginx", "-g", "daemon off;"]
     depends_on: [php-fpm]
   php-fpm:
+    command: ["php-fpm", "-F", "-R"]
     depends_on: [nginx]  # Circular!
+```
 
-# Result: Validation fails, reload aborted ❌
+Result: validation fails, the reload is aborted ❌
+
+```text
 time=2025-11-23T15:24:10.124+01:00 level=ERROR msg="Config reload failed" error="circular dependency detected: nginx → php-fpm → nginx"
 ```
 
