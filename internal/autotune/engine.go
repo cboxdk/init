@@ -78,8 +78,21 @@ const (
 const warmBufferPoolCeilingMB = 512
 
 // The chunk size InnoDB allocates the pool in. Pinned rather than left to the
-// default so the rounding granularity is predictable.
+// default so the rounding granularity is predictable. It is scaled DOWN in
+// containers too small to hold one chunk — see tunePercona.
 const innodbChunkSizeMB = 128
+
+// InnoDB refuses to start with a buffer pool below this, so a budget under it
+// cannot be tuned into a working database at all.
+const innodbMinPoolMB = 8
+
+// Each connection is allowed this much outside the pool for sort, join and net
+// buffers — deliberately pessimistic.
+const connectionMemoryMB = 12
+
+// Below this many connections the server is not useful; the reserve has to
+// cover it, and if it cannot we say so rather than pretending.
+const minConnections = 10
 
 // ParseEngine validates an engine name.
 func ParseEngine(name string) (Engine, error) {
@@ -142,7 +155,9 @@ func (c *EngineCalculator) Calculate() (*EngineConfig, error) {
 
 	switch c.engine {
 	case EnginePercona:
-		c.tunePercona(cfg)
+		if err := c.tunePercona(cfg); err != nil {
+			return nil, err
+		}
 	case EngineValkey:
 		c.tuneValkey(cfg)
 	default:
@@ -154,7 +169,7 @@ func (c *EngineCalculator) Calculate() (*EngineConfig, error) {
 	return cfg, nil
 }
 
-func (c *EngineCalculator) tunePercona(cfg *EngineConfig) {
+func (c *EngineCalculator) tunePercona(cfg *EngineConfig) error {
 	limit := c.resources.MemoryLimitMB
 	cfg.ReservedMB = reserved(limit, perconaReservedFraction, perconaReservedFloorMB)
 	cfg.MemoryBudgetMB = limit - cfg.ReservedMB
@@ -168,15 +183,9 @@ func (c *EngineCalculator) tunePercona(cfg *EngineConfig) {
 		pool = warmBufferPoolCeilingMB
 	}
 
-	// InnoDB refuses to start with a pool below 5MB, and anything near that is a
-	// misconfiguration rather than a small database.
 	if pool < 128 {
 		cfg.Warnings = append(cfg.Warnings, fmt.Sprintf(
 			"only %dMB available for the buffer pool; this container is very likely too small for a database", pool))
-
-		if pool < 32 {
-			pool = 32
-		}
 	}
 
 	// InnoDB does not take the pool size literally: it rounds UP to a multiple of
@@ -186,15 +195,34 @@ func (c *EngineCalculator) tunePercona(cfg *EngineConfig) {
 	// load. Both operands are therefore pinned and the request is rounded DOWN,
 	// so the headroom computed above survives contact with the engine.
 	instances := clamp(pool/1024, 1, 8)
-	granularity := instances * innodbChunkSizeMB
-	pool = (pool / granularity) * granularity
+	chunk := innodbChunkSizeMB
 
-	if pool < granularity {
-		pool = granularity
+	// ...but the chunk size is itself 128MB, so in a small container the
+	// granularity exceeds the whole budget and rounding down yields zero. The
+	// old floor then raised the pool back to one full chunk — handing InnoDB
+	// 128MB inside a 128MB container that had already reserved 64MB for the
+	// server. That is the OOM the headroom above exists to prevent, written into
+	// the config file. Scale the chunk down to fit instead.
+	if instances*chunk > pool {
+		instances = 1
+		chunk = pool
+	}
+
+	granularity := instances * chunk
+	if granularity > 0 {
+		pool = (pool / granularity) * granularity
+	}
+
+	if pool < innodbMinPoolMB {
+		// There is no size that both fits and starts. Say so instead of writing
+		// a fragment that guarantees an OOM kill.
+		return fmt.Errorf("container memory limit %dMB leaves only %dMB for the InnoDB buffer pool after a %dMB server reserve; "+
+			"InnoDB cannot start below %dMB — give the container more memory or do not autotune it",
+			limit, pool, cfg.ReservedMB, innodbMinPoolMB)
 	}
 
 	cfg.Settings["innodb_buffer_pool_size"] = fmt.Sprintf("%dM", pool)
-	cfg.Settings["innodb_buffer_pool_chunk_size"] = fmt.Sprintf("%dM", innodbChunkSizeMB)
+	cfg.Settings["innodb_buffer_pool_chunk_size"] = fmt.Sprintf("%dM", chunk)
 	cfg.Settings["innodb_buffer_pool_instances"] = strconv.Itoa(instances)
 
 	// The redo log has to absorb the writes a large pool defers, but a huge log
@@ -207,11 +235,20 @@ func (c *EngineCalculator) tunePercona(cfg *EngineConfig) {
 	// from the budget as well as from CPU — 12MB per connection is a
 	// deliberately pessimistic allowance for sort, join and net buffers.
 	byCPU := c.resources.CPULimit * 75
-	byMemory := cfg.ReservedMB / 12
-	maxConns := clamp(min(byCPU, byMemory), 25, 1000)
+	byMemory := cfg.ReservedMB / connectionMemoryMB
+	maxConns := clamp(min(byCPU, byMemory), minConnections, 1000)
 	cfg.Settings["max_connections"] = strconv.Itoa(maxConns)
 
-	if byMemory < byCPU {
+	if byMemory < minConnections {
+		// The floor won: the reserve does not actually cover the connections we
+		// are about to allow. Previously the floor was 25, so every container at
+		// or below 1GB silently allowed 25 × 12MB = 300MB of connection memory
+		// against a 64–256MB reserve, with no warning at all.
+		cfg.Warnings = append(cfg.Warnings, fmt.Sprintf(
+			"max_connections held at the %d minimum, but the %dMB server reserve only covers %d connections at %dMB each: "+
+				"concurrent load can exceed the container limit",
+			minConnections, cfg.ReservedMB, byMemory, connectionMemoryMB))
+	} else if byMemory < byCPU {
 		cfg.Warnings = append(cfg.Warnings, fmt.Sprintf(
 			"max_connections limited to %d by memory rather than the %d cores would allow", maxConns, byCPU))
 	}
@@ -220,6 +257,8 @@ func (c *EngineCalculator) tunePercona(cfg *EngineConfig) {
 	// the buffer pool — wasted memory when resident, and a larger checkpoint when
 	// warm.
 	cfg.Settings["innodb_flush_method"] = "O_DIRECT"
+
+	return nil
 }
 
 func (c *EngineCalculator) tuneValkey(cfg *EngineConfig) {

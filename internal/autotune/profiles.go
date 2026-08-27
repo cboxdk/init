@@ -135,12 +135,27 @@ func (p Profile) Validate() error {
 	return nil
 }
 
-// GetConfig returns the configuration for this profile
+// GetConfig returns the configuration for this profile.
+//
+// Profiles is an exported, mutable package map, so a downstream consumer can
+// register its own. A profile with AvgMemoryPerWorker of 0 divides by zero in
+// the calculator — inside PID 1, that is a panic that takes the container with
+// it. The invariant is cheap to check here, once, rather than at every use.
 func (p Profile) GetConfig() (ProfileConfig, error) {
 	if err := p.Validate(); err != nil {
 		return ProfileConfig{}, err
 	}
-	return Profiles[p], nil
+
+	cfg := Profiles[p]
+	if cfg.AvgMemoryPerWorker <= 0 {
+		return ProfileConfig{}, fmt.Errorf("profile %s has a non-positive avg_memory_per_worker (%dMB): "+
+			"worker sizing divides by it", p, cfg.AvgMemoryPerWorker)
+	}
+	if cfg.MaxMemoryUsage <= 0 {
+		return ProfileConfig{}, fmt.Errorf("profile %s has a non-positive max_memory_usage (%v)", p, cfg.MaxMemoryUsage)
+	}
+
+	return cfg, nil
 }
 
 // String returns the string representation of the Profile
