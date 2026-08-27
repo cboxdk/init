@@ -4892,12 +4892,14 @@ func TestShouldRedactEnv(t *testing.T) {
 		// Compact forms, and credential-bearing URLs whose name would otherwise
 		// be exempted as public/frontend.
 		"DBPASS": "x", "SMTPPASS": "x",
-		"SITE_URL":          "https://user:pw@example.com",
-		"VITE_DATABASE_URL": "postgres://user:pw@db/app",
-		"MAIL_DSN":          "smtp://u:p@mail",
-		"DATABASE_URL":      "mysql://user:pw@db/app",
-		"REDIS_URL":         "redis://:supersecret@redis:6379/0",
-		"AMQP_URL":          "amqp://:pw@rabbit:5672",
+		"SLACK_WEBHOOK_URL":   "https://hooks.slack.com/services/T/B/x",
+		"DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/1/x",
+		"SITE_URL":            "https://user:pw@example.com",
+		"VITE_DATABASE_URL":   "postgres://user:pw@db/app",
+		"MAIL_DSN":            "smtp://u:p@mail",
+		"DATABASE_URL":        "mysql://user:pw@db/app",
+		"REDIS_URL":           "redis://:supersecret@redis:6379/0",
+		"AMQP_URL":            "amqp://:pw@rabbit:5672",
 	}
 	// Must stay readable: ordinary framework settings an operator needs to see.
 	readable := map[string]string{

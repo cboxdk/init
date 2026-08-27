@@ -178,3 +178,51 @@ func TestStop_ContextDeadlineBoundsGracefulWait(t *testing.T) {
 		t.Errorf("state = %v, want stopped", sup.GetState())
 	}
 }
+
+// shutdown.kill_signal is operator-configurable, so it can name a signal the
+// process ignores. The force-kill path must still terminate the process and
+// return within a bounded time: it escalates to a real SIGKILL, which cannot be
+// caught. Before this, it waited on the instance's done channel forever, hanging
+// PID 1 with the manager lock held.
+func TestStop_KillSignalIgnored_EscalatesToSIGKILL(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	dir := t.TempDir()
+	ready := filepath.Join(dir, "ready")
+	// Ignores BOTH the graceful signal and the configured kill signal.
+	script := "trap '' TERM; trap '' USR1; touch " + ready + "; while true; do sleep 0.05; done"
+
+	sup := NewSupervisor("unkillable", &config.Process{
+		Enabled:      true,
+		Type:         "longrun",
+		InitialState: "running",
+		Command:      []string{"sh", "-c", script},
+		Restart:      "never",
+		Scale:        1,
+		Shutdown: &config.ShutdownConfig{
+			Timeout:    1,
+			KillSignal: "SIGUSR1", // deliberately ignorable
+		},
+	}, &config.GlobalConfig{LogLevel: "error", MaxRestartAttempts: 1, RestartBackoff: 1},
+		logger, audit.NewLogger(logger, false), nil)
+
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitForFile(t, ready)
+
+	done := make(chan error, 1)
+	go func() { done <- sup.Stop(context.Background()) }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("stop: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("Stop hung: an ignorable kill_signal must escalate to SIGKILL, not wait forever")
+	}
+	if sup.GetState() != StateStopped {
+		t.Errorf("state = %v, want stopped", sup.GetState())
+	}
+}

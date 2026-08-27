@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A force-kill can no longer hang PID 1.** `shutdown.kill_signal` is
+  operator-configurable, so it can name a signal the process ignores (a trapped
+  `SIGTERM`, or `SIGSTOP`, which never terminates). The force-kill then waited
+  for the process to exit *forever*, with the manager lock held — freezing
+  shutdown, reload and the API. The wait is now bounded and escalates to a real
+  `SIGKILL`, which cannot be caught, blocked or ignored.
+- **A supervisor that failed to stop stays authoritative for its process.**
+  `Stop` cleared the instance list and marked itself stopped even when it was
+  returning errors, so the manager lost track of a still-running child — and
+  could then start a second copy alongside it. On failure it now keeps its
+  instances and reports a failed state.
+- **Webhook URLs are redacted.** `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` and
+  similar carry their secret in the URL path rather than as userinfo, so the
+  credential check did not catch them.
+
+### Fixed
+
 - **A credential-bearing URL is redacted whatever its name.** The public/frontend
   exemptions were checked first, so `SITE_URL=https://user:pw@host` and
   `VITE_DATABASE_URL=postgres://user:pw@db/app` were returned in cleartext. A
