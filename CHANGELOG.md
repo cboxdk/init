@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Scaling down keeps track of an instance that would not stop.** `ScaleDown`
+  truncated its instance list even when stopping had failed, so a process that
+  survived the shutdown was left running with nothing tracking it — and a later
+  scale-up would start a replacement on the same instance index and port,
+  alongside the orphan. It now keeps the instance and reports the failure.
+
+### Fixed
+
 - **A force-kill can no longer hang PID 1.** `shutdown.kill_signal` is
   operator-configurable, so it can name a signal the process ignores (a trapped
   `SIGTERM`, or `SIGSTOP`, which never terminates). The force-kill then waited

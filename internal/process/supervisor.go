@@ -1445,15 +1445,19 @@ func (s *Supervisor) ScaleDown(ctx context.Context, targetScale int) error {
 		errs = append(errs, err)
 	}
 
+	if len(errs) > 0 {
+		// One or more instances would not stop, so they may still be running.
+		// Keep them in the list: dropping them here would leave live processes
+		// with nothing tracking them, and a later scale-up would start
+		// replacements on the same instance indexes (and ports) alongside them.
+		return fmt.Errorf("scale down completed with %d errors: %v", len(errs), errs)
+	}
+
 	// Remove stopped instances from the list
 	s.mu.Lock()
 	s.instances = s.instances[:targetScale]
 	newScale := len(s.instances)
 	s.mu.Unlock()
-
-	if len(errs) > 0 {
-		return fmt.Errorf("scale down completed with %d errors: %v", len(errs), errs)
-	}
 
 	s.logger.Info("Scale down completed",
 		"new_scale", newScale,
