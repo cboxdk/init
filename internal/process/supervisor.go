@@ -89,6 +89,11 @@ const (
 	// delivers SIGKILL promptly, so this only needs to cover reaping.
 	forceKillGrace = 5 * time.Second
 
+	// minStopGrace is the shortest graceful window an instance gets, even when
+	// the caller's deadline has already passed. Zero would deliver SIGTERM and
+	// SIGKILL in the same instant, which is not a graceful stop by any reading.
+	minStopGrace = 100 * time.Millisecond
+
 	// DefaultInstanceShutdownTimeout is the timeout for graceful instance shutdown.
 	DefaultInstanceShutdownTimeout = 30 * time.Second
 )
@@ -1587,7 +1592,15 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 	// set here let it start a replacement that the caller (ScaleDown, Stop) has
 	// already dropped from the instance list, orphaning a live process.
 	instance.allowRestart = false
-	if currentState != StateRunning {
+
+	// StateStopping means a PREVIOUS stop attempt did not finish, so the process
+	// may well still be alive. Treating that as "already stopped" and returning
+	// nil was how a retry lied: Stop() takes a nil error as permission to drop
+	// the instance from its list, so the second call orphaned a live process —
+	// exactly what keeping the instances on error was meant to prevent. Worse,
+	// rollbackReload retries automatically, so no operator had to do anything.
+	retry := currentState == StateStopping
+	if currentState != StateRunning && !retry {
 		instance.mu.Unlock()
 		s.logger.Debug("Process not running, skipping stop",
 			"instance_id", instance.id,
@@ -1599,13 +1612,24 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 	pid := instance.pid
 	instance.mu.Unlock()
 
-	s.logger.Info("Stopping process instance",
-		"instance_id", instance.id,
-		"pid", pid,
-	)
+	if retry {
+		s.logger.Warn("Re-stopping instance that did not finish stopping",
+			"instance_id", instance.id,
+			"pid", pid,
+		)
+	} else {
+		s.logger.Info("Stopping process instance",
+			"instance_id", instance.id,
+			"pid", pid,
+		)
+	}
 
-	// Execute pre-stop hook if configured
-	s.executePreStopHook(ctx, instance)
+	// Execute pre-stop hook if configured. Skipped on a retry: it already ran,
+	// and a hook that drains a queue or deregisters from a load balancer is not
+	// necessarily safe to run twice.
+	if !retry {
+		s.executePreStopHook(ctx, instance)
+	}
 
 	// Send shutdown signal to process/process group
 	if err := s.sendShutdownSignal(instance); err != nil {
@@ -1618,9 +1642,23 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 		timeout = time.Duration(s.config.Shutdown.Timeout) * time.Second
 	}
 
+	// A caller's DEADLINE shortens the wait — during shutdown the manager passes
+	// a context bounded by the global shutdown_timeout, and a larger per-process
+	// shutdown.timeout must not be waited out here, or one slow service holds
+	// PID 1 (and, under the manager lock, the API) past the global deadline.
+	//
+	// A plain CANCELLATION does not. This context also comes from HTTP handlers,
+	// where it dies the moment the client goes away, and selecting on ctx.Done()
+	// turned Ctrl-C on `cbox-init stop`, a curl timeout, or an ingress read
+	// timeout into an immediate SIGKILL of a queue worker mid-job. The operator
+	// asked for a graceful stop; whether they stayed to watch is not the
+	// process's business. Folding the deadline into the timer keeps the two
+	// apart with one timer and no goroutine.
+	gracePeriod, deadlineBound := effectiveStopTimeout(ctx, timeout)
+
 	// CRITICAL: Wait on doneCh instead of calling Wait() again to avoid double-Wait race
 	// The monitorInstance goroutine is already calling Wait() and will close doneCh when done
-	timer := time.NewTimer(timeout)
+	timer := time.NewTimer(gracePeriod)
 	defer timer.Stop()
 
 	select {
@@ -1631,26 +1669,48 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 		s.cleanupInstanceResources(instance, pid, "graceful_shutdown")
 		return nil
 
-	case <-ctx.Done():
-		// The caller's deadline fired first. During shutdown the manager passes a
-		// context bounded by the global shutdown_timeout, so a larger per-process
-		// shutdown.timeout must not be waited out here — otherwise one slow
-		// service holds PID 1 (and, under the manager lock, the API) past the
-		// global deadline. Escalate to the kill signal now.
-		s.logger.Warn("Shutdown deadline reached before instance stopped gracefully, force killing",
-			"instance_id", instance.id,
-			"timeout", timeout,
-			"error", ctx.Err(),
-		)
-		return s.forceKillInstance(instance, pid, "force_killed_shutdown_deadline")
-
 	case <-timer.C:
+		if deadlineBound {
+			s.logger.Warn("Shutdown deadline reached before instance stopped gracefully, force killing",
+				"instance_id", instance.id,
+				"configured_timeout", timeout,
+				"deadline_allowed", gracePeriod,
+			)
+			return s.forceKillInstance(instance, pid, "force_killed_shutdown_deadline")
+		}
+
 		s.logger.Warn("Process instance did not stop gracefully, force killing",
 			"instance_id", instance.id,
 			"timeout", timeout,
 		)
 		return s.forceKillInstance(instance, pid, "force_killed_after_timeout")
 	}
+}
+
+// effectiveStopTimeout returns how long to wait for a graceful exit, and whether
+// the caller's deadline is what bounded it.
+//
+// A context with no deadline — or one whose deadline is further out than the
+// configured shutdown.timeout — leaves the configured value alone. Only an
+// earlier deadline shortens it, and a deadline already in the past yields a
+// minimal wait rather than a negative one (time.NewTimer accepts that, but a
+// process would get no chance at all to notice its SIGTERM).
+func effectiveStopTimeout(ctx context.Context, configured time.Duration) (time.Duration, bool) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return configured, false
+	}
+
+	remaining := time.Until(deadline)
+	if remaining >= configured {
+		return configured, false
+	}
+
+	if remaining < minStopGrace {
+		remaining = minStopGrace
+	}
+
+	return remaining, true
 }
 
 // forceKillInstance escalates a stuck instance to the kill signal and waits for

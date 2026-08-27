@@ -160,6 +160,41 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 	// Update config
 	m.config.Processes[name] = procCfg
 
+	// A scheduled process belongs to the scheduler, not to a supervisor.
+	// AddProcess knows this; this path did not, so editing a cron expression
+	// through the API or TUI built a longrun supervisor AND left the cron job
+	// registered — a nightly `php artisan backup:run` became a continuous
+	// restart loop that also still fired on schedule.
+	if procCfg.Enabled && procCfg.Schedule != "" {
+		// Stop and drop any supervisor the process had before the edit: it may
+		// have been a longrun process that is now scheduled.
+		if supervisor, running := m.processes[name]; running {
+			if err := supervisor.Stop(ctx); err != nil {
+				m.config.Processes[name] = oldCfg
+				return fmt.Errorf("failed to stop process before converting it to a scheduled job: %w", err)
+			}
+			delete(m.processes, name)
+		}
+
+		m.unregisterScheduledProcess(name)
+		if err := m.registerScheduledProcess(name, procCfg); err != nil {
+			m.config.Processes[name] = oldCfg
+			return fmt.Errorf("failed to register scheduled process: %w", err)
+		}
+		if stats := m.scheduler.Stats(); stats.TotalJobs > 0 && !stats.Started {
+			m.scheduler.Start()
+		}
+
+		m.logger.Info("Scheduled process updated", "name", name, "schedule", procCfg.Schedule)
+		m.auditLogger.LogProcessUpdated(name, procCfg.Command, procCfg.Scale)
+
+		return nil
+	}
+
+	// The process is no longer scheduled (or is now disabled), so any job it had
+	// must go — otherwise the old cron expression keeps firing the old command.
+	m.unregisterScheduledProcess(name)
+
 	// If process is running, need to restart with new config
 	if supervisor, running := m.processes[name]; running {
 		m.logger.Info("Restarting process with new configuration", "name", name)
@@ -211,6 +246,15 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 			delete(m.processes, name)
 			m.logger.Info("Process updated and disabled", "name", name)
 		}
+	} else if procCfg.Enabled && procCfg.InitialState == "stopped" {
+		// "Defined but not running." Register a supervisor so the process is
+		// visible and can be started later, but do not start it — starting a
+		// process the operator explicitly chose not to run is the opposite of
+		// what the setting asks for.
+		supervisor := m.newConfiguredSupervisor(name, procCfg)
+		supervisor.MarkReadyImmediately()
+		m.processes[name] = supervisor
+		m.logger.Info("Process updated and left in stopped state", "name", name)
 	} else if procCfg.Enabled {
 		// Process wasn't running but new config enables it
 		m.logger.Info("Starting previously disabled process", "name", name)
@@ -430,17 +474,31 @@ func (m *Manager) rollbackReload(ctx context.Context, oldCfg *config.Config, tou
 		delete(m.processes, name)
 	}
 
+	// Each touched process is stopped EXACTLY once. The catch-all pass below
+	// used to re-stop everything the ordered pass had already handled, which
+	// double-counted stopFailures and — before stopInstance learned to re-stop
+	// a StateStopping instance — turned a failed stop into a silent success on
+	// the second call, dropping a live process from the instance list.
+	stopped := make(map[string]bool, len(touched))
+	stopOnce := func(name string) {
+		if stopped[name] {
+			return
+		}
+		stopped[name] = true
+		m.unregisterScheduledProcess(name)
+		stopTouched(name)
+	}
+
 	for _, name := range m.getShutdownOrder() {
 		if !touched[name] {
 			continue
 		}
-		m.unregisterScheduledProcess(name)
-		stopTouched(name)
+		stopOnce(name)
 	}
 	// Anything touched but not in the shutdown order (e.g. only present in the
 	// new config) still needs stopping and its scheduler registration cleared.
 	for name := range touched {
-		stopTouched(name)
+		stopOnce(name)
 	}
 
 	// Restore the previous configuration and bring the touched processes that
