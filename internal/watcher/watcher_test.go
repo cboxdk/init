@@ -21,7 +21,7 @@ func TestNew_MissingConfigPath(t *testing.T) {
 
 func TestNew_MissingHandler(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestNew_MissingHandler(t *testing.T) {
 
 func TestNew_DefaultLogger(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestNew_DefaultLogger(t *testing.T) {
 
 func TestNew_DefaultDebounce(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestNew_DefaultDebounce(t *testing.T) {
 
 func TestNew_CustomDebounce(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestNew_CustomDebounce(t *testing.T) {
 
 func TestNew_AbsolutePath(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestNew_AbsolutePath(t *testing.T) {
 
 func TestWatcher_Start(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestWatcher_StartNonExistentFile(t *testing.T) {
 
 func TestWatcher_Stop(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestWatcher_Stop(t *testing.T) {
 
 func TestWatcher_FileChange(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestWatcher_FileChange(t *testing.T) {
 
 func TestWatcher_Debounce(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestWatcher_Debounce(t *testing.T) {
 
 func TestWatcher_ContextCancellation(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestWatcher_ContextCancellation(t *testing.T) {
 
 func TestWatcher_HandlerError(t *testing.T) {
 	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "test-config-*.yaml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
