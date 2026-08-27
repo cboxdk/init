@@ -645,6 +645,7 @@ func (s *Server) bodyLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 // The auth middleware is only applied when requireAuth is true.
 func (s *Server) wrapHandler(handler http.HandlerFunc, requireAuth bool) http.HandlerFunc {
 	h := handler
+	h = s.auditMiddleware(h)
 	if requireAuth {
 		h = s.authMiddleware(h)
 	}
@@ -652,6 +653,79 @@ func (s *Server) wrapHandler(handler http.HandlerFunc, requireAuth bool) http.Ha
 	h = s.bodyLimitMiddleware(h)
 	h = s.panicRecoveryMiddleware(h)
 	return h
+}
+
+// auditStatusWriter records the status code so the audit middleware can tell a
+// request that actually changed something from one that was rejected.
+type auditStatusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *auditStatusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *auditStatusWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+// Flush forwards to the underlying writer so SSE streaming keeps working
+// through this wrapper.
+func (w *auditStatusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// auditMiddleware records privileged actions that SUCCEEDED.
+//
+// The audit log recorded only refusals — ACL denials, rate limits, auth
+// failures. Everything that got through was invisible, so an attacker holding a
+// valid bearer token could stop every process in the container, rewrite the
+// config and reload it, and the audit log would show nothing at all. That is
+// backwards: a denial is a failed attempt, while a successful privileged action
+// is the event an investigation actually needs.
+//
+// Read-only requests are not recorded; they would drown the signal.
+func (s *Server) auditMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next(w, r)
+			return
+		}
+
+		rec := &auditStatusWriter{ResponseWriter: w}
+		next(rec, r)
+
+		if rec.status == 0 {
+			rec.status = http.StatusOK
+		}
+		if rec.status < 200 || rec.status >= 300 {
+			// Refusals are already covered by the ACL/auth/rate-limit paths.
+			return
+		}
+
+		s.auditLogger.LogPrivilegedAction(s.clientIPForAudit(r), r.Method, r.URL.Path, rec.status)
+	}
+}
+
+// clientIPForAudit resolves the client address the same way the ACL does, so the
+// audit log and the access decision agree on who the caller was.
+func (s *Server) clientIPForAudit(r *http.Request) string {
+	if s.aclChecker != nil {
+		if ip, err := s.aclChecker.ExtractIP(r); err == nil {
+			return ip.String()
+		}
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // handleHealth returns health status

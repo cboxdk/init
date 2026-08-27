@@ -1475,9 +1475,23 @@ func (s *Supervisor) ScaleDown(ctx context.Context, targetScale int) error {
 
 	// Remove stopped instances from the list
 	s.mu.Lock()
+	removed := make([]string, 0, len(s.instances)-targetScale)
+	for _, inst := range s.instances[targetScale:] {
+		if inst != nil {
+			removed = append(removed, inst.id)
+		}
+	}
 	s.instances = s.instances[:targetScale]
 	newScale := len(s.instances)
 	s.mu.Unlock()
+
+	// Drop the per-instance series. Left behind, they sit at process_up == 0
+	// forever, and Prometheus cannot tell that from a genuinely down instance —
+	// so the obvious alert fires permanently on instances the operator
+	// deliberately scaled away.
+	for _, id := range removed {
+		metrics.RemoveInstanceMetrics(s.name, id)
+	}
 
 	s.logger.Info("Scale down completed",
 		"new_scale", newScale,

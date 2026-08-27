@@ -128,7 +128,41 @@ func (l *Logger) Log(event Event) {
 	}
 }
 
-// LogAPIRequest logs an API request
+// LogPrivilegedAction records a state-changing API request that SUCCEEDED.
+//
+// The audit trail used to hold only refusals, so anything that got through was
+// invisible — a caller with a valid token could stop every process and rewrite
+// the config without leaving a trace.
+func (l *Logger) LogPrivilegedAction(ip, method, path string, status int) {
+	l.Log(Event{
+		EventType: EventAPIRequest,
+		Actor: Actor{
+			Type: "api",
+			ID:   ip, // deliberately not the credential; see LogAPIRequest
+			IP:   ip,
+		},
+		Action: method,
+		Resource: Resource{
+			Type: "api",
+			ID:   path,
+		},
+		Status:  StatusSuccess,
+		Message: "privileged API action performed",
+		Context: map[string]any{
+			"method": method,
+			"path":   path,
+			"status": status,
+		},
+	})
+}
+
+// LogAPIRequest logs an API request.
+//
+// The auth argument is an identifier for the caller, NOT the credential itself.
+// Actor.ID is written to the log verbatim, so passing a raw bearer token here
+// would copy it into the audit trail — which is usually shipped off-host and
+// retained far longer than the token's own lifetime. Callers pass the client IP
+// or an opaque key id.
 func (l *Logger) LogAPIRequest(ip, method, path, auth string) {
 	l.Log(Event{
 		EventType: EventAPIRequest,
