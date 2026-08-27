@@ -356,8 +356,22 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 
-	// Execute post-stop hooks (non-fatal).
-	_ = m.runHooks(ctx, m.config.Hooks.PostStop, hooks.TypePostStop, false)
+	// Execute post-stop hooks (non-fatal), on a context detached from the one
+	// that just bounded the teardown.
+	//
+	// ctx carries the global shutdown_timeout. When stopping the workload
+	// consumes that budget — exactly the case the timeout exists for — ctx is
+	// already DeadlineExceeded here, so every post-stop hook failed before fork
+	// and the cleanup, deregistration and notification they exist to perform was
+	// silently skipped. Shutdown still returned nil. They now get their own
+	// budget, so the hooks that run after a slow shutdown are the same ones that
+	// run after a fast one.
+	postStopCtx, cancelPostStop := context.WithTimeout(context.WithoutCancel(ctx), postStopHookBudget)
+	defer cancelPostStop()
+
+	if err := m.runHooks(postStopCtx, m.config.Hooks.PostStop, hooks.TypePostStop, false); err != nil {
+		m.logger.Warn("Post-stop hooks reported errors", "error", err)
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("shutdown completed with %d errors: %v", len(errs), errs)
@@ -365,6 +379,12 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 
 	return nil
 }
+
+// postStopHookBudget is how long post-stop hooks get, independent of the global
+// shutdown_timeout that the process teardown above may have already consumed.
+// Kept modest: the container is on its way out, and the runtime's own SIGKILL is
+// not far behind.
+const postStopHookBudget = 15 * time.Second
 
 // getStartupOrder returns processes in startup order (topological sort).
 func (m *Manager) getStartupOrder() ([]string, error) {

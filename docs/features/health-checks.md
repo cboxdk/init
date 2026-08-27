@@ -184,9 +184,18 @@ processes:
 ```
 
 **Restart policy behaviors:**
-- `always` - Restart on health check failure
-- `on-failure` - Restart on health check failure
-- `never` - Health checks still run, but no restart is triggered
+- `always` - The unhealthy instance is killed and restarted
+- `on-failure` - The unhealthy instance is killed and restarted (the kill counts
+  as a failure)
+- `never` - Health checks run and report, but the process is left alone. Killing
+  it would end the workload for the life of the container, since nothing would
+  bring it back.
+
+Note that a liveness kill is a hard `SIGKILL` to the process group: it does not
+run the process's `pre_stop_hook` and does not use its configured
+`shutdown.signal`. A queue worker killed this way loses whatever job it was
+holding. If your workload needs a graceful drain, prefer `mode: readiness` and
+let the process be taken out of rotation rather than killed.
 
 ## Prometheus Metrics
 
