@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"errors"
+	"github.com/cboxdk/init/internal/signals"
 	"syscall"
 	"time"
 )
@@ -65,6 +66,12 @@ func DrainCheckpointed(opts DrainOptions) []int {
 		pid, err := wait(-1, &status, syscall.WNOHANG, nil)
 
 		if pid > 0 {
+			// This drain uses the same wildcard wait as PID 1's reaper, so it can
+			// collect a child a supervisor is waiting on — a lifecycle hook, an
+			// exec health check, a scheduled job. Hand the status to the same
+			// place the reaper does, or that supervisor sees "exit status
+			// unavailable" and reads a successful run as a failure.
+			signals.CaptureSupervisedStatus(pid, status)
 			reaped = append(reaped, pid)
 			quiet = 0
 			continue

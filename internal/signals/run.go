@@ -24,7 +24,10 @@ import (
 // the captured status — returning nil for a clean exit (the status that matters
 // most) or a descriptive error otherwise.
 func RunSupervised(cmd *exec.Cmd) error {
-	if err := cmd.Start(); err != nil {
+	// Start and register atomically: a child that exits immediately could
+	// otherwise be reaped in the gap between Start and RegisterSupervised, and
+	// its status discarded as unowned.
+	if err := StartSupervised(cmd); err != nil {
 		return err
 	}
 	return waitSupervised(cmd)
@@ -32,7 +35,6 @@ func RunSupervised(cmd *exec.Cmd) error {
 
 func waitSupervised(cmd *exec.Cmd) error {
 	pid := cmd.Process.Pid
-	RegisterSupervised(pid)
 
 	waitErr := cmd.Wait()
 
