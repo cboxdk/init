@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -74,9 +75,23 @@ func New(cfg Config) (*Watcher, error) {
 
 // Start begins watching the configuration file for changes
 func (w *Watcher) Start(ctx context.Context) error {
-	// Add the config file to the watcher
-	if err := w.watcher.Add(w.configPath); err != nil {
+	// Watch the config file's DIRECTORY, not the file itself.
+	//
+	// inotify watches an inode. Every common way of editing a config file
+	// replaces it rather than writing in place — vim, `sed -i`, `helm upgrade`,
+	// a Kubernetes ConfigMap update, `kubectl cp` — so a watch on the file is
+	// destroyed by the first save and `--watch` silently becomes a no-op. (On
+	// macOS/kqueue it happens to survive, which is why this never shows up in
+	// local testing.) Watching the directory survives replacement; events for
+	// other files in it are filtered out below.
+	// Watching the directory means a missing config file would no longer be
+	// reported, so check for it explicitly — starting a watch on a config that
+	// is not there is a mistake worth surfacing immediately.
+	if _, err := os.Stat(w.configPath); err != nil {
 		return fmt.Errorf("failed to watch config file: %w", err)
+	}
+	if err := w.watcher.Add(filepath.Dir(w.configPath)); err != nil {
+		return fmt.Errorf("failed to watch config directory: %w", err)
 	}
 
 	w.logger.Info("Config watcher started",
@@ -102,8 +117,15 @@ func (w *Watcher) watchLoop(ctx context.Context) {
 				return
 			}
 
-			// Only handle Write and Create events
-			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+			// The watch is on the directory, so filter to our own file.
+			if filepath.Clean(event.Name) != w.configPath {
+				continue
+			}
+
+			// Create and Rename both land here when the file is replaced
+			// atomically (write temp + rename over), which is what an editor or
+			// a ConfigMap update does.
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
 				w.handleFileChange(event)
 			}
 
