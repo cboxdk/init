@@ -20,6 +20,7 @@ import (
 	"github.com/cboxdk/init/internal/process"
 	"github.com/cboxdk/init/internal/scaffold"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // captureOutput captures stdout and stderr during function execution
@@ -540,8 +541,36 @@ func TestGlobalConfigFlag(t *testing.T) {
 // Helper functions for test execution
 
 // executeCommandCapture executes a cobra command and captures real stdout/stderr
+// resetCommandFlags restores every flag in the command tree to its default.
+//
+// These tests drive the SHARED global rootCmd, and cobra flag values are sticky:
+// once "version --short" has run, the --short flag stays set on that command, so
+// a later plain "version" printed only the number. Within a single run the
+// subtests happened to be ordered such that this never showed; under -count=2
+// (or any reordering) it fails, which made -count unusable for this package and
+// could equally hide a real regression.
+func resetCommandFlags(cmd *cobra.Command) {
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if f.Changed {
+			_ = f.Value.Set(f.DefValue)
+			f.Changed = false
+		}
+	})
+	cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Changed {
+			_ = f.Value.Set(f.DefValue)
+			f.Changed = false
+		}
+	})
+
+	for _, sub := range cmd.Commands() {
+		resetCommandFlags(sub)
+	}
+}
+
 func executeCommandCapture(t *testing.T, cmd *cobra.Command, args ...string) string {
 	t.Helper()
+	resetCommandFlags(cmd)
 	var output string
 	stdout, stderr := captureOutput(func() {
 		cmd.SetArgs(args)
@@ -554,6 +583,7 @@ func executeCommandCapture(t *testing.T, cmd *cobra.Command, args ...string) str
 
 // executeCommandCaptureWithError executes a cobra command and returns captured output and error
 func executeCommandCaptureWithError(cmd *cobra.Command, args ...string) (string, error) {
+	resetCommandFlags(cmd)
 	var cmdErr error
 	stdout, stderr := captureOutput(func() {
 		cmd.SetArgs(args)
@@ -575,6 +605,8 @@ func executeCommand(t *testing.T, cmd *cobra.Command, args ...string) string {
 
 // executeCommandWithError executes a cobra command and returns stdout and error
 func executeCommandWithError(cmd *cobra.Command, args ...string) (string, error) {
+	resetCommandFlags(cmd)
+
 	// Create buffers for output
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
