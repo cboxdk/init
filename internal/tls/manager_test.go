@@ -918,3 +918,122 @@ func TestConcurrentReload(t *testing.T) {
 		<-done
 	}
 }
+
+// TestGetTLSConfig_VerifyRequiresCA covers a silent mTLS bypass: with
+// client_auth: "verify" and no ca_file, ClientCAs stayed nil and Go verified
+// client certificates against the SYSTEM ROOT POOL — so any certificate issued
+// by any public CA satisfied a config that meant "only our own clients".
+func TestGetTLSConfig_VerifyRequiresCA(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	certFile, keyFile, caFile, cleanup := createTestCertificates(t)
+	defer cleanup()
+
+	mgr, err := NewManager(&config.TLSConfig{
+		Enabled:    true,
+		CertFile:   certFile,
+		KeyFile:    keyFile,
+		ClientAuth: "verify",
+	}, logger)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	if _, err := mgr.GetTLSConfig(); err == nil {
+		t.Fatal("client_auth: verify with no ca_file was accepted; " +
+			"client certificates would be checked against the system roots")
+	}
+
+	// With a CA it builds, and the pool is actually installed.
+	mgr2, err := NewManager(&config.TLSConfig{
+		Enabled:    true,
+		CertFile:   certFile,
+		KeyFile:    keyFile,
+		CAFile:     caFile,
+		ClientAuth: "verify",
+	}, logger)
+	if err != nil {
+		t.Fatalf("NewManager with CA: %v", err)
+	}
+	cfg, err := mgr2.GetTLSConfig()
+	if err != nil {
+		t.Fatalf("GetTLSConfig with CA: %v", err)
+	}
+	if cfg.ClientCAs == nil {
+		t.Error("ClientCAs not set even though ca_file was provided")
+	}
+	if cfg.ClientAuth != tls.RequireAndVerifyClientCert {
+		t.Errorf("ClientAuth = %v, want RequireAndVerifyClientCert", cfg.ClientAuth)
+	}
+}
+
+// TestGetTLSConfig_CAPoolIsReReadPerHandshake: ClientCAs is snapshotted when the
+// handshake config is built, so a rotated CA never reached the running listener.
+// GetConfigForClient re-reads the manager's pool on every connection.
+func TestGetTLSConfig_CAPoolIsReReadPerHandshake(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	certFile, keyFile, caFile, cleanup := createTestCertificates(t)
+	defer cleanup()
+
+	mgr, err := NewManager(&config.TLSConfig{
+		Enabled: true, CertFile: certFile, KeyFile: keyFile, CAFile: caFile,
+		ClientAuth: "verify",
+	}, logger)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	cfg, err := mgr.GetTLSConfig()
+	if err != nil {
+		t.Fatalf("GetTLSConfig: %v", err)
+	}
+	if cfg.GetConfigForClient == nil {
+		t.Fatal("GetConfigForClient not installed; a reloaded CA pool can never reach the listener")
+	}
+
+	original := cfg.ClientCAs
+
+	// Simulate a reload swapping in a different pool.
+	replacement := x509.NewCertPool()
+	mgr.mu.Lock()
+	mgr.certPool = replacement
+	mgr.mu.Unlock()
+
+	got, err := cfg.GetConfigForClient(&tls.ClientHelloInfo{})
+	if err != nil {
+		t.Fatalf("GetConfigForClient: %v", err)
+	}
+	if got.ClientCAs != replacement {
+		t.Error("handshake used a stale CA pool; rotation does not take effect until restart")
+	}
+	if got.ClientCAs == original {
+		t.Error("handshake pool is still the one captured at startup")
+	}
+	if got.GetConfigForClient != nil {
+		t.Error("the per-handshake clone must not recurse into itself")
+	}
+}
+
+// TestAutoReloadLoop_NonPositiveInterval: time.NewTicker panics on a
+// non-positive duration, and this runs inside PID 1, so `auto_reload_interval:
+// -1` took the whole container down at startup.
+func TestAutoReloadLoop_NonPositiveInterval(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	certFile, keyFile, _, cleanup := createTestCertificates(t)
+	defer cleanup()
+
+	for _, interval := range []int{-1, 0} {
+		mgr, err := NewManager(&config.TLSConfig{
+			Enabled: true, CertFile: certFile, KeyFile: keyFile,
+			AutoReload: true, AutoReloadInterval: interval,
+		}, logger)
+		if err != nil {
+			t.Fatalf("interval %d: NewManager: %v", interval, err)
+		}
+		// The loop goroutine is already running; if it were going to panic on
+		// NewTicker it would have by now. Stop cleanly.
+		mgr.Stop()
+	}
+}
