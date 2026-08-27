@@ -25,12 +25,41 @@ func NewGraph() *Graph {
 func NewGraphFromConfig(processes map[string]*config.Process) (*Graph, error) {
 	g := NewGraph()
 
-	// Build nodes from enabled processes only
+	// Build nodes from enabled processes only, but drop edges that point at a
+	// process which is not part of the graph.
+	//
+	// Disabling a process is the ordinary way to switch a service off, and
+	// config validation checks depends_on against ALL processes (enabled or
+	// not), so it passes. Keeping the edge here made Validate report the
+	// dependency as non-existent and the container failed to start at all —
+	// a config check-config accepts, refusing to boot. The startup loop already
+	// skips disabled processes, so an edge to one has nothing to wait for.
 	for name, proc := range processes {
 		if !proc.Enabled {
 			continue
 		}
-		g.AddNode(name, proc.DependsOn)
+		deps := make([]string, 0, len(proc.DependsOn))
+		seen := make(map[string]struct{}, len(proc.DependsOn))
+		for _, dep := range proc.DependsOn {
+			// A dependency that is present but DISABLED is dropped: switching a
+			// service off is ordinary, and the startup loop skips it anyway, so
+			// there is nothing to order against. A dependency that is ABSENT
+			// entirely is a typo and must still be reported by Validate below,
+			// so keep that edge.
+			if target, ok := processes[dep]; ok && !target.Enabled {
+				continue
+			}
+			// De-duplicate: in-degree is computed from len(deps) but decremented
+			// once per dependency node, so a repeated entry left the node's
+			// in-degree permanently above zero and the sort reported a cycle
+			// that does not exist.
+			if _, dup := seen[dep]; dup {
+				continue
+			}
+			seen[dep] = struct{}{}
+			deps = append(deps, dep)
+		}
+		g.AddNode(name, deps)
 	}
 
 	// Validate the graph
