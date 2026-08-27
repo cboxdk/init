@@ -110,6 +110,10 @@ func LoadWithEnvExpansion(path string) (*Config, error) {
 		}
 	}
 
+	if err := applyEnvOverridesMap(rawConfig); err != nil {
+		return nil, err
+	}
+
 	// `enabled` defaults to true, as documented. The field is a plain bool, so
 	// once decoded an omitted key is indistinguishable from `enabled: false` —
 	// and the zero value meant a process defined with a command but no `enabled`
@@ -117,11 +121,14 @@ func LoadWithEnvExpansion(path string) (*Config, error) {
 	// it in on the raw map, where the key's absence is still visible, before it
 	// is decoded. Doing it here (rather than via a custom unmarshaller) keeps the
 	// strict unknown-key check working.
+	//
+	// This runs AFTER the env overrides, not before. Processes defined entirely
+	// through CBOX_INIT_PROCESS_* variables are added by that pass, so defaulting
+	// first left them with enabled=false — the very failure this defaulting was
+	// written to prevent, still live for anyone configuring a container purely
+	// from the environment. Defaulting only fills in ABSENT keys, so an explicit
+	// `enabled: false` from either source still stands.
 	defaultProcessEnabled(rawConfig)
-
-	if err := applyEnvOverridesMap(rawConfig); err != nil {
-		return nil, err
-	}
 
 	mergedBytes, err := yaml.Marshal(rawConfig)
 	if err != nil {
