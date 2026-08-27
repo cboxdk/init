@@ -174,6 +174,13 @@ func (c *Client) request(ctx context.Context, msg Message) error {
 	if c.broken != nil {
 		return c.broken
 	}
+	// The caller's own deadline having expired is not a channel failure. Without
+	// this check the write below fails immediately on the past deadline, fail()
+	// closes the socket and latches broken forever — killing a healthy agent
+	// connection for every future caller because one request queued too long.
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("%s abandoned before send: %w", msg.Verb, err)
+	}
 	done := c.bound(ctx)
 	defer done()
 

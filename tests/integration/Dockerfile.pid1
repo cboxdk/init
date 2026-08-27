@@ -1,0 +1,20 @@
+FROM debian:bookworm-slim
+
+# Runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY build/cbox-init-linux-amd64 /usr/local/bin/cbox-init
+RUN chmod +x /usr/local/bin/cbox-init
+
+COPY tests/integration/pid1-config.yaml /etc/cbox-init/cbox-init.yaml
+COPY tests/integration/verify-pid1.sh /verify-pid1.sh
+RUN chmod +x /verify-pid1.sh
+
+# cbox-init IS PID 1 here — this is what the other integration images do not do
+# (they run it as a child of a test shell, so orphan adoption, the wildcard
+# reaper and PID-1 signal handling are never exercised). The container's exit
+# code is the test result.
+ENTRYPOINT ["/usr/local/bin/cbox-init"]

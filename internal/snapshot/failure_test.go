@@ -254,6 +254,15 @@ func (f *fakeWorkload) ColdStart(context.Context) error {
 	return f.coldStartErr
 }
 
+// wakeAsleep establishes the state Wake is only ever called from in production —
+// the proxy calls it exactly when it has marked the workload asleep — and then
+// wakes. Wake short-circuits when the workload is not asleep (single-flight
+// against the restore herd), so a test that skips this would exercise nothing.
+func wakeAsleep(c *Coordinator, p *Proxy, ctx context.Context) error {
+	p.SetAsleep(true)
+	return c.Wake(ctx)
+}
+
 func newTestCoordinator(t *testing.T, control Control, workload Workload) (*Coordinator, *Proxy) {
 	t.Helper()
 	p := NewProxy(ProxyOptions{Upstream: "127.0.0.1:1", Log: quietLogger()})
@@ -322,9 +331,9 @@ func TestRepeatedCheckpointFailuresStopTrying(t *testing.T) {
 func TestTransientRestoreFailureDoesNotColdStart(t *testing.T) {
 	control := &fakeControl{restorer: func() error { return &AgentError{Reason: "restore_failed"} }}
 	workload := &fakeWorkload{}
-	c, _ := newTestCoordinator(t, control, workload)
+	c, p := newTestCoordinator(t, control, workload)
 
-	if err := c.Wake(context.Background()); err == nil {
+	if err := wakeAsleep(c, p, context.Background()); err == nil {
 		t.Fatal("the connection must be failed, not served")
 	}
 	if workload.coldStarts.Load() != 0 {
@@ -344,9 +353,9 @@ func TestAbandonedCheckpointColdStartsTheWorkload(t *testing.T) {
 		t.Run(reason, func(t *testing.T) {
 			control := &fakeControl{restorer: func() error { return &AgentError{Reason: reason} }}
 			workload := &fakeWorkload{}
-			c, _ := newTestCoordinator(t, control, workload)
+			c, p := newTestCoordinator(t, control, workload)
 
-			if err := c.Wake(context.Background()); err != nil {
+			if err := wakeAsleep(c, p, context.Background()); err != nil {
 				t.Fatalf("after a cold start the connection can be served: %v", err)
 			}
 			if workload.coldStarts.Load() != 1 {
@@ -366,9 +375,9 @@ func TestAbandonedCheckpointColdStartsTheWorkload(t *testing.T) {
 func TestLostControlChannelColdStartsTheWorkload(t *testing.T) {
 	control := &fakeControl{restorer: func() error { return ErrControlLost }}
 	workload := &fakeWorkload{}
-	c, _ := newTestCoordinator(t, control, workload)
+	c, p := newTestCoordinator(t, control, workload)
 
-	if err := c.Wake(context.Background()); err != nil {
+	if err := wakeAsleep(c, p, context.Background()); err != nil {
 		t.Fatalf("Wake: %v", err)
 	}
 	if workload.coldStarts.Load() != 1 {
@@ -382,9 +391,9 @@ func TestLostControlChannelColdStartsTheWorkload(t *testing.T) {
 func TestFailedColdStartIsReported(t *testing.T) {
 	control := &fakeControl{restorer: func() error { return &AgentError{Reason: ReasonRestoreAbandoned} }}
 	workload := &fakeWorkload{coldStartErr: errors.New("exec format error")}
-	c, _ := newTestCoordinator(t, control, workload)
+	c, p := newTestCoordinator(t, control, workload)
 
-	if err := c.Wake(context.Background()); err == nil {
+	if err := wakeAsleep(c, p, context.Background()); err == nil {
 		t.Fatal("a failed cold start must not be reported as a served connection")
 	}
 	if c.Disabled() == "" {
@@ -495,9 +504,9 @@ func TestSleepBacksOutWhenAConnectionArrivesFirst(t *testing.T) {
 // workload can never sleep a second time and its death would go unnoticed.
 func TestRestorePutsTheWorkloadBackUnderSupervision(t *testing.T) {
 	workload := &fakeWorkload{}
-	c, _ := newTestCoordinator(t, &fakeControl{}, workload)
+	c, p := newTestCoordinator(t, &fakeControl{}, workload)
 
-	if err := c.Wake(context.Background()); err != nil {
+	if err := wakeAsleep(c, p, context.Background()); err != nil {
 		t.Fatalf("Wake: %v", err)
 	}
 	if workload.ended.Load() != 1 {
@@ -516,7 +525,7 @@ func TestColdStartMarksTheProxyAwakeItself(t *testing.T) {
 	c, p := newTestCoordinator(t, control, &fakeWorkload{})
 	p.SetAsleep(true)
 
-	if err := c.Wake(context.Background()); err != nil {
+	if err := wakeAsleep(c, p, context.Background()); err != nil {
 		t.Fatalf("Wake: %v", err)
 	}
 	if p.Asleep() {
@@ -529,10 +538,64 @@ func TestSuccessfulRestoreMarksTheProxyAwake(t *testing.T) {
 	c, p := newTestCoordinator(t, &fakeControl{}, &fakeWorkload{})
 	p.SetAsleep(true)
 
-	if err := c.Wake(context.Background()); err != nil {
+	if err := wakeAsleep(c, p, context.Background()); err != nil {
 		t.Fatalf("Wake: %v", err)
 	}
 	if p.Asleep() {
 		t.Error("the proxy stayed asleep after a successful restore")
+	}
+}
+
+// Every connection that arrives while the workload is asleep calls Wake, so
+// they queue on the same lock. Only the first may restore: asking the agent to
+// restore an already-restored tree can be answered "images missing" (a restore
+// consumes them), which counts as unrecoverable and cold starts a perfectly
+// healthy workload — destroying exactly the state the warm tier exists to keep.
+func TestConcurrentWakesRestoreOnce(t *testing.T) {
+	control := &fakeControl{}
+	workload := &fakeWorkload{}
+	c, p := newTestCoordinator(t, control, workload)
+	p.SetAsleep(true)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := c.Wake(context.Background()); err != nil {
+				t.Errorf("wake: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if control.restores != 1 {
+		t.Errorf("restores = %d, want exactly 1 for a herd of concurrent wakes", control.restores)
+	}
+	if workload.coldStarts.Load() != 0 {
+		t.Errorf("a healthy workload must never be cold started (%d cold starts)", workload.coldStarts.Load())
+	}
+}
+
+// A wake whose caller already gave up must not touch the control channel: a
+// write on an expired deadline fails, and that failure latches the channel
+// broken for every future caller.
+func TestWakeWithExpiredContextDoesNotPoisonTheChannel(t *testing.T) {
+	control := &fakeControl{}
+	c, p := newTestCoordinator(t, control, &fakeWorkload{})
+	p.SetAsleep(true)
+
+	expired, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := c.Wake(expired); err == nil {
+		t.Fatal("a wake with an expired context must fail the caller")
+	}
+	if control.restores != 0 {
+		t.Errorf("restores = %d, want 0 — the channel must not be used with a dead context", control.restores)
+	}
+
+	// The channel must still be usable for the next caller.
+	if err := c.Wake(context.Background()); err != nil {
+		t.Errorf("the control channel must survive an abandoned wake, got: %v", err)
 	}
 }

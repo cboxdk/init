@@ -1,0 +1,35 @@
+version: "1.0"
+
+# Config for the PID-1 integration test. cbox-init runs as PID 1 (the image's
+# ENTRYPOINT), so this exercises the behavior that only exists there: adopting
+# and reaping orphaned grandchildren.
+#
+# The container's exit code IS the test result: cbox-init exits non-zero when a
+# oneshot fails, so a failing check fails the test.
+global:
+  shutdown_timeout: 10
+  log_level: info
+  log_format: text
+
+processes:
+  # Creates an orphan: the inner process is double-forked, its parent exits
+  # immediately, so the kernel re-parents it onto PID 1 — us. It then exits,
+  # leaving a zombie that only PID 1's wildcard reaper can collect.
+  orphan-maker:
+    enabled: true
+    type: oneshot
+    initial_state: running
+    restart: never
+    scale: 1
+    command: ["/bin/sh", "-c", "/bin/sh -c 'sleep 2 & exit 0'"]
+
+  # Runs after orphan-maker completes (depends_on gates on completion) and
+  # asserts the PID-1 invariants.
+  verify:
+    enabled: true
+    type: oneshot
+    initial_state: running
+    restart: never
+    scale: 1
+    depends_on: [orphan-maker]
+    command: ["/verify-pid1.sh"]
