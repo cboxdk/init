@@ -13,20 +13,40 @@ func (m Model) View() string {
 		return ""
 	}
 
+	var view string
 	switch m.currentView {
 	case viewProcessList:
-		return m.renderProcessList()
+		view = m.renderProcessList()
 	case viewProcessDetail:
-		return m.renderProcessDetail()
+		view = m.renderProcessDetail()
 	case viewLogs:
-		return m.renderLogs()
+		view = m.renderLogs()
 	case viewHelp:
-		return m.renderHelp()
+		view = m.renderHelp()
 	case viewWizard:
-		return m.renderWizard()
+		view = m.renderWizard()
 	default:
 		return "Unknown view"
 	}
+
+	// Dialogs are drawn HERE, once, for every view.
+	//
+	// The confirmation and scale overlays used to be rendered inside
+	// renderProcessList alone, while handleKeyPress routes every key into the
+	// dialog handler as soon as showConfirmation is set — from any view. So `r`
+	// or `x` in the process-detail view armed a confirmation nothing drew: the
+	// TUI looked hung, `q` and every other key went to the invisible dialog, and
+	// Enter executed the restart or stop with no prompt ever shown. That is
+	// strictly worse than the fire-and-forget behaviour the confirmation
+	// replaced. Whatever sets the flag, the dialog is now visible.
+	if m.showConfirmation {
+		view = m.withOverlay(view, m.renderConfirmationOverlay())
+	}
+	if m.showScaleDialog {
+		view = m.withOverlay(view, m.renderScaleDialogOverlay())
+	}
+
+	return m.padViewHeight(view)
 }
 
 // renderTabBar renders the k9s-style tab bar
@@ -102,18 +122,9 @@ func (m Model) renderProcessList() string {
 	}
 	b.WriteString(footer)
 
-	// Overlay dialogs
-	view := b.String()
-
-	if m.showConfirmation {
-		view = m.withOverlay(view, m.renderConfirmationOverlay())
-	}
-
-	if m.showScaleDialog {
-		view = m.withOverlay(view, m.renderScaleDialogOverlay())
-	}
-
-	return m.padViewHeight(view)
+	// The confirmation and scale overlays are drawn centrally in View(), so
+	// every view gets them — see the note there.
+	return b.String()
 }
 
 // renderProcessesTab renders the Processes tab content (longrun/oneshot)

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -120,5 +121,56 @@ func TestShrinkingListClampsScrollOffset(t *testing.T) {
 	if m.oneshotOffset > len(m.oneshotData)-1 {
 		t.Errorf("oneshotOffset = %d past the end of a %d-row list",
 			m.oneshotOffset, len(m.oneshotData))
+	}
+}
+
+// TestConfirmationIsVisibleFromEveryView: the confirmation overlay was drawn
+// inside renderProcessList alone, while handleKeyPress routes every key into the
+// dialog handler as soon as showConfirmation is set — from any view. So "r" or
+// "x" in the process-detail view armed a confirmation nothing drew: the TUI
+// looked hung, "q" went to the invisible dialog instead of quitting, and Enter
+// executed the restart or stop with no prompt ever shown.
+func TestConfirmationIsVisibleFromEveryView(t *testing.T) {
+	views := map[string]viewMode{
+		"process list":   viewProcessList,
+		"process detail": viewProcessDetail,
+		"logs":           viewLogs,
+	}
+
+	for name, v := range views {
+		t.Run(name, func(t *testing.T) {
+			m := Model{
+				width: 100, height: 30,
+				currentView:      v,
+				detailProc:       "php-fpm",
+				showConfirmation: true,
+				pendingAction:    actionStop,
+				pendingTarget:    "php-fpm",
+			}
+
+			out := m.View()
+			if !strings.Contains(out, "php-fpm") {
+				t.Errorf("the confirmation dialog is not drawn in the %s view; "+
+					"the TUI looks hung and Enter acts with no prompt shown:\n%s", name, out)
+			}
+		})
+	}
+}
+
+// TestScaleDialogIsVisibleFromEveryView: same shape as the confirmation dialog.
+func TestScaleDialogIsVisibleFromEveryView(t *testing.T) {
+	for _, v := range []viewMode{viewProcessList, viewProcessDetail} {
+		m := Model{
+			width: 100, height: 30,
+			currentView:     v,
+			detailProc:      "worker",
+			showScaleDialog: true,
+			pendingTarget:   "worker",
+			scaleInput:      "3",
+		}
+
+		if out := m.View(); !strings.Contains(out, "worker") {
+			t.Errorf("the scale dialog is not drawn in view %v:\n%s", v, out)
+		}
 	}
 }
