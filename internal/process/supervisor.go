@@ -1827,6 +1827,23 @@ func (s *Supervisor) signalProcessGroup(instance *Instance, sig syscall.Signal, 
 		return nil
 	}
 
+	// kill(-1, sig) is "every process the caller may signal" — as PID 1 in a
+	// container that is the entire container, including cbox-init's other
+	// managed services and cbox-init itself. Reaching pgid 1 means the child's
+	// own group is gone (a reused PID landing in the init group), so signal just
+	// the process instead of shooting the whole container.
+	if pgid <= 1 {
+		s.logger.Warn("Process group resolved to the init group; signalling the process directly",
+			"instance_id", instance.id,
+			"pgid", pgid,
+			"reason", reason,
+		)
+		if err := instance.cmd.Process.Signal(sig); err != nil && !signalMoot(err) {
+			return fmt.Errorf("failed to send signal: %w", err)
+		}
+		return nil
+	}
+
 	if err := syscall.Kill(-pgid, sig); err != nil {
 		if signalMoot(err) {
 			return nil

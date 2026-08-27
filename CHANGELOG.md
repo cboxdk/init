@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A process that omits `enabled` now starts, as documented.** The field
+  documents a default of `true`, but it decoded to the zero value — so a process
+  defined with a command and no `enabled` was silently skipped, and a config
+  could start a container with no workload at all. An explicit `enabled: false`
+  is still honored.
+- **`logging.stdout: false` is respected.** The same unset-versus-false
+  ambiguity meant an explicit `false` was indistinguishable from omitted and the
+  defaulting turned the stream back on, so a process configured to suppress
+  stdout still logged it.
+- **Signalling a process can no longer hit every process in the container.** If a
+  child's process group resolved to the init group, the group signal became
+  `kill(-1, …)` — "every process this may signal", which as PID 1 means the whole
+  container, including cbox-init itself. That path now signals just the process.
+
+### Fixed
+
 - **A noisy process can no longer OOM the container through the log buffer.** The
   per-process ring buffer was bounded by entry count, not size, and a single
   entry can be large — newline-free output is flushed at a 64KB threshold, and
