@@ -88,6 +88,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyPress processes keyboard input
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// ctrl+c quits from anywhere, including the dialogs and the wizard, which
+	// otherwise own the keyboard below.
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+
 	// Handle confirmation dialog
 	if m.showConfirmation {
 		return m.handleConfirmationKeys(msg)
@@ -96,6 +102,14 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle scale dialog
 	if m.showScaleDialog {
 		return m.handleScaleDialogKeys(msg)
+	}
+
+	// The wizard has text fields, so it must own the whole keyboard. The global
+	// bindings below used to fire first: typing the wizard's own suggested
+	// command, `php artisan queue:work`, aborted at the "q" and threw the
+	// half-filled form away.
+	if m.currentView == viewWizard {
+		return m.handleWizardKeys(msg)
 	}
 
 	// Global keys
@@ -761,6 +775,14 @@ func (m *Model) getSelectedProcess() string {
 	if m.activeTab == tabScheduled {
 		return m.getSelectedScheduledName()
 	}
+	// Only the Processes and Scheduled tabs have a cursor the user can see.
+	// selectedIndex belongs to the Processes tab, and returning it from the
+	// view-only tabs meant an action key acted on an unrendered row — pressing
+	// "+" on the Oneshot tab scaled whichever process happened to sit at that
+	// index on a tab the operator was not even looking at.
+	if !m.tabHasProcessSelection() {
+		return ""
+	}
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.tableData) {
 		return m.tableData[m.selectedIndex].name
 	}
@@ -791,11 +813,21 @@ func (m *Model) getSelectedProcessInfo() *processDisplayRow {
 	}
 
 	// Processes tab
+	if !m.tabHasProcessSelection() {
+		return nil
+	}
 	idx := m.selectedIndex
 	if idx >= 0 && idx < len(m.tableData) {
 		return &m.tableData[idx]
 	}
 	return nil
+}
+
+// tabHasProcessSelection reports whether the active tab renders a process cursor
+// the user can actually see. The Oneshot and System tabs are view-only (the
+// footer says so), so no action key may resolve a target from them.
+func (m *Model) tabHasProcessSelection() bool {
+	return m.activeTab == tabProcesses || m.activeTab == tabScheduled
 }
 
 func (m *Model) getSelectedInstanceID() string {
@@ -1507,7 +1539,8 @@ func (m *Model) refreshOneshotData() {
 		m.oneshotData = append(m.oneshotData, row)
 	}
 
-	// Ensure selection is valid
+	// Ensure selection is valid. The offset needs clamping too — see the note in
+	// refreshScheduledData; a stale offset renders a header and zero rows.
 	if m.oneshotIndex >= len(m.oneshotData) {
 		if len(m.oneshotData) > 0 {
 			m.oneshotIndex = len(m.oneshotData) - 1
@@ -1515,6 +1548,7 @@ func (m *Model) refreshOneshotData() {
 			m.oneshotIndex = 0
 		}
 	}
+	m.ensureOneshotCursorVisible()
 }
 
 // convertOneshotExecution converts a process.OneshotExecution to an oneshotDisplayRow
