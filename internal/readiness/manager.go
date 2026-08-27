@@ -170,6 +170,14 @@ func (m *Manager) Stop() error {
 
 	close(m.stopCh)
 
+	// Not ready any more, in both places that report it. Removing only the file
+	// left /readyz answering "ready": true for the whole graceful-shutdown
+	// window, because the HTTP server outlives Stop (it is torn down after
+	// pm.Shutdown returns). A file-based probe would correctly go not-ready
+	// while an httpGet probe kept the pod in the Service endpoints — routing
+	// traffic into a container whose processes are being SIGTERMed.
+	m.isReady = false
+
 	// Remove readiness file on shutdown
 	m.removeReadinessFile()
 
@@ -279,12 +287,16 @@ func (m *Manager) RemoveProcess(name string) {
 func (m *Manager) IsReady() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.isReady
+	// Once stopped, never ready — shutdown is under way.
+	return m.isReady && !m.stopped
 }
 
 // Snapshot returns the aggregate readiness together with a copy of every
 // tracked process's status. It is the data source for the HTTP /readyz
 // endpoint. Thread-safe.
+//
+// A stopped manager is never ready: shutdown has begun, whatever the last
+// evaluation concluded.
 func (m *Manager) Snapshot() (ready bool, processes []ProcessStatus) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -292,7 +304,7 @@ func (m *Manager) Snapshot() (ready bool, processes []ProcessStatus) {
 	for _, p := range m.processes {
 		processes = append(processes, p)
 	}
-	return m.isReady, processes
+	return m.isReady && !m.stopped, processes
 }
 
 // evaluateReadiness checks if all tracked processes meet readiness criteria.

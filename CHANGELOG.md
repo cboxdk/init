@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`/readyz` reports not-ready as soon as shutdown begins.** Stopping the
+  readiness manager removed the readiness file but left the HTTP endpoint
+  answering `"ready": true` for the entire graceful-shutdown window (the server
+  outlives the manager). A file-based probe correctly went not-ready while an
+  `httpGet` probe kept the pod in the Service endpoints — routing traffic into a
+  container whose processes were being terminated.
+- **A dependency on a disabled process no longer refuses to boot.** Disabling a
+  service is the ordinary way to switch it off, and `check-config` accepts it —
+  but the dependency graph treated the disabled process as non-existent and the
+  container failed to start at all. Edges to disabled processes are now dropped
+  (startup skips them anyway); a dependency that does not exist at all is still
+  an error.
+- **A repeated `depends_on` entry no longer aborts startup with a bogus cycle
+  error.** In-degree was counted per entry but decremented per dependency, so
+  `depends_on: [db, db]` left the process permanently blocked and startup failed
+  with "graph contains cycle" for a graph that has none.
+
+### Fixed
+
 - **A successful hook, health check or job is no longer reported as failed.** The
   PID-1 reaper collected the child and *then* took the lock to stash its status,
   so the supervisor's own `Wait()` could see the child gone and check for a

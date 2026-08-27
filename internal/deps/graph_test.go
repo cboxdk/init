@@ -879,3 +879,53 @@ func TestNewGraphFromConfig_WithTopologicalSort(t *testing.T) {
 		t.Errorf("Expected 3 nodes in order, got %d: %v", len(order), order)
 	}
 }
+
+// Disabling a process is the ordinary way to switch a service off, and config
+// validation checks depends_on against all processes — enabled or not — so such
+// a config passes check-config. The graph used to treat the disabled dependency
+// as non-existent, and the container refused to start at all.
+func TestNewGraphFromConfig_DependencyOnDisabledProcess(t *testing.T) {
+	g, err := NewGraphFromConfig(map[string]*config.Process{
+		"app": {Enabled: true, DependsOn: []string{"db"}},
+		"db":  {Enabled: false},
+	})
+	if err != nil {
+		t.Fatalf("a dependency on a disabled process must not fail the graph: %v", err)
+	}
+	order, err := g.TopologicalSort()
+	if err != nil {
+		t.Fatalf("topological sort: %v", err)
+	}
+	if len(order) != 1 || order[0] != "app" {
+		t.Errorf("order = %v, want just [app]", order)
+	}
+}
+
+// A dependency that does not exist at all is a typo and must still be reported.
+func TestNewGraphFromConfig_DependencyOnAbsentProcessStillErrors(t *testing.T) {
+	if _, err := NewGraphFromConfig(map[string]*config.Process{
+		"app": {Enabled: true, DependsOn: []string{"typo"}},
+	}); err == nil {
+		t.Error("a dependency on a process that does not exist must be an error")
+	}
+}
+
+// In-degree was computed from len(depends_on) but decremented once per
+// dependency NODE, so a repeated entry left the in-degree permanently above
+// zero and startup aborted with a "cycle" error for a graph that has none.
+func TestNewGraphFromConfig_DuplicateDependencyIsNotACycle(t *testing.T) {
+	g, err := NewGraphFromConfig(map[string]*config.Process{
+		"web": {Enabled: true, DependsOn: []string{"db", "db"}},
+		"db":  {Enabled: true},
+	})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	order, err := g.TopologicalSort()
+	if err != nil {
+		t.Fatalf("a duplicated depends_on entry is not a cycle: %v", err)
+	}
+	if len(order) != 2 || order[0] != "db" {
+		t.Errorf("order = %v, want [db web]", order)
+	}
+}
