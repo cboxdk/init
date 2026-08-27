@@ -146,6 +146,29 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 	c.opMu.Lock()
 	defer c.opMu.Unlock()
 
+	// Single-flight: every connection that observed "asleep" queues here, so by
+	// the time this one gets the lock the workload has very likely already been
+	// restored by the first. Restoring again would ask the agent to restore an
+	// already-running tree — and if it answers "images missing" (there are none
+	// once a restore consumed them) that is treated as unrecoverable and cold
+	// starts a perfectly healthy workload, destroying its state. The same guard
+	// covers the maybeSleep back-out path, where a connection can queue while
+	// the workload was marked asleep but never actually dumped.
+	// Asleep is the authoritative signal: a successful restore clears it, and
+	// every maybeSleep back-out path clears it too — so "not asleep" means
+	// either someone already restored the tree or it was never dumped.
+	if !c.proxy.Asleep() {
+		c.log.Debug("wake: workload is already running, nothing to restore")
+		return nil
+	}
+
+	// The caller's deadline may have expired while queuing. Bail before touching
+	// the control channel: a write on an expired context fails the channel and
+	// latches it broken for everyone.
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("wake abandoned before restore: %w", err)
+	}
+
 	err := c.control.Restore(ctx)
 	if err == nil {
 		// The tree is back, at the PIDs CRIU recorded, re-parented onto

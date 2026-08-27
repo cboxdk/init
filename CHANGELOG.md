@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Concurrent connections to a sleeping workload no longer cold-start it.**
+  Every connection arriving while the warm tier was asleep called into the wake
+  path, and each one issued its own restore. Restores after the first ran against
+  an already-restored tree, and the agent answering "images missing" (a restore
+  consumes them) counted as unrecoverable — cold starting a perfectly healthy
+  workload and discarding the state the warm tier exists to preserve. A browser
+  opening several connections at once was enough to trigger it. Waking is now
+  single-flight.
+- **An abandoned wake no longer breaks the control channel for everyone.** A
+  caller whose deadline had already expired still wrote to the agent socket; the
+  write failed on the past deadline and latched the channel permanently broken,
+  so every later checkpoint or restore failed against a healthy agent. An expired
+  caller context is now recognised as the caller's own problem before the channel
+  is touched.
+
+### Added
+
+- **An integration test that actually runs cbox-init as PID 1.** The existing
+  integration images run it as a child of the test shell, so nothing exercised
+  the behavior that only exists at PID 1. The new image makes cbox-init the
+  entrypoint and asserts it: PID 1 is cbox-init, and an orphaned grandchild
+  (double-forked, re-parented onto PID 1) is adopted and reaped. The zombie check
+  reads process state from `/proc/<pid>/stat` — the previous check grepped
+  `cmdline`, which is empty for a zombie and so could never find one.
+
 ## [3.0.0] - 2026-08-26
 
 ### Added
