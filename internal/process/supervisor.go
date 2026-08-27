@@ -2167,6 +2167,22 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 					s.markReady("health check passed")
 				}
 			} else if !status.Healthy && s.livenessGated() {
+				// With restart: never, killing the process achieves nothing
+				// except taking the workload down permanently — monitorInstance
+				// honours the policy and does not bring it back, so a single
+				// failed probe ended the service for the life of the container.
+				// The documentation describes this case as "health checks still
+				// run, but no restart is triggered", which reads as monitor-only,
+				// and monitor-only is the useful behaviour: report it, mark it
+				// unhealthy, leave it running.
+				if !s.restartPolicy.ShouldRestart(-1, 0) {
+					s.logger.Error("Process unhealthy; leaving it running because restart is disabled",
+						"error", status.Error,
+						"restart", s.config.Restart,
+					)
+					continue
+				}
+
 				s.logger.Error("Process unhealthy, triggering restart",
 					"error", status.Error,
 				)

@@ -3,6 +3,7 @@ package process
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -97,12 +98,22 @@ func (h *HTTPHealthChecker) Check(ctx context.Context) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
+	// No Client.Timeout: the caller's context already carries the configured
+	// health_check.timeout, and a hardcoded 5s here silently won whenever the
+	// operator asked for more. Any `timeout:` above 5 was dead config — which
+	// made the documented remedy for a slow endpoint ("increase timeout")
+	// inert, so a Laravel /health that takes 6-10s under load flapped into a
+	// SIGKILL/restart loop no matter what the config said.
+	resp, err := httpHealthClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("http request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		// Drain before closing so the connection can be reused rather than torn
+		// down and re-dialled on every probe.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxHealthBodyDrain))
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != h.expectedStatus {
 		return fmt.Errorf("unexpected status code: got %d, want %d", resp.StatusCode, h.expectedStatus)
@@ -110,6 +121,17 @@ func (h *HTTPHealthChecker) Check(ctx context.Context) error {
 
 	return nil
 }
+
+// maxHealthBodyDrain bounds how much of a health endpoint's response is read
+// back before the connection is returned to the pool. A health check should
+// answer in a line or two; anything larger is not worth reading to reuse a
+// connection.
+const maxHealthBodyDrain = 32 << 10
+
+// httpHealthClient is shared so connections are pooled across probes instead of
+// a fresh dial (and TLS handshake) every few seconds. It has no Timeout of its
+// own — see Check.
+var httpHealthClient = &http.Client{}
 
 // ExecHealthChecker runs a command and checks exit code
 type ExecHealthChecker struct {
