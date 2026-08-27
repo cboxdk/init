@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`schedule_timezone` is finally honored, and IANA names work.** The cron spec
+  was parsed with the process's local time, so the setting was stored and then
+  ignored: a job configured with the documented default `UTC` fired at the
+  container's local time, and any image that sets `TZ` ran every nightly job at
+  the wrong hour. The timezone is now bound to the schedule. Validation also
+  accepts IANA names like `Europe/Copenhagen` — the documentation has always
+  shown them, while validation rejected everything except `UTC` and `Local`, so
+  the documented example refused to start. The zone database is embedded in the
+  binary, so names resolve even on images that ship no tzdata.
+- **A panic in a scheduled job no longer kills the container.** The cron runner
+  had no recovery, so a panic anywhere reachable from a tick — the executor, a
+  redaction pattern, the log pipeline — propagated out of its goroutine and took
+  PID 1 down with it. Panics are now recovered and logged, as they already were
+  for supervised processes.
+- **Scheduled job output is no longer published unredacted.** Output was written
+  both through the log pipeline (which applies `logging.redaction`) *and* straight
+  to the container's stdout, so a job printing a secret had it masked in the API
+  and TUI and leaked verbatim to `docker logs`. It now goes through the redacting
+  pipeline only, like every long-running process.
+
+### Fixed
+
 - **`/readyz` reports not-ready as soon as shutdown begins.** Stopping the
   readiness manager removed the readiness file but left the HTTP endpoint
   answering `"ready": true` for the entire graceful-shutdown window (the server

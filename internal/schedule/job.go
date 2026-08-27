@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -151,9 +152,22 @@ func NewScheduledJob(name, scheduleExpr, timezone string, historySize int, execu
 
 // NewScheduledJobWithOptions creates a new ScheduledJob with additional options
 func NewScheduledJobWithOptions(name, scheduleExpr, timezone string, historySize int, executor JobExecutor, logger *slog.Logger, opts JobOptions) (*ScheduledJob, error) {
-	// Parse the schedule expression
+	// Parse the schedule expression in the configured timezone.
+	//
+	// Without this the spec is parsed with the parser's default location —
+	// time.Local — so a job configured with the documented default
+	// schedule_timezone: "UTC" actually fired at the container's local time. An
+	// image that sets TZ ran every nightly job at the wrong hour. CRON_TZ is the
+	// parser's own way to bind a spec to a location.
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	schedule, err := parser.Parse(scheduleExpr)
+	spec := scheduleExpr
+	if tz := strings.TrimSpace(timezone); tz != "" && !strings.EqualFold(tz, "Local") {
+		if _, err := time.LoadLocation(tz); err != nil {
+			return nil, fmt.Errorf("invalid schedule_timezone %q: %w", tz, err)
+		}
+		spec = "CRON_TZ=" + tz + " " + scheduleExpr
+	}
+	schedule, err := parser.Parse(spec)
 	if err != nil {
 		return nil, fmt.Errorf("invalid schedule expression: %w", err)
 	}
