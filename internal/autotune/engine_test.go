@@ -101,8 +101,17 @@ func TestPerconaConnectionsAreLimitedByMemoryNotJustCores(t *testing.T) {
 		t.Fatalf("max_connections %d ignored the memory limit", conns)
 	}
 
-	if conns < 25 {
-		t.Fatalf("max_connections %d is below the usable floor", conns)
+	if conns < minConnections {
+		t.Fatalf("max_connections %d is below the usable floor of %d", conns, minConnections)
+	}
+
+	// The real invariant: the reserve has to actually cover the connections we
+	// allow. The floor used to be 25, which overrode the memory-derived cap for
+	// every container at or below 1GB — 25 × 12MB = 300MB charged against a
+	// 256MB reserve, silently.
+	if want := conns * connectionMemoryMB; want > cfg.ReservedMB {
+		t.Errorf("max_connections %d needs %dMB but the reserve is only %dMB",
+			conns, want, cfg.ReservedMB)
 	}
 }
 

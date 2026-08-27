@@ -91,8 +91,15 @@ func parseCgroupV2Memory(r *ContainerResources, content string) {
 	memStr := strings.TrimSpace(content)
 	if memStr != "max" {
 		if memLimit, err := strconv.ParseInt(memStr, 10, 64); err == nil {
-			r.MemoryLimitBytes = memLimit
-			r.MemoryLimitMB = int(memLimit / (1024 * 1024))
+			// Same sanity bound as the v1 parser below. Normal runtimes write
+			// "max" when there is no limit, but some write the raw sentinel
+			// (9223372036854771712), which parsed cleanly into a limit of ~8.8
+			// exabytes — and every derived setting scaled off it, producing an
+			// innodb_buffer_pool_size of 6597069766656M.
+			if memLimit > 0 && memLimit < (1<<50) {
+				r.MemoryLimitBytes = memLimit
+				r.MemoryLimitMB = int(memLimit / (1024 * 1024))
+			}
 		}
 	}
 }
