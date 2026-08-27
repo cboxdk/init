@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docker stop` is honored while the container is still starting.** Shutdown
+  signals were registered before startup but only consumed after it finished, so
+  a SIGTERM arriving during a slow start — a dependency wait, a long migration —
+  sat unhandled: the container ignored `docker stop` until it either finished
+  starting or was SIGKILLed when the grace period expired. A signal during
+  startup now aborts it and shuts down cleanly (measured: `docker stop` returns
+  in under a second instead of hanging for the dependency timeout).
+- **A failed startup stops the processes that did start.** Startup failures
+  exited immediately, so processes already running were never asked to stop —
+  they were torn down abruptly when PID 1 exited, skipping their shutdown
+  signal, pre-stop hooks and grace period.
+
+### Fixed
+
 - **Log-level detection no longer overrides a level the application stated.** An
   explicit `{"level":"info"}` was indistinguishable from the "assume info"
   fallback, so pattern matching re-labelled the line — an info message mentioning
