@@ -26,6 +26,12 @@ type Watcher struct {
 	mu            sync.Mutex
 	lastReload    time.Time
 	debounce      time.Duration
+	// stopped is checked inside reload under mu. Stopping the timer is not
+	// enough on its own: time.AfterFunc has already launched its goroutine by
+	// then, and that goroutine may be blocked on mu inside reload — Stop
+	// releases the lock and the reload proceeds against a watcher the caller has
+	// shut down.
+	stopped bool
 }
 
 // Config holds watcher configuration
@@ -153,6 +159,10 @@ func (w *Watcher) handleFileChange(event fsnotify.Event) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	if w.stopped {
+		return
+	}
+
 	w.logger.Debug("Config change observed; waiting for writes to settle",
 		"path", event.Name,
 		"event", event.Op.String(),
@@ -168,6 +178,12 @@ func (w *Watcher) handleFileChange(event fsnotify.Event) {
 func (w *Watcher) reload() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	if w.stopped {
+		w.logger.Debug("Ignoring debounced reload after stop")
+
+		return
+	}
 
 	w.logger.Info("Config file changed, triggering reload")
 
@@ -209,6 +225,7 @@ func (w *Watcher) Stop() error {
 	// Cancel a pending debounced reload: firing it after Stop would reload the
 	// config of a watcher the caller has already shut down.
 	w.mu.Lock()
+	w.stopped = true
 	if w.debounceTimer != nil {
 		w.debounceTimer.Stop()
 		w.debounceTimer = nil

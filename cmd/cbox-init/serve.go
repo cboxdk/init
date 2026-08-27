@@ -247,7 +247,18 @@ func runServe(cmd *cobra.Command, args []string) {
 	// start context so pm.Start unwinds promptly.
 	startupSignalled := make(chan os.Signal, 1)
 	startupDone := make(chan struct{})
+	// startupWatcherExited is closed by the watcher on its way out. Waiting for
+	// it before reading startupSignalled is what makes the read reliable: with
+	// both cases ready, the watcher's select picks at random, so a signal
+	// landing in the same instant as close(startupDone) could be taken by the
+	// signal branch AFTER main's non-blocking read had already run. The signal
+	// was then consumed and never surfaced — while cancel() still fired, so the
+	// root context died and the container kept running with restarts suppressed
+	// and health monitoring stopped, and `docker stop` hung to SIGKILL.
+	startupWatcherExited := make(chan struct{})
 	go func() {
+		defer close(startupWatcherExited)
+
 		for {
 			select {
 			case <-startupDone:
@@ -264,6 +275,8 @@ func runServe(cmd *cobra.Command, args []string) {
 				}
 				// Anything else (reload, forwarded signals) is not actionable
 				// until the workload is up; drop it rather than blocking.
+				// Putting it back would risk re-reading it immediately on the
+				// next iteration, spinning until startup finished.
 			}
 		}
 	}()
@@ -273,6 +286,7 @@ func runServe(cmd *cobra.Command, args []string) {
 		return pm.Start(ctx)
 	})
 	close(startupDone)
+	<-startupWatcherExited
 
 	select {
 	case sig := <-startupSignalled:
