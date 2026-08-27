@@ -916,7 +916,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request, processNa
 
 // handleStop stops a process
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request, processName string) {
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := s.stopContext(r, processName)
 	defer cancel()
 
 	if err := s.manager.StopProcess(ctx, processName); err != nil {
@@ -928,6 +928,43 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request, processName 
 		"status":  "stopped",
 		"process": processName,
 	})
+}
+
+const (
+	// defaultAPIActionTimeout bounds a state-changing API call that has no
+	// configured budget of its own.
+	defaultAPIActionTimeout = 30 * time.Second
+
+	// stopEscalationMargin is the headroom left beyond a process's configured
+	// shutdown.timeout, so the force-kill escalation behind it has room to run
+	// rather than being cut off by the deadline that triggered it.
+	stopEscalationMargin = 15 * time.Second
+)
+
+// stopContext builds the context for a stop, sized to what the process is
+// actually configured to need.
+//
+// A flat 30s cap here silently truncated any process with a larger
+// shutdown.timeout: a queue worker configured to drain for 120s was SIGKILLed at
+// 30s, deterministically, through the API. The cap is now the process's own
+// timeout plus a margin for the force-kill escalation behind it.
+//
+// The context is also detached from the request. r.Context() dies when the
+// client goes away, and a stop is a state change the operator asked for — it
+// should not be abandoned half-done because a curl timed out or someone closed
+// the TUI. The deadline below is what bounds it.
+func (s *Server) stopContext(r *http.Request, processName string) (context.Context, context.CancelFunc) {
+	budget := defaultAPIActionTimeout
+
+	if cfg, err := s.manager.GetProcessConfig(processName); err == nil && cfg != nil &&
+		cfg.Shutdown != nil && cfg.Shutdown.Timeout > 0 {
+		configured := time.Duration(cfg.Shutdown.Timeout) * time.Second
+		if configured+stopEscalationMargin > budget {
+			budget = configured + stopEscalationMargin
+		}
+	}
+
+	return context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 }
 
 // handleStart starts a process
