@@ -3,6 +3,7 @@ package metrics
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"runtime"
 )
 
 var (
@@ -273,7 +274,50 @@ func SetManagerStartTime(startTime float64) {
 
 // SetBuildInfo sets build information
 func SetBuildInfo(version, goVersion string) {
+	if goVersion == "" {
+		goVersion = runtime.Version()
+	}
 	BuildInfo.WithLabelValues(version, goVersion).Set(1)
+}
+
+// RemoveInstanceMetrics drops the per-instance series for an instance that no
+// longer exists.
+//
+// Scaling from 10 to 2 left cbox_init_process_up{instance="php-fpm-9"} sitting
+// at 0 forever. Prometheus cannot tell "this instance is down" from "this
+// instance was removed", so the obvious alert — process_up == 0 — fires
+// permanently on an instance the operator deliberately scaled away. A stopped
+// instance still keeps its series (0 is the truth there); only removal deletes.
+func RemoveInstanceMetrics(processName, instanceID string) {
+	// DeletePartialMatch rather than DeleteLabelValues: some of these carry an
+	// extra label (ProcessMemoryBytes has "type"), and DeleteLabelValues only
+	// matches a FULL label set — it would silently delete nothing there.
+	match := prometheus.Labels{"process": processName, "instance": instanceID}
+
+	ProcessUp.DeletePartialMatch(match)
+	ProcessStartTime.DeletePartialMatch(match)
+	ProcessExitCode.DeletePartialMatch(match)
+	ProcessCPUPercent.DeletePartialMatch(match)
+	ProcessMemoryBytes.DeletePartialMatch(match)
+	ProcessMemoryPercent.DeletePartialMatch(match)
+}
+
+// RemoveProcessMetrics drops every series belonging to a process that has been
+// removed from the config entirely, including the process-level ones that carry
+// no instance label.
+func RemoveProcessMetrics(processName string) {
+	match := prometheus.Labels{"process": processName}
+
+	ProcessUp.DeletePartialMatch(match)
+	ProcessStartTime.DeletePartialMatch(match)
+	ProcessExitCode.DeletePartialMatch(match)
+	ProcessCPUPercent.DeletePartialMatch(match)
+	ProcessMemoryBytes.DeletePartialMatch(match)
+	ProcessMemoryPercent.DeletePartialMatch(match)
+	ProcessCurrentScale.DeletePartialMatch(match)
+	ProcessRestarts.DeletePartialMatch(match)
+	HealthCheckStatus.DeletePartialMatch(match)
+	HealthCheckConsecutiveFails.DeletePartialMatch(match)
 }
 
 // RecordShutdownDuration records the duration of graceful shutdown
