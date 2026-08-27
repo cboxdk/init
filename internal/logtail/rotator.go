@@ -2,6 +2,7 @@ package logtail
 
 import (
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -31,7 +32,9 @@ func (r *FileRotator) CheckAndRotate(path string) error {
 		return fmt.Errorf("stat %s: %w", path, err)
 	}
 
-	if info.Size() < r.MaxSize {
+	// MaxSize 0 would rotate on every single write; treat it as "no rotation"
+	// rather than shredding the log.
+	if r.MaxSize <= 0 || info.Size() < r.MaxSize {
 		return nil
 	}
 
@@ -52,17 +55,48 @@ func (r *FileRotator) CheckAndRotate(path string) error {
 			}
 		}
 	}
-	// Rename current file to .1
-	if err := os.Rename(path, fmt.Sprintf("%s.1", path)); err != nil {
-		return fmt.Errorf("rename %s: %w", path, err)
+	// Copy-then-truncate rather than rename-then-create.
+	//
+	// Renaming the live file and creating a new one at the same path breaks
+	// every writer that holds an open descriptor — php-fpm, nginx, Monolog's
+	// StreamHandler — because their fd follows the renamed inode. They keep
+	// appending to the rotated file (which then grows without bound, defeating
+	// the size cap) while the file being tailed stays empty forever. Truncating
+	// in place keeps their descriptors valid.
+	//
+	// The cost is a small window in which lines written between the copy and
+	// the truncate are lost; that is the same trade-off logrotate's copytruncate
+	// makes, and it is far cheaper than silently losing all future output.
+	if err := copyFile(path, fmt.Sprintf("%s.1", path)); err != nil {
+		return fmt.Errorf("copy %s: %w", path, err)
 	}
-
-	// Create new empty file
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("create %s: %w", path, err)
+	if err := os.Truncate(path, 0); err != nil {
+		return fmt.Errorf("truncate %s: %w", path, err)
 	}
-	f.Close()
 
 	return nil
+}
+
+// copyFile copies src to dst, replacing dst if it exists.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }

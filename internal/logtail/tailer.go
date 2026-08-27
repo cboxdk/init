@@ -161,6 +161,16 @@ func (t *FileTailer) tailLoop(ctx context.Context, seekToEnd bool) error {
 				return nil
 			}
 
+			// The watch covers the parent directory (so the file can be
+			// re-created after a rotation), which means events for SIBLING
+			// files arrive here too. Acting on those is actively harmful: a
+			// sibling being removed took the Remove branch below, which reopens
+			// the file and resets the offset to 0 — replaying the entire log
+			// into the pipeline. Only this file's events matter.
+			if event.Name != "" && filepath.Clean(event.Name) != filepath.Clean(t.path) {
+				continue
+			}
+
 			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
 				info, err := os.Stat(t.path)
 				if err != nil {

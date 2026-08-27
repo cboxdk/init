@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`--watch` no longer stops working after the first save.** The config watcher
+  watched the file's inode, but almost every way of editing a config replaces the
+  file rather than writing in place — vim, `sed -i`, `helm upgrade`, a Kubernetes
+  ConfigMap update. On Linux the watch died with the replaced inode, so hot
+  reload silently became a no-op after one edit (macOS happened to survive it,
+  which is why it never showed up in local testing). The watcher now watches the
+  containing directory and filters to its own file, and treats an atomic replace
+  as a change.
+- **Log rotation no longer kills log capture.** Rotation renamed the live file
+  and created a new one, but any writer holding the file open — php-fpm, nginx,
+  Monolog — keeps writing to the renamed inode. Everything it logged after the
+  first rotation vanished from the tailed file, while the rotated file grew past
+  the size cap forever. Rotation now copies and truncates in place, so existing
+  descriptors stay valid. A `max_size` of 0 no longer rotates on every write.
+- **A log tailer no longer replays its whole file when a sibling changes.** The
+  tailer watches its file's directory, but acted on events for *any* file in it —
+  so an unrelated file being removed (a daily-log prune, an external logrotate)
+  made it reopen and re-read from the start, replaying the entire log into the
+  pipeline. Events are now filtered to the tailed file.
+
+### Fixed
+
 - **Concurrent connections to a sleeping workload no longer cold-start it.**
   Every connection arriving while the warm tier was asleep called into the wake
   path, and each one issued its own restore. Restores after the first ran against
