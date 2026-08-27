@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -43,10 +44,31 @@ func NewLogBuffer(size int) *LogBuffer {
 	}
 }
 
+// MaxStoredMessageBytes bounds the size of a single message RETAINED in the ring
+// buffer. The buffer is capped by entry count, not bytes, and a single entry can
+// be large: output with no newline is flushed at a 64KB threshold, and multiline
+// buffering can hold a whole stack trace. At 1000 entries that reaches hundreds
+// of megabytes per instance — PID 1 grows to it and the cgroup OOM-kills the
+// container, which is precisely the failure this project exists to prevent, from
+// nothing worse than an app dumping a base64 blob.
+//
+// Truncation applies only to the retained copy. The full line still goes to
+// stdout and to live subscribers; it is just not accumulated.
+const MaxStoredMessageBytes = 8 * 1024
+
 // Add adds a log entry to the buffer
 func (lb *LogBuffer) Add(entry LogEntry) {
+	// Broadcast the entry in full: streaming is transient, so it costs no
+	// retained memory.
+	stored := entry
+	if len(stored.Message) > MaxStoredMessageBytes {
+		truncated := len(stored.Message) - MaxStoredMessageBytes
+		stored.Message = stored.Message[:MaxStoredMessageBytes] +
+			fmt.Sprintf("… [truncated %d bytes]", truncated)
+	}
+
 	lb.mu.Lock()
-	lb.entries[lb.index] = entry
+	lb.entries[lb.index] = stored
 	lb.index++
 	if lb.index >= lb.size {
 		lb.index = 0

@@ -17,13 +17,14 @@ type ReloadHandler func() error
 
 // Watcher watches configuration files for changes and triggers reload
 type Watcher struct {
-	configPath string
-	handler    ReloadHandler
-	logger     *slog.Logger
-	watcher    *fsnotify.Watcher
-	mu         sync.Mutex
-	lastReload time.Time
-	debounce   time.Duration
+	configPath    string
+	debounceTimer *time.Timer
+	handler       ReloadHandler
+	logger        *slog.Logger
+	watcher       *fsnotify.Watcher
+	mu            sync.Mutex
+	lastReload    time.Time
+	debounce      time.Duration
 }
 
 // Config holds watcher configuration
@@ -139,24 +140,36 @@ func (w *Watcher) watchLoop(ctx context.Context) {
 	}
 }
 
-// handleFileChange processes a file change event with debouncing
+// handleFileChange processes a file change event with trailing-edge debouncing.
+//
+// Trailing edge matters: reloading on the FIRST event of a burst and ignoring
+// the rest means the config that actually gets loaded is the intermediate state,
+// and the final write of the burst — the one the operator meant — is never
+// loaded at all. Editors and generators routinely write a file in several steps.
+// Restarting the timer on each event and firing once it settles always loads the
+// last version.
 func (w *Watcher) handleFileChange(event fsnotify.Event) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Debounce: ignore if last reload was too recent
-	if time.Since(w.lastReload) < w.debounce {
-		w.logger.Debug("Config change debounced",
-			"event", event.Op.String(),
-			"since_last_reload", time.Since(w.lastReload))
-		return
-	}
-
-	w.logger.Info("Config file changed, triggering reload",
+	w.logger.Debug("Config change observed; waiting for writes to settle",
 		"path", event.Name,
-		"event", event.Op.String())
+		"event", event.Op.String(),
+		"debounce", w.debounce)
 
-	// Call the reload handler
+	if w.debounceTimer != nil {
+		w.debounceTimer.Stop()
+	}
+	w.debounceTimer = time.AfterFunc(w.debounce, w.reload)
+}
+
+// reload runs the handler once a burst of writes has settled.
+func (w *Watcher) reload() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.logger.Info("Config file changed, triggering reload")
+
 	if err := w.handler(); err != nil {
 		w.logger.Error("Config reload failed", "error", err)
 		// Don't update lastReload on failure to allow retry
@@ -170,5 +183,15 @@ func (w *Watcher) handleFileChange(event fsnotify.Event) {
 // Stop stops the file watcher
 func (w *Watcher) Stop() error {
 	w.logger.Debug("Stopping config watcher")
+
+	// Cancel a pending debounced reload: firing it after Stop would reload the
+	// config of a watcher the caller has already shut down.
+	w.mu.Lock()
+	if w.debounceTimer != nil {
+		w.debounceTimer.Stop()
+		w.debounceTimer = nil
+	}
+	w.mu.Unlock()
+
 	return w.watcher.Close()
 }
