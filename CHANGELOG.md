@@ -5,190 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Fixed
-
-- **`docker stop` is honored while the container is still starting.** Shutdown
-  signals were registered before startup but only consumed after it finished, so
-  a SIGTERM arriving during a slow start — a dependency wait, a long migration —
-  sat unhandled: the container ignored `docker stop` until it either finished
-  starting or was SIGKILLed when the grace period expired. A signal during
-  startup now aborts it and shuts down cleanly (measured: `docker stop` returns
-  in under a second instead of hanging for the dependency timeout).
-- **A failed startup stops the processes that did start.** Startup failures
-  exited immediately, so processes already running were never asked to stop —
-  they were torn down abruptly when PID 1 exited, skipping their shutdown
-  signal, pre-stop hooks and grace period.
-
-### Fixed
-
-- **Log-level detection no longer overrides a level the application stated.** An
-  explicit `{"level":"info"}` was indistinguishable from the "assume info"
-  fallback, so pattern matching re-labelled the line — an info message mentioning
-  the word "error" was promoted to error, against the application's own
-  classification. Detection now runs only when the line did not state a level.
-- **Requesting a negative number of log entries no longer panics.**
-
-### Fixed
-
-- **A deleted readiness file is recreated.** The file was written only when
-  readiness *changed*, so one removed from underneath the container — by a tmpfs
-  cleaner, a sidecar, an operator — was never restored, and the container looked
-  not-ready to a file-based probe for the rest of its life with nothing in the
-  logs to explain it. Readiness is now reconciled on every evaluation.
-- **Readiness handles a disabled configuration without panicking.** Creating and
-  removing the readiness file dereferenced the config unconditionally, although a
-  nil config (readiness disabled) is documented as supported. An empty path —
-  documented as "no file" — is now honored too.
-
-### Fixed
-
-- **A process that omits `enabled` now starts, as documented.** The field
-  documents a default of `true`, but it decoded to the zero value — so a process
-  defined with a command and no `enabled` was silently skipped, and a config
-  could start a container with no workload at all. An explicit `enabled: false`
-  is still honored.
-- **`logging.stdout: false` is respected.** The same unset-versus-false
-  ambiguity meant an explicit `false` was indistinguishable from omitted and the
-  defaulting turned the stream back on, so a process configured to suppress
-  stdout still logged it.
-- **Signalling a process can no longer hit every process in the container.** If a
-  child's process group resolved to the init group, the group signal became
-  `kill(-1, …)` — "every process this may signal", which as PID 1 means the whole
-  container, including cbox-init itself. That path now signals just the process.
-
-### Fixed
-
-- **A noisy process can no longer OOM the container through the log buffer.** The
-  per-process ring buffer was bounded by entry count, not size, and a single
-  entry can be large — newline-free output is flushed at a 64KB threshold, and
-  multiline buffering can hold a whole stack trace. At 1000 entries that reached
-  hundreds of megabytes per instance, so an app dumping a base64 blob or a long
-  `var_dump` could grow PID 1 until the cgroup killed the container. Retained
-  messages are now truncated (with a marker); the full line still goes to stdout
-  and to live log subscribers.
-- **A burst of config writes now reloads the final version.** Debouncing fired on
-  the *first* event of a burst and ignored the rest, so an editor or generator
-  that writes a file in several steps had an intermediate version loaded and the
-  final write — the one that mattered — never loaded at all. Debouncing is now
-  trailing-edge, and a pending reload is cancelled when the watcher stops.
-
-### Fixed
-
-- **`schedule_timezone` is finally honored, and IANA names work.** The cron spec
-  was parsed with the process's local time, so the setting was stored and then
-  ignored: a job configured with the documented default `UTC` fired at the
-  container's local time, and any image that sets `TZ` ran every nightly job at
-  the wrong hour. The timezone is now bound to the schedule. Validation also
-  accepts IANA names like `Europe/Copenhagen` — the documentation has always
-  shown them, while validation rejected everything except `UTC` and `Local`, so
-  the documented example refused to start. The zone database is embedded in the
-  binary, so names resolve even on images that ship no tzdata.
-- **A panic in a scheduled job no longer kills the container.** The cron runner
-  had no recovery, so a panic anywhere reachable from a tick — the executor, a
-  redaction pattern, the log pipeline — propagated out of its goroutine and took
-  PID 1 down with it. Panics are now recovered and logged, as they already were
-  for supervised processes.
-- **Scheduled job output is no longer published unredacted.** Output was written
-  both through the log pipeline (which applies `logging.redaction`) *and* straight
-  to the container's stdout, so a job printing a secret had it masked in the API
-  and TUI and leaked verbatim to `docker logs`. It now goes through the redacting
-  pipeline only, like every long-running process.
-
-### Fixed
-
-- **`/readyz` reports not-ready as soon as shutdown begins.** Stopping the
-  readiness manager removed the readiness file but left the HTTP endpoint
-  answering `"ready": true` for the entire graceful-shutdown window (the server
-  outlives the manager). A file-based probe correctly went not-ready while an
-  `httpGet` probe kept the pod in the Service endpoints — routing traffic into a
-  container whose processes were being terminated.
-- **A dependency on a disabled process no longer refuses to boot.** Disabling a
-  service is the ordinary way to switch it off, and `check-config` accepts it —
-  but the dependency graph treated the disabled process as non-existent and the
-  container failed to start at all. Edges to disabled processes are now dropped
-  (startup skips them anyway); a dependency that does not exist at all is still
-  an error.
-- **A repeated `depends_on` entry no longer aborts startup with a bogus cycle
-  error.** In-degree was counted per entry but decremented per dependency, so
-  `depends_on: [db, db]` left the process permanently blocked and startup failed
-  with "graph contains cycle" for a graph that has none.
-
-### Fixed
-
-- **A successful hook, health check or job is no longer reported as failed.** The
-  PID-1 reaper collected the child and *then* took the lock to stash its status,
-  so the supervisor's own `Wait()` could see the child gone and check for a
-  status before it was recorded — reporting a successful run as a failure. That
-  meant a *passing* exec health check could trigger a restart and a *successful*
-  pre-start hook could abort container startup. Measured at ~7% under a tight
-  reaper; the wait-and-stash is now a single atomic step, along with the
-  symmetric start-and-register (a child that exited instantly could be reaped
-  before it was registered). The checkpoint drain, which runs its own wildcard
-  wait, now hands statuses to the same place instead of discarding them.
-- **A crashing process's last log line is no longer lost.** Output waiting for
-  its newline was never flushed when a process exited, so an unterminated final
-  line — the usual shape of a crash message, and with multiline enabled the whole
-  buffered stack trace — was dropped. Exactly the log needed to debug a crash
-  loop. The writers are now flushed when the process exits.
-
-### Security
-
-- **A publicly-bound API is no longer accepted with an ACL that restricts
-  nothing.** The exposure check treated any enabled `api_acl` as sufficient, so
-  `api_host: 0.0.0.0` with no `api_auth` and a **deny-mode** ACL — which permits
-  everyone except the listed addresses — passed validation and served the full
-  control plane to the world. Only a bearer token, or an `allow`-mode ACL with a
-  non-empty `allow_list`, now counts; the error names which of the two is missing.
-
-### Fixed
-
-- **A health-check typo no longer kills the container.** `health_check.period: -1`
-  (or `0`) reached `time.NewTicker`, which panics on a non-positive interval — in
-  a goroutine, so it took PID 1 and the whole container down. Config validation
-  now rejects negative periods, timeouts, delays and thresholds and an unknown
-  `mode`, and the health loop falls back to a default period rather than panicking
-  if one reaches it anyway (a process added through the API, say).
-
-### Fixed
-
-- **`--watch` no longer stops working after the first save.** The config watcher
-  watched the file's inode, but almost every way of editing a config replaces the
-  file rather than writing in place — vim, `sed -i`, `helm upgrade`, a Kubernetes
-  ConfigMap update. On Linux the watch died with the replaced inode, so hot
-  reload silently became a no-op after one edit (macOS happened to survive it,
-  which is why it never showed up in local testing). The watcher now watches the
-  containing directory and filters to its own file, and treats an atomic replace
-  as a change.
-- **Log rotation no longer kills log capture.** Rotation renamed the live file
-  and created a new one, but any writer holding the file open — php-fpm, nginx,
-  Monolog — keeps writing to the renamed inode. Everything it logged after the
-  first rotation vanished from the tailed file, while the rotated file grew past
-  the size cap forever. Rotation now copies and truncates in place, so existing
-  descriptors stay valid. A `max_size` of 0 no longer rotates on every write.
-- **A log tailer no longer replays its whole file when a sibling changes.** The
-  tailer watches its file's directory, but acted on events for *any* file in it —
-  so an unrelated file being removed (a daily-log prune, an external logrotate)
-  made it reopen and re-read from the start, replaying the entire log into the
-  pipeline. Events are now filtered to the tailed file.
-
-### Fixed
-
-- **Concurrent connections to a sleeping workload no longer cold-start it.**
-  Every connection arriving while the warm tier was asleep called into the wake
-  path, and each one issued its own restore. Restores after the first ran against
-  an already-restored tree, and the agent answering "images missing" (a restore
-  consumes them) counted as unrecoverable — cold starting a perfectly healthy
-  workload and discarding the state the warm tier exists to preserve. A browser
-  opening several connections at once was enough to trigger it. Waking is now
-  single-flight.
-- **An abandoned wake no longer breaks the control channel for everyone.** A
-  caller whose deadline had already expired still wrote to the agent socket; the
-  write failed on the past deadline and latched the channel permanently broken,
-  so every later checkpoint or restore failed against a healthy agent. An expired
-  caller context is now recognised as the caller's own problem before the channel
-  is touched.
+## [3.0.0] - 2026-08-27
 
 ### Added
 
@@ -199,10 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (double-forked, re-parented onto PID 1) is adopted and reaped. The zombie check
   reads process state from `/proc/<pid>/stat` — the previous check grepped
   `cmdline`, which is empty for a zombie and so could never find one.
-
-## [3.0.0] - 2026-08-26
-
-### Added
 
 - **An OpenAPI 3.0 spec for the management API.** Every endpoint — process
   lifecycle, scaling, per-process signal, logs (incl. the SSE stream), schedule
@@ -358,6 +171,272 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have made the drift gate above either wrong or littered with special cases.
 
 ### Fixed
+
+- **X-Forwarded-For could be forged to bypass the IP ACL.** The header was read
+  leftmost-first, but every standard proxy *appends* the peer it saw (nginx's
+  `proxy_add_x_forwarded_for`, HAProxy, ingress-nginx). A client sending
+  `X-Forwarded-For: 10.0.0.1` therefore produced `10.0.0.1, <client>` and the ACL
+  believed the forged half — so any client could name its own source address and
+  walk through an allow-list. It also gave the rate limiter a fresh bucket per
+  forged value and wrote the forged address into the audit log. The chain is now
+  walked right-to-left, discarding hops that are themselves trusted proxies; the
+  walk stops at a malformed entry, is capped at 32 hops, and falls back to the
+  peer when every entry is a trusted proxy.
+- **`client_auth: verify` without `ca_file` accepted any publicly-issued
+  certificate.** `ClientCAs` stayed nil, and Go then verifies client certificates
+  against the system root pool — the opposite of what mTLS was configured for.
+  The combination is now refused. Separately, `ClientCAs` was snapshotted when
+  the handshake config was built, so certificate auto-reload never reached the
+  listener and a rotated CA stayed trusted until restart.
+- **An unrecognised `acl.mode` allowed everyone.** A typo — `"Allow"`,
+  `"whitelist"` — fell through to deny-mode semantics, which with an empty
+  `deny_list` means no restriction at all. Now rejected at load, for both
+  `api_acl` and `metrics_acl`. `deny_list` is also honored in allow mode, so
+  "allow this subnet except this host" no longer silently allows the host.
+- **The metrics server served metrics after failing to build its ACL.** Process
+  names, command lines and resource figures went to everyone, from a config that
+  asked for an allow-list. It now refuses to start, as the API server already did.
+- **A process entry with an empty body crashed PID 1.** `processes:\n  app:`
+  decodes to a nil process, which was dereferenced while applying defaults —
+  segfaulting at boot, and in the watcher's reload goroutine on a container that
+  had been running for weeks. It is now a clear validation error, and the reload
+  handler runs under a recover so no config can take the container down.
+- **A retried stop reported success and orphaned the live process.**
+  `stopInstance` short-circuited on any state other than running, and a failed
+  stop leaves the instance *stopping* — so the second call returned nil and the
+  caller dropped a still-running process from its list. `rollbackReload` retried
+  automatically, so no operator action was needed to hit it.
+- **A client disconnect no longer force-kills the workload.** The graceful wait
+  selected on the caller's context, which for an API request dies the moment the
+  client goes away — Ctrl-C on `cbox-init stop`, a curl timeout or an ingress
+  read timeout SIGKILLed a queue worker mid-job. Only a deadline shortens the
+  window now. The API's flat 30s cap also truncated any larger configured
+  `shutdown.timeout`.
+- **Editing a scheduled process turned it into a permanent daemon.** The update
+  path did not know that a scheduled process belongs to the scheduler, so
+  changing a cron expression built a long-running supervisor *and* left the job
+  registered: a nightly task became a continuous restart loop that also still
+  fired on schedule. The same path ignored `initial_state: stopped`.
+- **`schedule_timezone` never took effect.** The timezone-bound schedule was
+  parsed and stored, and then the raw expression was registered instead, so the
+  cron entry used the container's local time. A job set to `America/New_York`
+  fired at 03:00 UTC rather than 08:00.
+- **Secrets with a frontend prefix were served in cleartext.** The exemption for
+  `VITE_`/`NEXT_PUBLIC_`/`MIX_` variables ran before the secret-word check, so
+  `VITE_DB_PASSWORD` and `NEXT_PUBLIC_API_SECRET` were returned unmasked. The
+  exemption now yields to an unambiguous secret word while still keeping
+  genuinely publishable values readable.
+- **`--watch` was a no-op for a symlinked config on Linux.** `filepath.Abs` does
+  not resolve symlinks, so the directory watch landed on the link's directory —
+  the shape produced by a mounted volume or a Kubernetes ConfigMap. Both
+  directories are watched now.
+- **Successful privileged API actions left no audit trail.** Only refusals were
+  recorded, so a caller holding a valid token could stop every process and
+  rewrite the config invisibly. State-changing requests that succeed are now
+  recorded with the caller's address, resolved through the same ACL path the
+  access decision used.
+- **`health_check.timeout` above 5 seconds was ignored.** The HTTP checker had a
+  hardcoded 5s client timeout that always won, which made the documented remedy
+  for a slow endpoint inert — a `/health` taking 6-10s under load flapped into a
+  restart loop whatever the config said.
+- **`restart: never` plus a liveness check killed the workload for good.** The
+  unhealthy instance was SIGKILLed regardless of policy, and nothing brought it
+  back, so one failed probe ended the service for the life of the container. It
+  is now reported and left running, which is what the documentation describes.
+- **Post-stop hooks were skipped after a slow shutdown.** They ran on the context
+  that had just bounded the process teardown, so when stopping the workload
+  consumed the shutdown budget — the case the timeout exists for — every hook
+  failed before fork and its cleanup was silently dropped.
+- **Autotune wrote a Percona config that guaranteed an OOM kill.** Below roughly
+  384MB the buffer pool chunk size exceeded the whole memory budget and the floor
+  raised the pool back above the container limit: 128MB of pool plus a 64MB
+  reserve in a 128MB container. `max_connections` had the same shape, its floor
+  of 25 discarding the memory-derived cap for every container at or below 1GB.
+- **A process defined purely from the environment was never enabled.** The
+  `enabled: true` default was applied before the `CBOX_INIT_PROCESS_*` overrides
+  ran, so a process created by those overrides kept `enabled=false` and was
+  silently skipped.
+- **A panicking scheduled job was retired silently.** Its state was left as
+  *executing*, and the overlap check then refused every later run.
+- **The readiness file was recreated after shutdown began.** An evaluation racing
+  `Stop` rewrote the file, so a file-based probe kept routing traffic to a
+  container that was tearing itself down.
+- **The multiline log timeout never fired without further output.** It was only
+  evaluated on write, so a worker that logged a fatal error and then went quiet
+  kept it buffered — invisible in `docker logs`, the API and the TUI.
+- **A config `check-config` accepted could fail to boot.** `tracing_exporter`
+  advertised five values and defaulted endpoints for four; the provider supports
+  two, so `serve` exited 1 at startup. `tracing_sample_rate: 0.0` also produced
+  100% sampling rather than none.
+- **TUI: action keys operated on rows that were not on screen.** Selection was
+  not tab-aware, so `+`/`-`, `s`, `p` and `t` on the view-only Oneshot and System
+  tabs acted on a process the operator could not see. `r`/`x` in the detail view
+  armed a confirmation nothing drew — the UI looked hung, `q` did not quit, and
+  Enter acted with no prompt. The wizard could not accept `q` or `?`, so typing
+  its own suggested command aborted it.
+- **Scaffold presets generated another framework's commands.** The `symfony`
+  preset emitted Laravel's `artisan queue:work`, which crash-looped from first
+  boot; nginx's document root was wrong for WordPress, Drupal and Magento, hidden
+  by a `/health` stub that always answered 200; and the generated config was
+  installed at a path cbox-init never reads.
+- **Nine documented configuration keys did not exist.** Because loading rejects
+  unknown keys, an operator copying a documented snippet got a container that
+  would not start. All 204 config snippets in `docs/` are now checked against the
+  real loader.
+- **An expired TLS certificate loaded silently**, leaving clients to fail the
+  handshake with nothing in the server log to explain it.
+
+- **`docker stop` is honored while the container is still starting.** Shutdown
+  signals were registered before startup but only consumed after it finished, so
+  a SIGTERM arriving during a slow start — a dependency wait, a long migration —
+  sat unhandled: the container ignored `docker stop` until it either finished
+  starting or was SIGKILLed when the grace period expired. A signal during
+  startup now aborts it and shuts down cleanly (measured: `docker stop` returns
+  in under a second instead of hanging for the dependency timeout).
+- **A failed startup stops the processes that did start.** Startup failures
+  exited immediately, so processes already running were never asked to stop —
+  they were torn down abruptly when PID 1 exited, skipping their shutdown
+  signal, pre-stop hooks and grace period.
+
+- **Log-level detection no longer overrides a level the application stated.** An
+  explicit `{"level":"info"}` was indistinguishable from the "assume info"
+  fallback, so pattern matching re-labelled the line — an info message mentioning
+  the word "error" was promoted to error, against the application's own
+  classification. Detection now runs only when the line did not state a level.
+- **Requesting a negative number of log entries no longer panics.**
+
+- **A deleted readiness file is recreated.** The file was written only when
+  readiness *changed*, so one removed from underneath the container — by a tmpfs
+  cleaner, a sidecar, an operator — was never restored, and the container looked
+  not-ready to a file-based probe for the rest of its life with nothing in the
+  logs to explain it. Readiness is now reconciled on every evaluation.
+- **Readiness handles a disabled configuration without panicking.** Creating and
+  removing the readiness file dereferenced the config unconditionally, although a
+  nil config (readiness disabled) is documented as supported. An empty path —
+  documented as "no file" — is now honored too.
+
+- **A process that omits `enabled` now starts, as documented.** The field
+  documents a default of `true`, but it decoded to the zero value — so a process
+  defined with a command and no `enabled` was silently skipped, and a config
+  could start a container with no workload at all. An explicit `enabled: false`
+  is still honored.
+- **`logging.stdout: false` is respected.** The same unset-versus-false
+  ambiguity meant an explicit `false` was indistinguishable from omitted and the
+  defaulting turned the stream back on, so a process configured to suppress
+  stdout still logged it.
+- **Signalling a process can no longer hit every process in the container.** If a
+  child's process group resolved to the init group, the group signal became
+  `kill(-1, …)` — "every process this may signal", which as PID 1 means the whole
+  container, including cbox-init itself. That path now signals just the process.
+
+- **A noisy process can no longer OOM the container through the log buffer.** The
+  per-process ring buffer was bounded by entry count, not size, and a single
+  entry can be large — newline-free output is flushed at a 64KB threshold, and
+  multiline buffering can hold a whole stack trace. At 1000 entries that reached
+  hundreds of megabytes per instance, so an app dumping a base64 blob or a long
+  `var_dump` could grow PID 1 until the cgroup killed the container. Retained
+  messages are now truncated (with a marker); the full line still goes to stdout
+  and to live log subscribers.
+- **A burst of config writes now reloads the final version.** Debouncing fired on
+  the *first* event of a burst and ignored the rest, so an editor or generator
+  that writes a file in several steps had an intermediate version loaded and the
+  final write — the one that mattered — never loaded at all. Debouncing is now
+  trailing-edge, and a pending reload is cancelled when the watcher stops.
+
+- **`schedule_timezone` is finally honored, and IANA names work.** The cron spec
+  was parsed with the process's local time, so the setting was stored and then
+  ignored: a job configured with the documented default `UTC` fired at the
+  container's local time, and any image that sets `TZ` ran every nightly job at
+  the wrong hour. The timezone is now bound to the schedule. Validation also
+  accepts IANA names like `Europe/Copenhagen` — the documentation has always
+  shown them, while validation rejected everything except `UTC` and `Local`, so
+  the documented example refused to start. The zone database is embedded in the
+  binary, so names resolve even on images that ship no tzdata.
+- **A panic in a scheduled job no longer kills the container.** The cron runner
+  had no recovery, so a panic anywhere reachable from a tick — the executor, a
+  redaction pattern, the log pipeline — propagated out of its goroutine and took
+  PID 1 down with it. Panics are now recovered and logged, as they already were
+  for supervised processes.
+- **Scheduled job output is no longer published unredacted.** Output was written
+  both through the log pipeline (which applies `logging.redaction`) *and* straight
+  to the container's stdout, so a job printing a secret had it masked in the API
+  and TUI and leaked verbatim to `docker logs`. It now goes through the redacting
+  pipeline only, like every long-running process.
+
+- **`/readyz` reports not-ready as soon as shutdown begins.** Stopping the
+  readiness manager removed the readiness file but left the HTTP endpoint
+  answering `"ready": true` for the entire graceful-shutdown window (the server
+  outlives the manager). A file-based probe correctly went not-ready while an
+  `httpGet` probe kept the pod in the Service endpoints — routing traffic into a
+  container whose processes were being terminated.
+- **A dependency on a disabled process no longer refuses to boot.** Disabling a
+  service is the ordinary way to switch it off, and `check-config` accepts it —
+  but the dependency graph treated the disabled process as non-existent and the
+  container failed to start at all. Edges to disabled processes are now dropped
+  (startup skips them anyway); a dependency that does not exist at all is still
+  an error.
+- **A repeated `depends_on` entry no longer aborts startup with a bogus cycle
+  error.** In-degree was counted per entry but decremented per dependency, so
+  `depends_on: [db, db]` left the process permanently blocked and startup failed
+  with "graph contains cycle" for a graph that has none.
+
+- **A successful hook, health check or job is no longer reported as failed.** The
+  PID-1 reaper collected the child and *then* took the lock to stash its status,
+  so the supervisor's own `Wait()` could see the child gone and check for a
+  status before it was recorded — reporting a successful run as a failure. That
+  meant a *passing* exec health check could trigger a restart and a *successful*
+  pre-start hook could abort container startup. Measured at ~7% under a tight
+  reaper; the wait-and-stash is now a single atomic step, along with the
+  symmetric start-and-register (a child that exited instantly could be reaped
+  before it was registered). The checkpoint drain, which runs its own wildcard
+  wait, now hands statuses to the same place instead of discarding them.
+- **A crashing process's last log line is no longer lost.** Output waiting for
+  its newline was never flushed when a process exited, so an unterminated final
+  line — the usual shape of a crash message, and with multiline enabled the whole
+  buffered stack trace — was dropped. Exactly the log needed to debug a crash
+  loop. The writers are now flushed when the process exits.
+
+- **A health-check typo no longer kills the container.** `health_check.period: -1`
+  (or `0`) reached `time.NewTicker`, which panics on a non-positive interval — in
+  a goroutine, so it took PID 1 and the whole container down. Config validation
+  now rejects negative periods, timeouts, delays and thresholds and an unknown
+  `mode`, and the health loop falls back to a default period rather than panicking
+  if one reaches it anyway (a process added through the API, say).
+
+- **`--watch` no longer stops working after the first save.** The config watcher
+  watched the file's inode, but almost every way of editing a config replaces the
+  file rather than writing in place — vim, `sed -i`, `helm upgrade`, a Kubernetes
+  ConfigMap update. On Linux the watch died with the replaced inode, so hot
+  reload silently became a no-op after one edit (macOS happened to survive it,
+  which is why it never showed up in local testing). The watcher now watches the
+  containing directory and filters to its own file, and treats an atomic replace
+  as a change.
+- **Log rotation no longer kills log capture.** Rotation renamed the live file
+  and created a new one, but any writer holding the file open — php-fpm, nginx,
+  Monolog — keeps writing to the renamed inode. Everything it logged after the
+  first rotation vanished from the tailed file, while the rotated file grew past
+  the size cap forever. Rotation now copies and truncates in place, so existing
+  descriptors stay valid. A `max_size` of 0 no longer rotates on every write.
+- **A log tailer no longer replays its whole file when a sibling changes.** The
+  tailer watches its file's directory, but acted on events for *any* file in it —
+  so an unrelated file being removed (a daily-log prune, an external logrotate)
+  made it reopen and re-read from the start, replaying the entire log into the
+  pipeline. Events are now filtered to the tailed file.
+
+- **Concurrent connections to a sleeping workload no longer cold-start it.**
+  Every connection arriving while the warm tier was asleep called into the wake
+  path, and each one issued its own restore. Restores after the first ran against
+  an already-restored tree, and the agent answering "images missing" (a restore
+  consumes them) counted as unrecoverable — cold starting a perfectly healthy
+  workload and discarding the state the warm tier exists to preserve. A browser
+  opening several connections at once was enough to trigger it. Waking is now
+  single-flight.
+- **An abandoned wake no longer breaks the control channel for everyone.** A
+  caller whose deadline had already expired still wrote to the agent socket; the
+  write failed on the past deadline and latched the channel permanently broken,
+  so every later checkpoint or restore failed against a healthy agent. An expired
+  caller context is now recognised as the caller's own problem before the channel
+  is touched.
 
 - **A process added in the stopped state is visible and startable.** Honoring
   `initial_state: stopped` on the API path skipped creating its supervisor
@@ -874,6 +953,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a configuration warning.
 
 ### Security
+
+- **A publicly-bound API is no longer accepted with an ACL that restricts
+  nothing.** The exposure check treated any enabled `api_acl` as sufficient, so
+  `api_host: 0.0.0.0` with no `api_auth` and a **deny-mode** ACL — which permits
+  everyone except the listed addresses — passed validation and served the full
+  control plane to the world. Only a bearer token, or an `allow`-mode ACL with a
+  non-empty `allow_list`, now counts; the error names which of the two is missing.
 
 - **The process-detail API no longer leaks — or destroys — secrets.** Two
   problems with the env redaction: (1) a client that read a process (secrets
