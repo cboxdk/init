@@ -1,0 +1,22 @@
+# Config for the runtime PHP-FPM autotuner e2e (tests/integration/e2e-fpm-tune.sh).
+# cbox-init runs as PID 1, supervises php-fpm, and runs the embedded fpm-tune
+# loop in apply mode. A short interval keeps the test quick; the driver script
+# generates load and asserts the loop resizes and reloads php-fpm.
+version: "1.0"
+global:
+  log_level: info
+  log_format: text
+  shutdown_timeout: 10
+  fpm_tune:
+    enabled: true
+    mode: apply
+    interval: 3s
+    drop_in_dir: /usr/local/etc/php-fpm.d
+    state_path: /var/lib/fpm-tune/state.json
+    backup_dir: /var/lib/fpm-tune/backup
+    metrics_addr: ":9110"
+processes:
+  php-fpm:
+    enabled: true
+    command: ["php-fpm", "-F"]
+    restart: always

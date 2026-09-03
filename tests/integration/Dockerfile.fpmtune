@@ -1,0 +1,20 @@
+# Runtime PHP-FPM autotuner end-to-end image. cbox-init is PID 1, supervising a
+# real php-fpm and running the embedded fpm-tune loop. libfcgi-bin (cgi-fcgi) and
+# busy.php are baked in so the driver script can generate load with no network.
+FROM php:8.4-fpm
+
+ARG TARGETARCH=amd64
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libfcgi-bin \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/lib/fpm-tune/backup /etc/cbox-init \
+    && printf '%s' '<?php usleep(300000); echo "ok";' > /var/www/html/busy.php
+
+# The linux binaries come from `make build-all` (local) or the CI `binaries`
+# artifact; TARGETARCH selects the one matching the build platform.
+COPY build/cbox-init-linux-${TARGETARCH} /usr/local/bin/cbox-init
+COPY tests/integration/fpm-tune-config.yaml /etc/cbox-init/cbox-init.yaml
+RUN chmod +x /usr/local/bin/cbox-init
+
+ENTRYPOINT ["/usr/local/bin/cbox-init"]
