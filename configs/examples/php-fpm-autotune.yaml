@@ -1,0 +1,43 @@
+# Runtime PHP-FPM autotuning
+#
+# cbox-init sizes php-fpm twice, at two different moments:
+#
+#   1. Boot: the autotune profile computes a starting pm.max_children from the
+#      container's memory limit and templates it into www.conf before php-fpm
+#      starts. (Set PHP_FPM_AUTOTUNE_PROFILE, or the --php-fpm-profile flag.)
+#
+#   2. Runtime: the fpm_tune block below embeds cboxdk/fpm-tune, which measures
+#      live per-worker memory (PSS), and when the right size has moved it rewrites
+#      a pool drop-in and reloads php-fpm with SIGUSR2 (never a restart). Every
+#      change is validated against a throwaway copy, written atomically, and
+#      rolled back if the master does not come back.
+#
+# The boot value is the seed; the runtime loop refines it as traffic arrives.
+
+version: "1.0"
+
+global:
+  shutdown_timeout: 30
+  log_format: json
+  log_level: info
+
+  fpm_tune:
+    enabled: true
+    # apply: write drop-ins and reload php-fpm (the default).
+    # advisory: observe and only write a recommendation (set recommend_path).
+    mode: apply
+    interval: 30s
+    # Expose fpm_tune_* metrics (worker RSS/PSS, recommended vs configured
+    # workers, whether the machine is full). Empty disables the endpoint.
+    metrics_addr: ":9110"
+    # Leave the paths unset to let fpm-tune resolve them the way the standalone
+    # tool does: drop_in_dir = the directory the master includes,
+    # state_path = /var/lib/fpm-tune/state.json, backup_dir = its default.
+    # reserve_fraction: 0.2   # hold 20% of the budget back from the pools
+    # workload: web           # default class for pools that spawn no children
+
+processes:
+  php-fpm:
+    enabled: true
+    command: ["php-fpm", "-F", "-R"]
+    restart: always

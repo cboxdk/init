@@ -57,6 +57,87 @@
       "version": "v1.0.1"
     },
     {
+      "bom-ref": "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/cboxdk/fcgx"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a81c7d0b47708b8130e1458b4aa7de5075500ef08f8f06f8bbdabd78249424b1"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "github.com/cboxdk/fcgx",
+      "purl": "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v1.2.0"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/cboxdk/fpm-tune"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2b17723a938559fe3388735203c6c1a7c366a7da1c710430ce3ffb1d9fcd4aff"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "github.com/cboxdk/fpm-tune",
+      "purl": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v0.1.0-beta.20"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/cboxdk/phpfpm"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c397514caa2db160b309e568989850f075057834b15b862d8cc4f6e6273ca3db"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "github.com/cboxdk/phpfpm",
+      "purl": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v1.2.0"
+    },
+    {
       "bom-ref": "pkg:golang/github.com/cenkalti/backoff/v5@v5.0.3?type=module",
       "externalReferences": [
         {
@@ -1056,6 +1137,33 @@
       "version": "v3.0.1"
     },
     {
+      "bom-ref": "pkg:golang/github.com/shirou/gopsutil/v3@v3.24.5?type=module",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/shirou/gopsutil"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8b4b7c90bfa4413be90184e87ae8959374e00de28e162a193b766dcff899f692"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "name": "github.com/shirou/gopsutil/v3",
+      "purl": "pkg:golang/github.com/shirou/gopsutil/v3@v3.24.5?type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v3.24.5"
+    },
+    {
       "bom-ref": "pkg:golang/github.com/shirou/gopsutil/v4@v4.26.7?type=module",
       "externalReferences": [
         {
@@ -1081,6 +1189,33 @@
       "scope": "required",
       "type": "library",
       "version": "v4.26.7"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/shoenig/go-m1cpu@v0.1.6?type=module",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/shoenig/go-m1cpu"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9f174a40d70407abf3800d84d9bbf3288611b8d8fb5cd2784bf6914b02b316d3"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "name": "github.com/shoenig/go-m1cpu",
+      "purl": "pkg:golang/github.com/shoenig/go-m1cpu@v0.1.6?type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v0.1.6"
     },
     {
       "bom-ref": "pkg:golang/github.com/spf13/cobra@v1.10.2?type=module",
@@ -1611,6 +1746,7 @@
   "dependencies": [
     {
       "dependsOn": [
+        "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module",
         "pkg:golang/github.com/charmbracelet/bubbles@v1.0.0?type=module",
         "pkg:golang/github.com/charmbracelet/bubbletea@v1.3.10?type=module",
         "pkg:golang/github.com/charmbracelet/lipgloss@v1.1.0?type=module",
@@ -1636,6 +1772,48 @@
     },
     {
       "ref": "pkg:golang/github.com/beorn7/perks@v1.0.1?type=module"
+    },
+    {
+      "ref": "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module"
+    },
+    {
+      "dependsOn": [
+        "pkg:golang/github.com/beorn7/perks@v1.0.1?type=module",
+        "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module",
+        "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module",
+        "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0?type=module",
+        "pkg:golang/github.com/go-ole/go-ole@v1.2.6?type=module",
+        "pkg:golang/github.com/lufia/plan9stats@v0.0.0-20211012122336-39d0f177ccd0?type=module",
+        "pkg:golang/github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822?type=module",
+        "pkg:golang/github.com/power-devops/perfstat@v0.0.0-20240221224432-82ca36839d55?type=module",
+        "pkg:golang/github.com/prometheus/client_golang@v1.24.1?type=module",
+        "pkg:golang/github.com/prometheus/client_model@v0.6.2?type=module",
+        "pkg:golang/github.com/prometheus/common@v0.70.1?type=module",
+        "pkg:golang/github.com/prometheus/procfs@v0.21.1?type=module",
+        "pkg:golang/github.com/shirou/gopsutil/v3@v3.24.5?type=module",
+        "pkg:golang/github.com/shoenig/go-m1cpu@v0.1.6?type=module",
+        "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module",
+        "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
+        "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
+        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+        "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module"
+      ],
+      "ref": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module"
+    },
+    {
+      "dependsOn": [
+        "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module",
+        "pkg:golang/github.com/go-ole/go-ole@v1.2.6?type=module",
+        "pkg:golang/github.com/lufia/plan9stats@v0.0.0-20211012122336-39d0f177ccd0?type=module",
+        "pkg:golang/github.com/power-devops/perfstat@v0.0.0-20240221224432-82ca36839d55?type=module",
+        "pkg:golang/github.com/shirou/gopsutil/v3@v3.24.5?type=module",
+        "pkg:golang/github.com/shoenig/go-m1cpu@v0.1.6?type=module",
+        "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module",
+        "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
+        "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
+        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+      ],
+      "ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module"
     },
     {
       "ref": "pkg:golang/github.com/cenkalti/backoff/v5@v5.0.3?type=module"
@@ -1926,6 +2104,20 @@
     },
     {
       "dependsOn": [
+        "pkg:golang/github.com/go-ole/go-ole@v1.2.6?type=module",
+        "pkg:golang/github.com/lufia/plan9stats@v0.0.0-20211012122336-39d0f177ccd0?type=module",
+        "pkg:golang/github.com/power-devops/perfstat@v0.0.0-20240221224432-82ca36839d55?type=module",
+        "pkg:golang/github.com/shoenig/go-m1cpu@v0.1.6?type=module",
+        "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module",
+        "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
+        "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
+        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+        "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
+      ],
+      "ref": "pkg:golang/github.com/shirou/gopsutil/v3@v3.24.5?type=module"
+    },
+    {
+      "dependsOn": [
         "pkg:golang/github.com/ebitengine/purego@v0.10.2?type=module",
         "pkg:golang/github.com/go-ole/go-ole@v1.2.6?type=module",
         "pkg:golang/github.com/lufia/plan9stats@v0.0.0-20211012122336-39d0f177ccd0?type=module",
@@ -1937,6 +2129,9 @@
         "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
       ],
       "ref": "pkg:golang/github.com/shirou/gopsutil/v4@v4.26.7?type=module"
+    },
+    {
+      "ref": "pkg:golang/github.com/shoenig/go-m1cpu@v0.1.6?type=module"
     },
     {
       "dependsOn": [

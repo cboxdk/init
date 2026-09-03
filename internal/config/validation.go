@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -186,6 +187,43 @@ func (c *Config) validateGlobalSettings(result *ValidationResult) {
 	c.validateGlobalAPISettings(result)
 	c.validateGlobalMetricsSettings(result)
 	c.validateGlobalReadinessSettings(result)
+	c.validateGlobalFPMTuneSettings(result)
+}
+
+// validateGlobalFPMTuneSettings checks the built-in runtime autotuner block, and
+// nudges toward an observable, correct setup. Errors mirror the fail-fast
+// validateFPMTune; the warnings and suggestions are check-config's job.
+func (c *Config) validateGlobalFPMTuneSettings(result *ValidationResult) {
+	ft := c.Global.FPMTune
+	if ft == nil || !ft.Enabled {
+		return
+	}
+
+	validModes := []string{"apply", "advisory"}
+	if ft.Mode != "" && !slices.Contains(validModes, ft.Mode) {
+		result.AddError("global.fpm_tune.mode", fmt.Sprintf("Invalid mode: %s", ft.Mode), fmt.Sprintf("Must be one of: %s", strings.Join(validModes, ", ")))
+	}
+	if ft.Interval < 0 {
+		result.AddError("global.fpm_tune.interval", "Must not be negative", "Use a value like 30s, or leave unset for the 30s default")
+	}
+	if ft.ReserveFraction < 0 || ft.ReserveFraction >= 1 {
+		result.AddError("global.fpm_tune.reserve_fraction", fmt.Sprintf("Out of range (%v)", ft.ReserveFraction), "Must be in [0, 1); leave unset for fpm-tune's default")
+	}
+	if ft.RecommendPath != "" && ft.DropInDir != "" &&
+		filepath.Clean(filepath.Dir(ft.RecommendPath)) == filepath.Clean(ft.DropInDir) {
+		result.AddError("global.fpm_tune.recommend_path", "Inside drop_in_dir, where php-fpm would load it", "Choose a path outside the pool directory, such as /var/lib/fpm-tune/recommended.conf")
+	}
+
+	// apply is the point of embedding it, but it writes production config and
+	// reloads php-fpm — worth stating plainly in a config review.
+	if ft.Mode == "" || ft.Mode == "apply" {
+		result.AddSuggestion("global.fpm_tune.mode", "Apply mode writes pool drop-ins and reloads php-fpm (SIGUSR2)", "Use mode: advisory to observe and only write a recommendation")
+	}
+	// Observability: without a metrics address (and, in advisory mode, without a
+	// recommend path) the loop's decisions are visible only in the log.
+	if ft.MetricsAddr == "" {
+		result.AddSuggestion("global.fpm_tune.metrics_addr", "No metrics endpoint for the autotuner", "Set metrics_addr like \":9110\" to expose fpm_tune_* metrics")
+	}
 }
 
 // validateGlobalBasicSettings validates shutdown timeout, logging, and restart settings
