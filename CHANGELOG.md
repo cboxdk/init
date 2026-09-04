@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-09-04
+
+### Added
+
+- **A built-in runtime PHP-FPM autotuner.** Until now cbox-init sized php-fpm
+  only once, at boot, from a static workload profile, and never touched it again
+  as traffic changed. The new `global.fpm_tune` block embeds
+  [fpm-tune](https://github.com/cboxdk/fpm-tune): it measures live per-worker
+  memory (PSS, which does not double-count shared OPcache), sizes each pool on the
+  p95 hybrid, and in apply mode rewrites a pool drop-in and reloads php-fpm with
+  SIGUSR2 (a graceful reload, never a restart). Every change is validated against
+  a throwaway copy, written atomically, and rolled back if the master does not
+  come back. The boot calculator stays as the seed: it gives php-fpm a sane
+  `pm.max_children` before it starts, and the loop owns the number from there. It
+  runs as a background service tied to the serve lifecycle and is stopped before
+  php-fpm is drained on shutdown. Apply mode is the default; set `mode: advisory`
+  to observe and only recommend. See
+  [PHP-FPM Auto-Tuning](docs/configuration/php-fpm-autotune.md) and
+  `configs/examples/php-fpm-autotune.yaml`. A container integration test
+  (`make test-e2e-fpm-tune`, run in CI) exercises the whole chain: discover,
+  enable the status page, size, resize under load, and reload without changing the
+  master pid.
+
 ## [3.0.0] - 2026-08-27
 
 ### Added
