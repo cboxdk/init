@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-09-04
+
+### Changed
+
+- **Pin the embedded autotuner to fpm-tune v1.0.0.** The runtime PHP-FPM
+  autotuner added in 3.1.0 was built against a v0.1.0 beta; it now tracks
+  fpm-tune's stable 1.0 release. No behavior change for the embedding: the serve
+  API it uses is unchanged.
+
+### Fixed
+
+- **The release smoke test no longer uses an unsupported `priority` field.** The
+  release workflow's post-build check wrote a process config with `priority`, a
+  field the schema does not have (processes order by `depends_on`), so strict
+  decoding rejected it and the check failed on every release. Removed it from the
+  smoke-test config and the release-notes example.
+
 ## [3.1.0] - 2026-09-04
 
 ### Added
