@@ -11,6 +11,7 @@ Cbox Init includes intelligent PHP-FPM worker auto-tuning based on container res
 ## Table of Contents
 
 - [Overview](#overview)
+- [Runtime Auto-Tuning](#runtime-auto-tuning)
 - [How It Works](#how-it-works)
 - [Application Profiles](#application-profiles)
 - [Safety Features](#safety-features)
@@ -29,6 +30,41 @@ PHP-FPM worker configuration is critical for Laravel application performance and
 - Sets all PM (Process Manager) parameters correctly
 - Reserves memory for Nginx, Redis clients, system overhead
 - Validates calculations to prevent over-provisioning
+
+## Runtime Auto-Tuning
+
+Everything above is **boot-time** sizing: a one-shot calculation that runs before
+php-fpm starts and templates `pm.max_children` into the pool config from the
+container's memory limit and a workload profile. It is a good starting value, but
+it is a guess made before a single request has been served, from an assumed
+per-worker memory figure.
+
+Cbox Init can also refine that value at **runtime**. The `global.fpm_tune` block
+embeds the [fpm-tune](https://github.com/cboxdk/fpm-tune) engine as a built-in
+background loop: it measures live per-worker memory (PSS, which does not
+double-count shared OPcache), and when the right size has moved it rewrites a pool
+drop-in and reloads php-fpm with `SIGUSR2` (a graceful reload, not a restart). Each
+change is validated against a throwaway copy, written atomically, and rolled back
+if the master does not come back.
+
+The two compose. The boot calculator seeds `pm.max_children` so php-fpm starts
+sane; the runtime loop owns the number from there, following real memory use and
+damping reloads with hysteresis so it does not react to every small drift. Enable
+it alongside a php-fpm process:
+
+```yaml
+global:
+  fpm_tune:
+    enabled: true
+    mode: apply          # write drop-ins and reload; use "advisory" to only recommend
+    interval: 30s
+    metrics_addr: ":9110" # exposes fpm_tune_* metrics; empty disables it
+```
+
+A full example lives in `configs/examples/php-fpm-autotune.yaml`. The embedded
+engine is the same tool that runs standalone, so do not point a separate `fpm-tune`
+daemon at the same pools: the loop takes a lock on its state file, and a second
+copy on the same state refuses to start.
 
 ## How It Works
 

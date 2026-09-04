@@ -388,6 +388,15 @@ func runServe(cmd *cobra.Command, args []string) {
 		defer func() { _ = configWatcher.Stop() }()
 	}
 
+	// Runtime PHP-FPM autotuner (embedded fpm-tune). Started last, after every
+	// startup step that can os.Exit, so its stop is never skipped. Non-critical:
+	// if it cannot start (for example a second copy already holds the state lock),
+	// php-fpm keeps its boot-time size and the container runs on.
+	stopFPMTune, err := startFPMTune(ctx, cfg, log)
+	if err != nil {
+		slog.Warn("Runtime PHP-FPM autotuner not started", "error", err)
+	}
+
 	// Main event loop - handles shutdown signals and config reloads
 	var shutdownReason string
 	for {
@@ -411,7 +420,7 @@ func runServe(cmd *cobra.Command, args []string) {
 		}
 
 		// Graceful shutdown for other reasons (signal, all processes dead)
-		performGracefulShutdown(cfg, pm, apiServer, metricsServer, auditLogger, shutdownReason)
+		performGracefulShutdown(cfg, pm, apiServer, metricsServer, stopFPMTune, auditLogger, shutdownReason)
 		break
 	}
 
@@ -800,7 +809,7 @@ func waitForShutdownOrReload(
 }
 
 // performGracefulShutdown gracefully shuts down all components
-func performGracefulShutdown(cfg *config.Config, pm *process.Manager, apiServer *api.Server, metricsServer *metrics.Server, auditLogger *audit.Logger, reason string) {
+func performGracefulShutdown(cfg *config.Config, pm *process.Manager, apiServer *api.Server, metricsServer *metrics.Server, stopFPMTune func(), auditLogger *audit.Logger, reason string) {
 	shutdownCtx, shutdownCancel := context.WithTimeout(
 		context.Background(),
 		time.Duration(cfg.Global.ShutdownTimeout)*time.Second,
@@ -811,6 +820,14 @@ func performGracefulShutdown(cfg *config.Config, pm *process.Manager, apiServer 
 		"reason", reason,
 		"timeout", cfg.Global.ShutdownTimeout,
 	)
+
+	// Stop the runtime autotuner FIRST, before php-fpm is drained: it rewrites
+	// php-fpm's config and reloads it, so it must not be acting on a master that
+	// is being torn down. The stop waits for the loop to finish its round, save
+	// baselines, and release its lock.
+	if stopFPMTune != nil {
+		stopFPMTune()
+	}
 
 	// Shutdown process manager
 	if err := pm.Shutdown(shutdownCtx); err != nil {

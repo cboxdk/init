@@ -7361,7 +7361,7 @@ func TestPerformGracefulShutdownDirect(t *testing.T) {
 			}
 			done <- true
 		}()
-		performGracefulShutdown(cfg, pm, nil, nil, auditLog, "test")
+		performGracefulShutdown(cfg, pm, nil, nil, nil, auditLog, "test")
 	}()
 
 	select {
@@ -8107,7 +8107,7 @@ func TestPerformGracefulShutdownWithServers(t *testing.T) {
 			}
 			done <- true
 		}()
-		performGracefulShutdown(cfg, pm, nil, nil, auditLog, "test_signal")
+		performGracefulShutdown(cfg, pm, nil, nil, nil, auditLog, "test_signal")
 	}()
 
 	select {

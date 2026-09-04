@@ -1,4 +1,4 @@
-.PHONY: build build-all clean test test-all test-integration bench coverage lint deps install dev help \
+.PHONY: build build-all clean test test-all test-integration test-e2e-fpm-tune bench coverage lint deps install dev help \
 	check check-configs cover-check fmt fmt-check vet vulncheck sbom sbom-check license-check
 
 # Build variables
@@ -76,6 +76,10 @@ test-integration:
 		docker run --rm cbox-init-test-$$distro || exit 1; \
 	done
 	@echo "✅ All integration tests passed"
+
+test-e2e-fpm-tune: build-all
+	@echo "🧪 Running the runtime PHP-FPM autotuner e2e (php-fpm container)..."
+	@bash tests/integration/e2e-fpm-tune.sh
 
 # Run benchmarks
 bench:

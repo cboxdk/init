@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -109,6 +110,40 @@ func (c *Config) validateGlobal() error {
 	}
 	if err := c.validateTracing(); err != nil {
 		return err
+	}
+	if err := c.validateFPMTune(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateFPMTune rejects a runtime-autotuner block the embedded loop cannot act
+// on. Kept in step with fpm-tune's own serve.New, which refuses the same cases at
+// startup — catching them here means check-config and a reload report them
+// instead of a daemon that starts and then does nothing useful.
+func (c *Config) validateFPMTune() error {
+	ft := c.Global.FPMTune
+	if ft == nil || !ft.Enabled {
+		return nil
+	}
+	switch ft.Mode {
+	case "", "apply", "advisory":
+	default:
+		return fmt.Errorf("invalid fpm_tune.mode %q (valid: apply, advisory)", ft.Mode)
+	}
+	if ft.Interval < 0 {
+		return fmt.Errorf("fpm_tune.interval must not be negative")
+	}
+	if ft.ReserveFraction < 0 || ft.ReserveFraction >= 1 {
+		return fmt.Errorf("fpm_tune.reserve_fraction must be in [0, 1), got %v", ft.ReserveFraction)
+	}
+	// The one deterministic footgun fpm-tune itself refuses: a recommendation
+	// written where php-fpm would load it. The file carries fpm-tune's own marker,
+	// so the master would load it and the loop would refuse it every interval.
+	if ft.RecommendPath != "" && ft.DropInDir != "" &&
+		filepath.Clean(filepath.Dir(ft.RecommendPath)) == filepath.Clean(ft.DropInDir) {
+		return fmt.Errorf("fpm_tune.recommend_path %s is inside drop_in_dir %s, where php-fpm "+
+			"would load it; choose a path outside the pool directory", ft.RecommendPath, ft.DropInDir)
 	}
 	return nil
 }

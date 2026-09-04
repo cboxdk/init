@@ -61,6 +61,7 @@ type GlobalConfig struct {
 	OneshotHistoryMaxEntries int              `yaml:"oneshot_history_max_entries" json:"oneshot_history_max_entries"` // Max oneshot history entries per process (default: 5000)
 	OneshotHistoryMaxAge     time.Duration    `yaml:"oneshot_history_max_age" json:"oneshot_history_max_age"`         // Max age of oneshot history entries (default: 24h)
 	Readiness                *ReadinessConfig `yaml:"readiness" json:"readiness"`                                     // Container readiness file config for K8s
+	FPMTune                  *FPMTuneConfig   `yaml:"fpm_tune" json:"fpm_tune"`                                       // Built-in runtime PHP-FPM autotuner (embeds cboxdk/fpm-tune)
 	HealthCheckStrict        bool             `yaml:"health_check_strict" json:"health_check_strict"`                 // Fail process startup if health monitor creation fails (default: false)
 	DependencyTimeout        time.Duration    `yaml:"dependency_timeout" json:"dependency_timeout"`                   // Max time to wait for dependencies to become ready (default: 5m)
 	ProcessStartTimeout      time.Duration    `yaml:"process_start_timeout" json:"process_start_timeout"`             // Timeout for starting a single process (default: 30s)
@@ -304,6 +305,32 @@ type ReadinessConfig struct {
 	HTTPHost  string   `yaml:"http_host" json:"http_host"` // Bind host for the HTTP endpoint (default: 0.0.0.0 so kubelet can reach it)
 }
 
+// FPMTuneConfig configures the built-in runtime PHP-FPM autotuner.
+//
+// The boot-time calculator (the php-fpm autotune profile) still sizes
+// pm.max_children once, before php-fpm starts, because a loop cannot size a
+// master that is not running yet. This loop takes over at runtime: it measures
+// live per-worker memory (PSS), and when the right size has moved it rewrites a
+// pool drop-in and reloads php-fpm with SIGUSR2, never a restart. Change is
+// validated against a throwaway copy, written atomically, and rolled back if the
+// master does not come back.
+//
+// It embeds github.com/cboxdk/fpm-tune, which is also a standalone tool. Do not
+// run both against the same pools: the daemon takes a lock on its state file, so
+// a second copy pointed at the same state refuses to start.
+type FPMTuneConfig struct {
+	Enabled         bool          `yaml:"enabled" json:"enabled"`                   // Enable the runtime autotuner
+	Mode            string        `yaml:"mode" json:"mode"`                         // "apply" (write + reload) | "advisory" (observe + recommend only); default apply
+	Interval        time.Duration `yaml:"interval" json:"interval"`                 // How often pools are sampled (default 30s)
+	ReserveFraction float64       `yaml:"reserve_fraction" json:"reserve_fraction"` // Fraction of the budget held back from the pools (0 = fpm-tune's default)
+	Workload        string        `yaml:"workload" json:"workload"`                 // Default workload class for pools that declare none (default "web")
+	DropInDir       string        `yaml:"drop_in_dir" json:"drop_in_dir"`           // Where pool drop-ins are written; empty = the directory the master includes
+	StatePath       string        `yaml:"state_path" json:"state_path"`             // Where learned baselines persist (empty = fpm-tune's default)
+	BackupDir       string        `yaml:"backup_dir" json:"backup_dir"`             // Rollback / self-repair directory (empty = fpm-tune's default)
+	MetricsAddr     string        `yaml:"metrics_addr" json:"metrics_addr"`         // Address for fpm-tune's own /metrics, e.g. ":9110" (empty disables it)
+	RecommendPath   string        `yaml:"recommend_path" json:"recommend_path"`     // Advisory mode: write the plan here for copying by hand (empty disables it)
+}
+
 // setGlobalDefaults sets default values for global configuration
 func (c *Config) setGlobalDefaults() {
 	c.setGlobalBasicDefaults()
@@ -312,6 +339,26 @@ func (c *Config) setGlobalDefaults() {
 	c.setGlobalACLDefaults()
 	c.setGlobalTracingDefaults()
 	c.setGlobalHistoryDefaults()
+	c.setGlobalFPMTuneDefaults()
+}
+
+// setGlobalFPMTuneDefaults fills the runtime autotuner's defaults, leaving the
+// paths (state, backup, drop-in) empty so fpm-tune's own Defaults() resolve them
+// the same way the standalone tool does.
+func (c *Config) setGlobalFPMTuneDefaults() {
+	ft := c.Global.FPMTune
+	if ft == nil {
+		return
+	}
+	if ft.Mode == "" {
+		ft.Mode = "apply"
+	}
+	if ft.Interval == 0 {
+		ft.Interval = 30 * time.Second
+	}
+	if ft.Workload == "" {
+		ft.Workload = "web"
+	}
 }
 
 // setGlobalBasicDefaults sets basic global defaults

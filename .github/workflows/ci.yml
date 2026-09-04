@@ -189,6 +189,13 @@ jobs:
           # oneshot, and cbox-init exits non-zero when a oneshot fails.
           docker run --rm --name cbox-init-pid1 cbox-init-pid1
 
+      - name: Runtime PHP-FPM autotuner e2e
+        if: matrix.distro == 'debian'
+        # cbox-init as PID 1 supervising real php-fpm, with the embedded fpm-tune
+        # loop: discover, enable status, size, resize under load, reload via
+        # SIGUSR2 (not a restart). The script's exit code is the result.
+        run: bash tests/integration/e2e-fpm-tune.sh
+
       - name: Run integration tests - ${{ matrix.distro }}
         run: |
           docker build \
