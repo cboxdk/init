@@ -23,7 +23,7 @@ func TestNewCalculator_ValidProfile(t *testing.T) {
 
 	for _, profile := range profiles {
 		t.Run(string(profile), func(t *testing.T) {
-			calc, err := NewCalculator(profile, 0.75, logger)
+			calc, err := NewCalculator(profile, 0.75, false, logger)
 
 			// We expect success or only resource detection errors (which are valid)
 			if err != nil {

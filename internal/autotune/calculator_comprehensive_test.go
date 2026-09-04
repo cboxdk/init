@@ -128,7 +128,7 @@ func TestCalculator_AllWarningScenarios(t *testing.T) {
 					logger:          slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
 				}
 			},
-			expectWarn: "minimum",
+			expectWarn: "clamped",
 		},
 	}
 
