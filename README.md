@@ -6,7 +6,7 @@ Production-grade PID 1 process manager for Docker containers with Laravel-first 
 
 - **PID 1 Process Manager** - Proper signal handling and zombie process reaping
 - **Multi-Process Orchestration** - Manage PHP-FPM, Nginx, Horizon, Reverb, and workers
-- **PHP-FPM Auto-Tuning** - Intelligent worker calculation based on container limits
+- **PHP-FPM Auto-Tuning** - Sizes `pm.max_children` at boot from container limits, and optionally keeps it right at runtime with a built-in [fpm-tune](https://github.com/cboxdk/fpm-tune) loop that measures live worker memory and reloads php-fpm (SIGUSR2, never a restart)
 - **Dependency Management** - DAG-based process startup ordering
 - **Health Monitoring** - TCP, HTTP, and exec-based health checks
 - **Scheduled Tasks** - Built-in cron-like scheduler
