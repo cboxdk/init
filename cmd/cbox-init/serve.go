@@ -584,8 +584,13 @@ func runAutoTuning(profileName string, threshold float64, cfg *config.Config) er
 		thresholdSource = "global config"
 	}
 
+	// Fail-hard only when explicitly asked. By default the calculator clamps to
+	// what fits and boots, so a container too small for the profile does not
+	// crash-loop PID 1 — the runtime autotuner refines the number from there.
+	strict := cfg.Global.AutotuneStrict || truthyEnv("PHP_FPM_AUTOTUNE_STRICT")
+
 	// Create calculator
-	calc, err := autotune.NewCalculator(profile, finalThreshold, autotuneLog)
+	calc, err := autotune.NewCalculator(profile, finalThreshold, strict, autotuneLog)
 	if err != nil {
 		return fmt.Errorf("failed to create calculator: %w", err)
 	}

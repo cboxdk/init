@@ -13,7 +13,7 @@ func TestNewCalculator_InvalidProfileValue(t *testing.T) {
 	// Use invalid profile ("invalid" is not a valid Profile value)
 	invalidProfile := Profile("invalid-profile-name")
 
-	calc, err := NewCalculator(invalidProfile, 0, logger)
+	calc, err := NewCalculator(invalidProfile, 0, false, logger)
 
 	if err == nil {
 		t.Error("Expected error for invalid profile, got nil")
@@ -32,7 +32,7 @@ func TestNewCalculator_InvalidProfileValue(t *testing.T) {
 func TestNewCalculator_ZeroThreshold(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	calc, err := NewCalculator(ProfileMedium, 0, logger)
+	calc, err := NewCalculator(ProfileMedium, 0, false, logger)
 	if err != nil {
 		t.Fatalf("NewCalculator with zero threshold failed: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestNewCalculator_CustomThreshold(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	customThreshold := 0.75
-	calc, err := NewCalculator(ProfileHeavy, customThreshold, logger)
+	calc, err := NewCalculator(ProfileHeavy, customThreshold, false, logger)
 	if err != nil {
 		t.Fatalf("NewCalculator with custom threshold failed: %v", err)
 	}

@@ -152,12 +152,21 @@ func TestCalculator_CPULimit(t *testing.T) {
 }
 
 func TestCalculator_InsufficientMemory(t *testing.T) {
-	// 64MB RAM - insufficient for any profile
+	// 64MB is far too small for any profile. The default (non-strict) calculator
+	// must not kill PID 1: it clamps to one worker and warns loudly, and the
+	// runtime autotuner refines it from there. Strict mode is where a misfit is a
+	// hard error (see TestCalculator_StrictModeRefusesAMisfit).
 	calc := mockCalculator(ProfileMedium, 64, 2)
-	_, err := calc.Calculate()
+	cfg, err := calc.Calculate()
 
-	if err == nil {
-		t.Error("Expected error for insufficient memory, got none")
+	if err != nil {
+		t.Fatalf("non-strict Calculate() should clamp and boot, not error: %v", err)
+	}
+	if cfg.MaxChildren < 1 {
+		t.Errorf("expected at least 1 worker after clamping, got %d", cfg.MaxChildren)
+	}
+	if len(cfg.Warnings) == 0 {
+		t.Error("expected a loud warning that the container is too small for the profile")
 	}
 }
 
@@ -421,8 +430,10 @@ func TestCalculator_SafetyValidations(t *testing.T) {
 		{"Sufficient resources", ProfileMedium, 2048, 4, false},
 		{"Minimal resources", ProfileLight, 768, 1, false}, // 768*0.7=537, 537-224=313, 313/64=4 workers
 		{"Dev tiny", ProfileDev, 384, 1, false},            // 384*0.5=192, 192-128=64, 64/48=1 worker (min 2 enforced)
-		{"Insufficient memory", ProfileMedium, 100, 4, true},
-		{"Too small", ProfileHeavy, 256, 1, true},
+		// Containers too small for the profile are covered by the clamp/strict tests
+		// (calculator_clamp_test.go): non-strict clamps and boots rather than erroring,
+		// and the pathological over-commit case intentionally exceeds the limit, so it
+		// does not belong in this no-overprovisioning invariant table.
 	}
 
 	for _, tt := range tests {

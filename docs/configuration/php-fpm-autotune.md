@@ -250,14 +250,35 @@ Start Servers: 50% of max
 - **Prevents context switching**: Too many workers on limited CPUs degrade performance
 
 ### Validation Gates
-- **Pre-calculation checks**: Minimum memory requirements per profile
-- **Post-calculation validation**: PM relationships, memory limits
-- **Warning system**: Logs adjustments (CPU limiting, profile minimums)
+- **One shared memory model**: the reported minimum is the smallest limit that actually boots the profile, so the pre-check and the sizing never disagree
+- **Post-calculation validation**: PM relationships (min_spare <= start_servers <= max_spare <= max_children)
+- **Warning system**: Logs adjustments (CPU limiting, profile minimums, clamping)
 
 ### Profile Minimums
-- Each profile enforces minimum worker count
-- Prevents under-provisioning on small containers
+- Each profile has a preferred minimum worker count
 - Dev: 2 workers, Light: 2, Medium: 4, Heavy: 8, Bursty: 4
+- The minimum is a preference, not a hard floor that can crash a small container (see below)
+
+### When the container is too small
+
+By default the calculator **never kills PID 1**. If the memory limit cannot fit the
+profile's preferred worker count, it clamps to the largest count that fits (down to
+one worker), logs a loud warning naming the profile and the smallest limit that
+would run it, and boots. The container comes up degraded but working, and the
+embedded runtime autotuner (`fpm_tune`) refines the number from there.
+
+This matters because images often bake a default profile (for example
+`PHP_FPM_AUTOTUNE_PROFILE=medium`): a small sidecar should boot, not crash-loop.
+
+Set `global.autotune_strict: true` (or `PHP_FPM_AUTOTUNE_STRICT=1`) to keep the
+fail-hard behavior instead: a profile that does not fit exits at startup with a
+clear error naming the profile and the smallest limit that runs it. Use it when you
+want a hard guarantee that the box is sized for the profile you chose.
+
+```yaml
+global:
+  autotune_strict: false   # default: clamp and boot. true: fail hard on a misfit.
+```
 
 ## Usage
 

@@ -27,6 +27,7 @@ type GlobalConfig struct {
 	RestartBackoffMax         time.Duration `yaml:"restart_backoff_max" json:"restart_backoff_max"`                   // max duration
 	RestartStabilityWindow    time.Duration `yaml:"restart_stability_window" json:"restart_stability_window"`         // uptime after which the restart budget resets (default 60s; negative disables)
 	AutotuneMemoryThreshold   float64       `yaml:"autotune_memory_threshold" json:"autotune_memory_threshold"`       // 0.0-2.0, overrides profile MaxMemoryUsage
+	AutotuneStrict            bool          `yaml:"autotune_strict" json:"autotune_strict"`                           // Fail boot (exit PID 1) when the profile does not fit; default false clamps and boots
 	LogFormat                 string        `yaml:"log_format" json:"log_format"`                                     // json | text
 	LogLevel                  string        `yaml:"log_level" json:"log_level"`                                       // debug | info | warn | error
 	LogTimestamps             bool          `yaml:"log_timestamps" json:"log_timestamps"`                             //

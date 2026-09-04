@@ -31,11 +31,17 @@ type Calculator struct {
 	resources       *ContainerResources
 	profile         ProfileConfig
 	memoryThreshold float64 // Override for profile.MaxMemoryUsage (0.0 = use profile default)
+	strict          bool    // Fail hard when the profile does not fit, instead of clamping
 	logger          *slog.Logger
 }
 
-// NewCalculator creates a new calculator with detected resources and profile
-func NewCalculator(profile Profile, memoryThreshold float64, logger *slog.Logger) (*Calculator, error) {
+// NewCalculator creates a new calculator with detected resources and profile.
+//
+// strict controls what happens when the container is too small for the profile:
+// with strict false (the default) the calculator clamps to the largest worker
+// count that fits and warns, so the container still boots and the runtime
+// autotuner refines the number; with strict true a misfit is a hard error.
+func NewCalculator(profile Profile, memoryThreshold float64, strict bool, logger *slog.Logger) (*Calculator, error) {
 	profileConfig, err := profile.GetConfig()
 	if err != nil {
 		return nil, err
@@ -50,6 +56,7 @@ func NewCalculator(profile Profile, memoryThreshold float64, logger *slog.Logger
 		resources:       resources,
 		profile:         profileConfig,
 		memoryThreshold: memoryThreshold,
+		strict:          strict,
 		logger:          logger,
 	}, nil
 }
@@ -80,13 +87,6 @@ func (c *Calculator) Calculate() (*PHPFPMConfig, error) {
 			"  Kubernetes: resources.limits.memory and cpu")
 	}
 
-	// Validate minimum memory requirement
-	minRequired := c.profile.ReservedMemoryMB + c.profile.OPcacheMemoryMB + c.profile.AvgMemoryPerWorker
-	if c.resources.MemoryLimitMB < minRequired {
-		return nil, fmt.Errorf("insufficient memory: %dMB (minimum %dMB required: %dMB reserved + %dMB OPcache + %dMB per worker)",
-			c.resources.MemoryLimitMB, minRequired, c.profile.ReservedMemoryMB, c.profile.OPcacheMemoryMB, c.profile.AvgMemoryPerWorker)
-	}
-
 	// Determine memory threshold (allow override of profile default)
 	threshold := c.profile.MaxMemoryUsage
 	thresholdSource := "profile"
@@ -109,57 +109,23 @@ func (c *Calculator) Calculate() (*PHPFPMConfig, error) {
 		}
 	}
 
-	// Calculate available memory for PHP-FPM workers
-	// Formula: (Total × Threshold%) - Reserved - OPcache (shared) = Worker Memory Pool
-	availableMemory := int(float64(c.resources.MemoryLimitMB) * threshold)
-	totalReserved := c.profile.ReservedMemoryMB + c.profile.OPcacheMemoryMB
-	workerMemory := availableMemory - totalReserved
+	// Size the pool through one shared memory model. It clamps to the largest
+	// worker count that fits (with a warning) rather than refusing, so a container
+	// too small for the profile still boots a degraded-but-working pool that the
+	// runtime autotuner then refines. In strict mode a misfit is a hard error.
+	sized, err := sizeWorkers(c.resources.MemoryLimitMB, c.resources.CPULimit, threshold, c.profile, c.strict)
+	if err != nil {
+		return nil, err
+	}
+	maxChildren := sized.maxChildren
+	cfg.Warnings = append(cfg.Warnings, sized.warnings...)
 
 	c.logger.Debug("Memory calculation",
 		"threshold", fmt.Sprintf("%.1f%%", threshold*100),
 		"threshold_source", thresholdSource,
 		"total_memory", c.resources.MemoryLimitMB,
-		"available_after_threshold", availableMemory,
-		"reserved", totalReserved,
-		"worker_pool", workerMemory,
+		"max_children", maxChildren,
 	)
-
-	if workerMemory < c.profile.AvgMemoryPerWorker {
-		return nil, fmt.Errorf("insufficient memory for workers: %dMB available after reserving %dMB (system: %dMB + OPcache: %dMB), need at least %dMB per worker",
-			workerMemory, totalReserved, c.profile.ReservedMemoryMB, c.profile.OPcacheMemoryMB, c.profile.AvgMemoryPerWorker)
-	}
-
-	// Calculate max_children based on available memory
-	maxChildren := workerMemory / c.profile.AvgMemoryPerWorker
-
-	// Apply CPU-based limit: max 4 workers per CPU core (industry standard)
-	cpuBasedMax := c.resources.CPULimit * 4
-	if maxChildren > cpuBasedMax {
-		cfg.Warnings = append(cfg.Warnings,
-			fmt.Sprintf("Memory allows %d workers, but limiting to %d based on %d CPUs (max 4 per core)",
-				maxChildren, cpuBasedMax, c.resources.CPULimit))
-		maxChildren = cpuBasedMax
-	}
-
-	// Apply profile-specific max if set
-	if c.profile.MaxWorkers > 0 && maxChildren > c.profile.MaxWorkers {
-		cfg.Warnings = append(cfg.Warnings,
-			fmt.Sprintf("Calculated %d workers, but profile limits to %d", maxChildren, c.profile.MaxWorkers))
-		maxChildren = c.profile.MaxWorkers
-	}
-
-	// Enforce profile minimum
-	if maxChildren < c.profile.MinWorkers {
-		maxChildren = c.profile.MinWorkers
-		cfg.Warnings = append(cfg.Warnings,
-			fmt.Sprintf("Increasing to profile minimum: %d workers", maxChildren))
-	}
-
-	// Absolute minimum safety check
-	if maxChildren < 1 {
-		maxChildren = 1
-		cfg.Warnings = append(cfg.Warnings, "Using absolute minimum: 1 worker")
-	}
 
 	cfg.MaxChildren = maxChildren
 	cfg.ProcessManager = c.profile.ProcessManagerType
@@ -200,16 +166,11 @@ func (c *Calculator) Calculate() (*PHPFPMConfig, error) {
 	return cfg, nil
 }
 
-// validateConfig ensures the calculated configuration is safe and valid
+// validateConfig ensures the calculated PM relationships are valid. The memory
+// fit is owned by sizeWorkers, which clamps to what fits (or errors in strict
+// mode), so this no longer refuses on memory: a deliberately over-committed
+// one-worker pool on a tiny container has already warned and must still boot.
 func (c *Calculator) validateConfig(cfg *PHPFPMConfig) error {
-	// Validate memory won't exceed container limit
-	// Total = Workers + OPcache (shared) + Reserved (Nginx/system)
-	totalMemory := cfg.MemoryAllocated + cfg.MemoryOPcache + cfg.MemoryReserved
-	if totalMemory > cfg.MemoryTotal {
-		return fmt.Errorf("configuration would use %dMB (workers: %dMB + OPcache: %dMB + reserved: %dMB) but only %dMB available",
-			totalMemory, cfg.MemoryAllocated, cfg.MemoryOPcache, cfg.MemoryReserved, cfg.MemoryTotal)
-	}
-
 	// Validate PM settings
 	if cfg.ProcessManager == "dynamic" {
 		if cfg.MinSpare > cfg.MaxChildren {
@@ -251,6 +212,90 @@ func (c *Calculator) logCalculation(cfg *PHPFPMConfig) {
 	for _, warning := range cfg.Warnings {
 		c.logger.Warn("Auto-tuning warning", "message", warning)
 	}
+}
+
+// workerSizing is the result of the shared memory model.
+type workerSizing struct {
+	maxChildren int
+	warnings    []string
+}
+
+// sizeWorkers is the single memory model the calculator uses. It returns the
+// largest safe pm.max_children for the limit rather than refusing: the profile's
+// minimum is a preference, not a hard floor that may OOM, so when the container
+// cannot fit it the count is clamped to what fits and a warning explains it. Only
+// strict mode turns a misfit into an error, naming the profile and the smallest
+// limit that runs it.
+func sizeWorkers(limitMB, cpus int, threshold float64, p ProfileConfig, strict bool) (workerSizing, error) {
+	overhead := p.ReservedMemoryMB + p.OPcacheMemoryMB
+	perWorker := p.AvgMemoryPerWorker
+	var warnings []string
+
+	// Desired count from the soft (threshold) budget, capped by CPU and profile.
+	desired := 0
+	if softPool := int(float64(limitMB)*threshold) - overhead; softPool > 0 {
+		desired = softPool / perWorker
+	}
+	if cpuCap := cpus * 4; cpuCap > 0 && desired > cpuCap {
+		warnings = append(warnings,
+			fmt.Sprintf("memory allows %d workers, limiting to %d for %d CPUs (max 4 per core)", desired, cpuCap, cpus))
+		desired = cpuCap
+	}
+	if p.MaxWorkers > 0 && desired > p.MaxWorkers {
+		warnings = append(warnings,
+			fmt.Sprintf("calculated %d workers, but the profile limits to %d", desired, p.MaxWorkers))
+		desired = p.MaxWorkers
+	}
+	if desired < p.MinWorkers {
+		warnings = append(warnings, fmt.Sprintf(
+			"raising to the profile minimum of %d workers (%q; memory and CPU alone suggested %d)",
+			p.MinWorkers, p.Name, desired))
+		desired = p.MinWorkers
+	}
+
+	// Hard ceiling: workers plus overhead must fit the real limit, not just the
+	// thresholded budget, or the pool would risk the OOM killer.
+	hardMax := 0
+	if hardPool := limitMB - overhead; hardPool > 0 {
+		hardMax = hardPool / perWorker
+	}
+
+	if desired <= hardMax {
+		return workerSizing{maxChildren: max(1, desired), warnings: warnings}, nil
+	}
+
+	// The profile's floor does not fit this container.
+	minLimit := smallestBootableLimit(p)
+	if strict {
+		return workerSizing{}, fmt.Errorf(
+			"profile %q needs at least %dMB for its %d-worker minimum, but the limit is %dMB; "+
+				"raise the limit, choose a smaller profile, or set global.autotune_strict: false to clamp and boot",
+			p.Name, minLimit, p.MinWorkers, limitMB)
+	}
+	if hardMax >= 1 {
+		warnings = append(warnings, fmt.Sprintf(
+			"profile %q wants %d workers (needs %dMB) but the %dMB limit fits %d; clamped to %d, the runtime autotuner will refine it",
+			p.Name, p.MinWorkers, minLimit, limitMB, hardMax, hardMax))
+		return workerSizing{maxChildren: hardMax, warnings: warnings}, nil
+	}
+	// Even one worker plus overhead exceeds the limit: boot over-committed with a
+	// single worker rather than not at all, and say so loudly.
+	warnings = append(warnings, fmt.Sprintf(
+		"the %dMB limit is below what profile %q assumes (%dMB per worker plus %dMB overhead); "+
+			"booting one worker over-committed, the runtime autotuner will refine it",
+		limitMB, p.Name, perWorker, overhead))
+	return workerSizing{maxChildren: 1, warnings: warnings}, nil
+}
+
+// smallestBootableLimit is the smallest memory limit at which the profile's
+// intended minimum worker count fits. The clamp in sizeWorkers triggers on the
+// hard limit (workers plus overhead must fit the real memory, not just the
+// thresholded budget), so the honest minimum is that same hard floor: the
+// threshold shapes the count above the floor, not whether the floor fits. This is
+// the number a strict-mode error and a clamp warning report, computed from the
+// same model as the sizing so the two can never disagree.
+func smallestBootableLimit(p ProfileConfig) int {
+	return p.MinWorkers*p.AvgMemoryPerWorker + p.ReservedMemoryMB + p.OPcacheMemoryMB
 }
 
 // ToEnvVars converts the configuration to environment variables for PHP-FPM

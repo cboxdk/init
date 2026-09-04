@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-09-04
+
+### Fixed
+
+- **Boot autotune no longer crash-loops small containers ([#133]).** When a
+  container's memory limit could not fit the selected PHP-FPM profile, the boot
+  calculator exited PID 1, so any image with a baked default profile (for example
+  `PHP_FPM_AUTOTUNE_PROFILE=medium`) crash-looped at boot below ~512MB. The
+  calculator now clamps to the largest worker count that fits (down to one worker),
+  warns naming the profile and the smallest limit that would run it, and boots; the
+  embedded runtime autotuner refines the number from there. Set
+  `global.autotune_strict: true` (or `PHP_FPM_AUTOTUNE_STRICT=1`) to keep the
+  fail-hard behavior. The pre-check minimum and the sizing now use one shared memory
+  model, so the reported minimum is a limit that actually boots.
+
+[#133]: https://github.com/cboxdk/init/issues/133
+
 ## [3.1.1] - 2026-09-04
 
 ### Changed

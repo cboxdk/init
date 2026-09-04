@@ -36,7 +36,7 @@ func TestNewCalculator_Success(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Test with invalid profile
-	_, err := NewCalculator(Profile("invalid"), 0.0, logger)
+	_, err := NewCalculator(Profile("invalid"), 0.0, false, logger)
 	if err == nil {
 		t.Error("Expected error for invalid profile, got none")
 	}
@@ -60,7 +60,7 @@ func TestNewCalculator_InvalidProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewCalculator(tt.profile, 0.0, logger)
+			_, err := NewCalculator(tt.profile, 0.0, false, logger)
 			if err == nil {
 				t.Errorf("Expected error for profile %q, got none", tt.profile)
 			}
@@ -74,7 +74,7 @@ func TestNewCalculator_WithMemoryThreshold(t *testing.T) {
 	// Note: This will attempt to detect real cgroup resources
 	// In a containerized environment, this should succeed
 	// In a non-containerized environment, it should fall back to host resources
-	calc, err := NewCalculator(ProfileMedium, 0.8, logger)
+	calc, err := NewCalculator(ProfileMedium, 0.8, false, logger)
 
 	// We don't expect an error from resource detection failure
 	// (it falls back to host resources)
@@ -96,25 +96,24 @@ func TestNewCalculator_WithMemoryThreshold(t *testing.T) {
 	}
 }
 
-// TestCalculator_validateConfig tests the validateConfig function with edge cases
-func TestCalculator_validateConfig_MemoryOverflow(t *testing.T) {
+// TestCalculator_validateConfig_IgnoresMemory: validateConfig no longer polices
+// memory. Sizing owns that — sizeWorkers clamps to what fits, and only strict
+// mode turns a misfit into an error — so an over-committed config reaching this
+// function is not its concern. Its job is the PM relationships.
+func TestCalculator_validateConfig_IgnoresMemory(t *testing.T) {
 	calc := mockCalculator(ProfileMedium, 1024, 2)
 
 	cfg := &PHPFPMConfig{
 		ProcessManager:  "dynamic",
-		MaxChildren:     100, // Way too many workers
+		MaxChildren:     100, // Would over-commit, but that is sizing's job, not this one's
 		MemoryAllocated: 900,
 		MemoryOPcache:   128,
 		MemoryReserved:  100,
 		MemoryTotal:     1024,
 	}
 
-	err := calc.validateConfig(cfg)
-	if err == nil {
-		t.Error("Expected error for memory overflow, got none")
-	}
-	if !strings.Contains(err.Error(), "would use") && !strings.Contains(err.Error(), "available") {
-		t.Errorf("Expected memory overflow error, got: %v", err)
+	if err := calc.validateConfig(cfg); err != nil {
+		t.Errorf("validateConfig should not refuse on memory (sizing owns that), got: %v", err)
 	}
 }
 
