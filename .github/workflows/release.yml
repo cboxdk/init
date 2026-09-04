@@ -147,7 +147,6 @@ jobs:
             php-fpm:
               enabled: true
               command: ["php-fpm", "-F", "-R"]
-              priority: 10
               restart: always
           \`\`\`
 
@@ -260,7 +259,6 @@ jobs:
             sleeper:
               enabled: true
               command: ["sleep", "5"]
-              priority: 10
               restart: never
           EOF
 
