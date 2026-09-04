@@ -38,7 +38,15 @@ type exception struct {
 
 // Licenses accepted for one named component only, each with the reason it is
 // acceptable. Anything not listed here has to be permissive.
-var exceptions = map[string]exception{}
+var exceptions = map[string]exception{
+	"github.com/shoenig/go-m1cpu": {
+		license: "MPL-2.0",
+		reason: "darwin/arm64-only (//go:build darwin && arm64 && cgo), pulled " +
+			"transitively through gopsutil for Apple Silicon CPU detection and never " +
+			"compiled into the Linux production binary. MPL-2.0 is file-level weak " +
+			"copyleft: linking it imposes nothing on our code, and we do not modify it.",
+	},
+}
 
 type license struct {
 	License struct {

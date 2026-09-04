@@ -84,7 +84,7 @@
       "version": "v1.2.0"
     },
     {
-      "bom-ref": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module",
+      "bom-ref": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.25?type=module",
       "externalReferences": [
         {
           "type": "vcs",
@@ -94,7 +94,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2b17723a938559fe3388735203c6c1a7c366a7da1c710430ce3ffb1d9fcd4aff"
+          "content": "4fbd0068221f6aeb7fb976e7610da3ad55cac65a989edb5c44f4dbe71eabac27"
         }
       ],
       "licenses": [
@@ -105,10 +105,10 @@
         }
       ],
       "name": "github.com/cboxdk/fpm-tune",
-      "purl": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module",
+      "purl": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.25?type=module",
       "scope": "required",
       "type": "library",
-      "version": "v0.1.0-beta.20"
+      "version": "v0.1.0-beta.25"
     },
     {
       "bom-ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module",
@@ -1746,7 +1746,7 @@
   "dependencies": [
     {
       "dependsOn": [
-        "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module",
+        "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.25?type=module",
         "pkg:golang/github.com/charmbracelet/bubbles@v1.0.0?type=module",
         "pkg:golang/github.com/charmbracelet/bubbletea@v1.3.10?type=module",
         "pkg:golang/github.com/charmbracelet/lipgloss@v1.1.0?type=module",
@@ -1778,27 +1778,46 @@
     },
     {
       "dependsOn": [
+        "pkg:golang/github.com/aymanbagabas/go-osc52/v2@v2.0.1?type=module",
         "pkg:golang/github.com/beorn7/perks@v1.0.1?type=module",
         "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module",
         "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module",
         "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0?type=module",
+        "pkg:golang/github.com/charmbracelet/bubbles@v1.0.0?type=module",
+        "pkg:golang/github.com/charmbracelet/bubbletea@v1.3.10?type=module",
+        "pkg:golang/github.com/charmbracelet/colorprofile@v0.4.1?type=module",
+        "pkg:golang/github.com/charmbracelet/lipgloss@v1.1.0?type=module",
+        "pkg:golang/github.com/charmbracelet/x/ansi@v0.11.6?type=module",
+        "pkg:golang/github.com/charmbracelet/x/cellbuf@v0.0.15?type=module",
+        "pkg:golang/github.com/charmbracelet/x/term@v0.2.2?type=module",
+        "pkg:golang/github.com/erikgeiser/coninput@v0.0.0-20211004153227-1c3628e74d0f?type=module",
         "pkg:golang/github.com/go-ole/go-ole@v1.2.6?type=module",
+        "pkg:golang/github.com/lucasb-eyer/go-colorful@v1.3.0?type=module",
         "pkg:golang/github.com/lufia/plan9stats@v0.0.0-20211012122336-39d0f177ccd0?type=module",
+        "pkg:golang/github.com/mattn/go-isatty@v0.0.20?type=module",
+        "pkg:golang/github.com/mattn/go-localereader@v0.0.1?type=module",
+        "pkg:golang/github.com/mattn/go-runewidth@v0.0.19?type=module",
+        "pkg:golang/github.com/muesli/ansi@v0.0.0-20230316100256-276c6243b2f6?type=module",
+        "pkg:golang/github.com/muesli/cancelreader@v0.2.2?type=module",
+        "pkg:golang/github.com/muesli/termenv@v0.16.0?type=module",
         "pkg:golang/github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822?type=module",
         "pkg:golang/github.com/power-devops/perfstat@v0.0.0-20240221224432-82ca36839d55?type=module",
         "pkg:golang/github.com/prometheus/client_golang@v1.24.1?type=module",
         "pkg:golang/github.com/prometheus/client_model@v0.6.2?type=module",
         "pkg:golang/github.com/prometheus/common@v0.70.1?type=module",
         "pkg:golang/github.com/prometheus/procfs@v0.21.1?type=module",
+        "pkg:golang/github.com/rivo/uniseg@v0.4.7?type=module",
         "pkg:golang/github.com/shirou/gopsutil/v3@v3.24.5?type=module",
         "pkg:golang/github.com/shoenig/go-m1cpu@v0.1.6?type=module",
         "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module",
         "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
+        "pkg:golang/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e?type=module",
         "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
         "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.40.0?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.11?type=module"
       ],
-      "ref": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.20?type=module"
+      "ref": "pkg:golang/github.com/cboxdk/fpm-tune@v0.1.0-beta.25?type=module"
     },
     {
       "dependsOn": [

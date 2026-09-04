@@ -53,6 +53,8 @@ func startFPMTune(ctx context.Context, cfg *config.Config, log *slog.Logger) (fu
 		RecommendPath:   ft.RecommendPath,
 		ReserveFraction: ft.ReserveFraction,
 		Workload:        resolveFPMWorkload(ft.Workload, log),
+		Version:         version, // reported on the loop's /history.json
+
 		StateOptions: state.Options{
 			Sizing: state.Sizing{Percentile: fpmSizingPercentile, Margin: fpmSizingMargin},
 		},
