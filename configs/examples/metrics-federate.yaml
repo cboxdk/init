@@ -1,0 +1,54 @@
+# One scrape, one story.
+#
+# A PHP container easily grows three metrics endpoints: cbox-init's own
+# (supervision), the embedded fpm-tune's (capacity), and an application
+# exporter's (php-fpm status, queues). Federation folds the local exporters
+# into cbox-init's main /metrics response, and since 3.2.0 the embedded
+# fpm-tune series are always there natively - so Prometheus scrapes ONE port
+# and sees the whole story:
+#
+#   cbox_init_*   - is everything running?
+#   fpm_tune_*    - does the workload fit this container? (vertical)
+#   phpfpm_*      - is this container saturated? (horizontal - listen_queue)
+#
+# A source that is down contributes cbox_init_federate_up{name} 0 instead of
+# failing the scrape. URLs must be loopback: federation is for exporters
+# inside the container, not a proxy.
+
+version: "1.0"
+
+global:
+  shutdown_timeout: 30
+  log_format: json
+
+  metrics_enabled: true
+  metrics_port: 9090
+
+  metrics_federate:
+    - name: fpm-exporter
+      url: http://127.0.0.1:9114/metrics
+      # timeout: 2s     # per-fetch timeout (default)
+      # cache_ttl: 5s   # serve the cached body this long between fetches (default)
+
+  # The runtime autotuner's fpm_tune_* series ride on the main endpoint
+  # automatically; metrics_addr remains optional for standalone-tool parity.
+  fpm_tune:
+    enabled: true
+    mode: apply
+    interval: 30s
+
+processes:
+  php-fpm:
+    enabled: true
+    command: ["php-fpm", "-F", "-R"]
+    restart: always
+
+  fpm-exporter:
+    enabled: true
+    command: ["fpm-exporter", "serve"]
+    restart: always
+    depends_on:
+      - php-fpm
+    health_check:
+      type: tcp
+      address: "127.0.0.1:9114"

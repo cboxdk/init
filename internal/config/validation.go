@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -186,6 +188,7 @@ func (c *Config) validateGlobalSettings(result *ValidationResult) {
 	c.validateGlobalLimits(result)
 	c.validateGlobalAPISettings(result)
 	c.validateGlobalMetricsSettings(result)
+	c.validateGlobalMetricsFederate(result)
 	c.validateGlobalReadinessSettings(result)
 	c.validateGlobalFPMTuneSettings(result)
 }
@@ -367,6 +370,47 @@ func (c *Config) validateGlobalMetricsSettings(result *ValidationResult) {
 	}
 	if c.Global.MetricsACL == nil {
 		result.AddSuggestion("global.metrics_acl", "Metrics endpoint without ACL exposes monitoring data", "Consider adding IP ACL to restrict access")
+	}
+}
+
+// validateGlobalMetricsFederate validates the federated-source declarations.
+// URLs are restricted to loopback: federation exists to merge exporters that
+// run INSIDE the container onto one endpoint — a non-loopback URL would turn
+// the metrics port into an open proxy for whatever the operator points it at.
+func (c *Config) validateGlobalMetricsFederate(result *ValidationResult) {
+	seen := make(map[string]bool, len(c.Global.MetricsFederate))
+	for i, src := range c.Global.MetricsFederate {
+		field := fmt.Sprintf("global.metrics_federate[%d]", i)
+		if src.Name == "" {
+			result.AddError(field+".name", "Federated source needs a name", "It labels cbox_init_federate_up for this source")
+		} else if seen[src.Name] {
+			result.AddError(field+".name", fmt.Sprintf("Duplicate federated source name %q", src.Name), "Names must be unique")
+		}
+		seen[src.Name] = true
+
+		u, err := url.Parse(src.URL)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			result.AddError(field+".url", fmt.Sprintf("Invalid URL %q", src.URL), "Use e.g. http://127.0.0.1:9114/metrics")
+			continue
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			result.AddError(field+".url", fmt.Sprintf("Unsupported scheme %q", u.Scheme), "Only http and https are federated")
+			continue
+		}
+		host := u.Hostname()
+		if ip := net.ParseIP(host); ip != nil {
+			if !ip.IsLoopback() {
+				result.AddError(field+".url", fmt.Sprintf("Non-loopback address %q", host), "Federation is for exporters inside the container; use 127.0.0.1 or ::1")
+			}
+		} else if host != "localhost" {
+			result.AddError(field+".url", fmt.Sprintf("Non-loopback host %q", host), "Federation is for exporters inside the container; use 127.0.0.1, ::1 or localhost")
+		}
+		if src.Timeout < 0 {
+			result.AddError(field+".timeout", "Timeout cannot be negative", "Omit it for the 2s default")
+		}
+		if src.CacheTTL < 0 {
+			result.AddError(field+".cache_ttl", "cache_ttl cannot be negative", "Omit it for the 5s default")
+		}
 	}
 }
 

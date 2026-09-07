@@ -10,6 +10,7 @@ import (
 	"github.com/cboxdk/fpm-tune/state"
 
 	"github.com/cboxdk/init/internal/config"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // The p95 hybrid is the intended default sizing basis: size on the 95th
@@ -34,10 +35,13 @@ const (
 // are up, is fine even if php-fpm is still coming up. Its config is loaded per
 // round, so a pool's boot-time pm.max_children (set by the calculator before
 // php-fpm started) is the seed it refines, not something it fights.
-func startFPMTune(ctx context.Context, cfg *config.Config, log *slog.Logger) (func(), error) {
+// It also returns the tuner's Prometheus registry so the caller can merge the
+// fpm_tune_* series onto the main metrics endpoint — one scrape, one story —
+// regardless of whether the optional metrics_addr listener is configured.
+func startFPMTune(ctx context.Context, cfg *config.Config, log *slog.Logger) (func(), *prometheus.Registry, error) {
 	ft := cfg.Global.FPMTune
 	if ft == nil || !ft.Enabled {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	sc := serve.Config{
@@ -62,7 +66,7 @@ func startFPMTune(ctx context.Context, cfg *config.Config, log *slog.Logger) (fu
 
 	loop, err := serve.New(sc, log)
 	if err != nil {
-		return nil, fmt.Errorf("fpm-tune: %w", err)
+		return nil, nil, fmt.Errorf("fpm-tune: %w", err)
 	}
 
 	// The loop gets its own context so shutdown can stop it independently: the
@@ -90,7 +94,7 @@ func startFPMTune(ctx context.Context, cfg *config.Config, log *slog.Logger) (fu
 		<-done // Run's deferred Close() releases the state lock and saves baselines.
 	}
 
-	return stop, nil
+	return stop, loop.Metrics().Registry, nil
 }
 
 // resolveFPMWorkload maps the configured workload name to a class, warning on an

@@ -20,7 +20,7 @@ func discardLogger() *slog.Logger {
 func TestStartFPMTuneDisabled(t *testing.T) {
 	for _, ft := range []*config.FPMTuneConfig{nil, {Enabled: false}} {
 		cfg := &config.Config{Global: config.GlobalConfig{FPMTune: ft}}
-		stop, err := startFPMTune(context.Background(), cfg, discardLogger())
+		stop, _, err := startFPMTune(context.Background(), cfg, discardLogger())
 		if err != nil {
 			t.Fatalf("disabled autotuner returned an error: %v", err)
 		}
@@ -49,7 +49,7 @@ func TestStartFPMTuneStartsAndStops(t *testing.T) {
 		},
 	}
 
-	stop, err := startFPMTune(context.Background(), cfg, discardLogger())
+	stop, _, err := startFPMTune(context.Background(), cfg, discardLogger())
 	if err != nil {
 		t.Fatalf("startFPMTune: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestStartFPMTuneStartsAndStops(t *testing.T) {
 	}
 
 	// The state lock is released, so a second loop on the same state path starts.
-	stop2, err := startFPMTune(context.Background(), cfg, discardLogger())
+	stop2, _, err := startFPMTune(context.Background(), cfg, discardLogger())
 	if err != nil {
 		t.Fatalf("second start after stop failed (lock not released?): %v", err)
 	}

@@ -392,9 +392,16 @@ func runServe(cmd *cobra.Command, args []string) {
 	// startup step that can os.Exit, so its stop is never skipped. Non-critical:
 	// if it cannot start (for example a second copy already holds the state lock),
 	// php-fpm keeps its boot-time size and the container runs on.
-	stopFPMTune, err := startFPMTune(ctx, cfg, log)
+	stopFPMTune, fpmTuneRegistry, err := startFPMTune(ctx, cfg, log)
 	if err != nil {
 		slog.Warn("Runtime PHP-FPM autotuner not started", "error", err)
+	}
+	if fpmTuneRegistry != nil && metricsServer != nil {
+		// One scrape, one story: the tuner's fpm_tune_* series ride on the
+		// main metrics endpoint; the separate metrics_addr listener stays
+		// optional for standalone-tool parity.
+		metricsServer.AddGatherer(fpmTuneRegistry)
+		slog.Info("fpm-tune metrics merged onto the main metrics endpoint")
 	}
 
 	// Main event loop - handles shutdown signals and config reloads
@@ -684,6 +691,14 @@ func startMetricsServer(ctx context.Context, cfg *config.Config, log *slog.Logge
 
 	server := metrics.NewServer(metricsPort, metricsPath, cfg.Global.MetricsACL, cfg.Global.MetricsTLS, log)
 	server.SetBindHost(cfg.Global.MetricsHost)
+	if len(cfg.Global.MetricsFederate) > 0 {
+		sources := make([]metrics.FederateSource, len(cfg.Global.MetricsFederate))
+		for i, fs := range cfg.Global.MetricsFederate {
+			sources[i] = metrics.FederateSource{Name: fs.Name, URL: fs.URL, Timeout: fs.Timeout, CacheTTL: fs.CacheTTL}
+		}
+		server.SetFederator(metrics.NewFederator(sources, log))
+		slog.Info("Metrics federation enabled", "sources", len(sources))
+	}
 	if err := server.Start(ctx); err != nil {
 		slog.Warn("Failed to start metrics server (continuing without metrics)", "error", err)
 		return nil

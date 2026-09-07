@@ -18,39 +18,40 @@ type Config struct {
 
 // GlobalConfig contains global settings for the process manager
 type GlobalConfig struct {
-	ShutdownTimeout           int           `yaml:"shutdown_timeout" json:"shutdown_timeout"`                         // seconds
-	HealthCheckInterval       int           `yaml:"health_check_interval" json:"health_check_interval"`               // seconds
-	RestartPolicy             string        `yaml:"restart_policy" json:"restart_policy"`                             // always | on-failure | never
-	MaxRestartAttempts        int           `yaml:"max_restart_attempts" json:"max_restart_attempts"`                 //
-	RestartBackoff            int           `yaml:"restart_backoff" json:"restart_backoff"`                           // seconds (legacy, prefer restart_backoff_initial/max)
-	RestartBackoffInitial     time.Duration `yaml:"restart_backoff_initial" json:"restart_backoff_initial"`           // initial duration (supports "5s" style)
-	RestartBackoffMax         time.Duration `yaml:"restart_backoff_max" json:"restart_backoff_max"`                   // max duration
-	RestartStabilityWindow    time.Duration `yaml:"restart_stability_window" json:"restart_stability_window"`         // uptime after which the restart budget resets (default 60s; negative disables)
-	AutotuneMemoryThreshold   float64       `yaml:"autotune_memory_threshold" json:"autotune_memory_threshold"`       // 0.0-2.0, overrides profile MaxMemoryUsage
-	AutotuneStrict            bool          `yaml:"autotune_strict" json:"autotune_strict"`                           // Fail boot (exit PID 1) when the profile does not fit; default false clamps and boots
-	LogFormat                 string        `yaml:"log_format" json:"log_format"`                                     // json | text
-	LogLevel                  string        `yaml:"log_level" json:"log_level"`                                       // debug | info | warn | error
-	LogTimestamps             bool          `yaml:"log_timestamps" json:"log_timestamps"`                             //
-	MetricsEnabled            *bool         `yaml:"metrics_enabled" json:"metrics_enabled"`                           //
-	MetricsPort               int           `yaml:"metrics_port" json:"metrics_port"`                                 //
-	MetricsPath               string        `yaml:"metrics_path" json:"metrics_path"`                                 //
-	MetricsHost               string        `yaml:"metrics_host" json:"metrics_host"`                                 // Bind host for metrics (default: all interfaces)
-	APIEnabled                *bool         `yaml:"api_enabled" json:"api_enabled"`                                   //
-	APIPort                   int           `yaml:"api_port" json:"api_port"`                                         //
-	APIHost                   string        `yaml:"api_host" json:"api_host"`                                         // Bind host for the management API (default: 127.0.0.1, loopback-only; set 0.0.0.0 to expose — requires api_auth or api_acl)
-	APISocket                 string        `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/cbox-init.sock)
-	APIAuth                   string        `yaml:"api_auth" json:"api_auth"`                                         // Bearer token
-	APITLS                    *TLSConfig    `yaml:"api_tls" json:"api_tls"`                                           // TLS configuration for API
-	APIACL                    *ACLConfig    `yaml:"api_acl" json:"api_acl"`                                           // IP ACL for API
-	MetricsTLS                *TLSConfig    `yaml:"metrics_tls" json:"metrics_tls"`                                   // TLS configuration for metrics
-	MetricsACL                *ACLConfig    `yaml:"metrics_acl" json:"metrics_acl"`                                   // IP ACL for metrics
-	ResourceMetricsEnabled    *bool         `yaml:"resource_metrics_enabled" json:"resource_metrics_enabled"`         // Enable CPU/RAM collection
-	ResourceMetricsInterval   int           `yaml:"resource_metrics_interval" json:"resource_metrics_interval"`       // seconds (default: 5)
-	ResourceMetricsMaxSamples int           `yaml:"resource_metrics_max_samples" json:"resource_metrics_max_samples"` // Per-instance buffer size (default: 720 = 1h at 5s)
-	AuditEnabled              bool          `yaml:"audit_enabled" json:"audit_enabled"`                               // Enable audit logging
-	TracingEnabled            bool          `yaml:"tracing_enabled" json:"tracing_enabled"`                           // Enable distributed tracing
-	TracingExporter           string        `yaml:"tracing_exporter" json:"tracing_exporter"`                         // otlp-grpc | stdout
-	TracingEndpoint           string        `yaml:"tracing_endpoint" json:"tracing_endpoint"`                         // Exporter endpoint (e.g., localhost:4317)
+	ShutdownTimeout           int                    `yaml:"shutdown_timeout" json:"shutdown_timeout"`                         // seconds
+	HealthCheckInterval       int                    `yaml:"health_check_interval" json:"health_check_interval"`               // seconds
+	RestartPolicy             string                 `yaml:"restart_policy" json:"restart_policy"`                             // always | on-failure | never
+	MaxRestartAttempts        int                    `yaml:"max_restart_attempts" json:"max_restart_attempts"`                 //
+	RestartBackoff            int                    `yaml:"restart_backoff" json:"restart_backoff"`                           // seconds (legacy, prefer restart_backoff_initial/max)
+	RestartBackoffInitial     time.Duration          `yaml:"restart_backoff_initial" json:"restart_backoff_initial"`           // initial duration (supports "5s" style)
+	RestartBackoffMax         time.Duration          `yaml:"restart_backoff_max" json:"restart_backoff_max"`                   // max duration
+	RestartStabilityWindow    time.Duration          `yaml:"restart_stability_window" json:"restart_stability_window"`         // uptime after which the restart budget resets (default 60s; negative disables)
+	AutotuneMemoryThreshold   float64                `yaml:"autotune_memory_threshold" json:"autotune_memory_threshold"`       // 0.0-2.0, overrides profile MaxMemoryUsage
+	AutotuneStrict            bool                   `yaml:"autotune_strict" json:"autotune_strict"`                           // Fail boot (exit PID 1) when the profile does not fit; default false clamps and boots
+	LogFormat                 string                 `yaml:"log_format" json:"log_format"`                                     // json | text
+	LogLevel                  string                 `yaml:"log_level" json:"log_level"`                                       // debug | info | warn | error
+	LogTimestamps             bool                   `yaml:"log_timestamps" json:"log_timestamps"`                             //
+	MetricsEnabled            *bool                  `yaml:"metrics_enabled" json:"metrics_enabled"`                           //
+	MetricsPort               int                    `yaml:"metrics_port" json:"metrics_port"`                                 //
+	MetricsPath               string                 `yaml:"metrics_path" json:"metrics_path"`                                 //
+	MetricsHost               string                 `yaml:"metrics_host" json:"metrics_host"`                                 // Bind host for metrics (default: all interfaces)
+	APIEnabled                *bool                  `yaml:"api_enabled" json:"api_enabled"`                                   //
+	APIPort                   int                    `yaml:"api_port" json:"api_port"`                                         //
+	APIHost                   string                 `yaml:"api_host" json:"api_host"`                                         // Bind host for the management API (default: 127.0.0.1, loopback-only; set 0.0.0.0 to expose — requires api_auth or api_acl)
+	APISocket                 string                 `yaml:"api_socket" json:"api_socket"`                                     // Unix socket path (e.g. /var/run/cbox-init.sock)
+	APIAuth                   string                 `yaml:"api_auth" json:"api_auth"`                                         // Bearer token
+	APITLS                    *TLSConfig             `yaml:"api_tls" json:"api_tls"`                                           // TLS configuration for API
+	APIACL                    *ACLConfig             `yaml:"api_acl" json:"api_acl"`                                           // IP ACL for API
+	MetricsTLS                *TLSConfig             `yaml:"metrics_tls" json:"metrics_tls"`                                   // TLS configuration for metrics
+	MetricsACL                *ACLConfig             `yaml:"metrics_acl" json:"metrics_acl"`                                   // IP ACL for metrics
+	MetricsFederate           []FederateSourceConfig `yaml:"metrics_federate" json:"metrics_federate"`                         // Local exporters merged into the main /metrics response (see FederateSourceConfig)
+	ResourceMetricsEnabled    *bool                  `yaml:"resource_metrics_enabled" json:"resource_metrics_enabled"`         // Enable CPU/RAM collection
+	ResourceMetricsInterval   int                    `yaml:"resource_metrics_interval" json:"resource_metrics_interval"`       // seconds (default: 5)
+	ResourceMetricsMaxSamples int                    `yaml:"resource_metrics_max_samples" json:"resource_metrics_max_samples"` // Per-instance buffer size (default: 720 = 1h at 5s)
+	AuditEnabled              bool                   `yaml:"audit_enabled" json:"audit_enabled"`                               // Enable audit logging
+	TracingEnabled            bool                   `yaml:"tracing_enabled" json:"tracing_enabled"`                           // Enable distributed tracing
+	TracingExporter           string                 `yaml:"tracing_exporter" json:"tracing_exporter"`                         // otlp-grpc | stdout
+	TracingEndpoint           string                 `yaml:"tracing_endpoint" json:"tracing_endpoint"`                         // Exporter endpoint (e.g., localhost:4317)
 	// TracingSampleRate is a pointer so an explicit 0.0 — the documented way to
 	// sample nothing — can be told from an absent key. Treating 0 as "unset"
 	// turned it into 100% sampling, the exact opposite of what was asked for.
@@ -328,8 +329,22 @@ type FPMTuneConfig struct {
 	DropInDir       string        `yaml:"drop_in_dir" json:"drop_in_dir"`           // Where pool drop-ins are written; empty = the directory the master includes
 	StatePath       string        `yaml:"state_path" json:"state_path"`             // Where learned baselines persist (empty = fpm-tune's default)
 	BackupDir       string        `yaml:"backup_dir" json:"backup_dir"`             // Rollback / self-repair directory (empty = fpm-tune's default)
-	MetricsAddr     string        `yaml:"metrics_addr" json:"metrics_addr"`         // Address for fpm-tune's own /metrics, e.g. ":9110" (empty disables it)
+	MetricsAddr     string        `yaml:"metrics_addr" json:"metrics_addr"`         // OPTIONAL separate listener for fpm-tune's own /metrics, e.g. ":9110". Since 3.2.0 the fpm_tune_* series are always on the main metrics endpoint too; this exists for standalone-tool parity
 	RecommendPath   string        `yaml:"recommend_path" json:"recommend_path"`     // Advisory mode: write the plan here for copying by hand (empty disables it)
+}
+
+// FederateSourceConfig declares one local metrics endpoint whose exposition is
+// merged into the main /metrics response, so one scrape of cbox-init tells the
+// whole story (supervision + capacity + application metrics). Each source
+// contributes a cbox_init_federate_up{name} gauge; a source that is down
+// degrades to 0 there instead of failing the scrape. URLs must point at
+// loopback: federation is for exporters INSIDE the container, and anything
+// else would turn the metrics port into a proxy.
+type FederateSourceConfig struct {
+	Name     string        `yaml:"name" json:"name"`           // Label value for cbox_init_federate_up; required, unique
+	URL      string        `yaml:"url" json:"url"`             // Loopback http(s) URL, e.g. http://127.0.0.1:9114/metrics
+	Timeout  time.Duration `yaml:"timeout" json:"timeout"`     // Per-fetch timeout (default 2s)
+	CacheTTL time.Duration `yaml:"cache_ttl" json:"cache_ttl"` // Serve a cached body this long between fetches (default 5s)
 }
 
 // setGlobalDefaults sets default values for global configuration
