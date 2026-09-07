@@ -28,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [#135]: https://github.com/cboxdk/init/issues/135
 
+### Fixed
+
+- **Symfony apps are now detected on a fresh deploy.** Framework detection
+  required `var/cache` to already exist — but `var/cache` is exactly what
+  the permission setup creates, so a fresh Symfony deploy (or a bind mount
+  without `var/`) was classified as generic and never got its cache
+  directory. Detection now corroborates `bin/console` with `symfony.lock`
+  or a `symfony/framework-bundle` composer dependency instead. Laravel
+  detection gained the same corroboration (`artisan` plus composer
+  dependency or `bootstrap/app.php`), so a stray file named `artisan` no
+  longer triggers Laravel permission handling.
+
 ## [3.1.2] - 2026-09-04
 
 ### Fixed

@@ -19,8 +19,14 @@ func TestPermissionManager_Setup(t *testing.T) {
 		{
 			name: "Laravel setup",
 			setupFunc: func(dir string) error {
-				// Create artisan to make it a Laravel project
-				return os.WriteFile(filepath.Join(dir, "artisan"), []byte("#!/usr/bin/env php"), 0644)
+				// Create artisan + bootstrap/app.php to make it a Laravel project
+				if err := os.WriteFile(filepath.Join(dir, "artisan"), []byte("#!/usr/bin/env php"), 0644); err != nil {
+					return err
+				}
+				if err := os.MkdirAll(filepath.Join(dir, "bootstrap"), 0755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(dir, "bootstrap", "app.php"), []byte("<?php"), 0644)
 			},
 			checkDirs: []string{
 				"storage/framework/sessions",
@@ -33,14 +39,15 @@ func TestPermissionManager_Setup(t *testing.T) {
 		{
 			name: "Symfony setup",
 			setupFunc: func(dir string) error {
-				// Create bin/console and var/cache to make it a Symfony project
+				// Create bin/console and symfony.lock to make it a Symfony
+				// project - deliberately WITHOUT var/, which Setup() creates.
 				if err := os.MkdirAll(filepath.Join(dir, "bin"), 0755); err != nil {
 					return err
 				}
 				if err := os.WriteFile(filepath.Join(dir, "bin", "console"), []byte("#!/usr/bin/env php"), 0644); err != nil {
 					return err
 				}
-				return os.MkdirAll(filepath.Join(dir, "var", "cache"), 0755)
+				return os.WriteFile(filepath.Join(dir, "symfony.lock"), []byte("{}"), 0644)
 			},
 			checkDirs: []string{
 				"var/cache",
@@ -146,14 +153,37 @@ func TestDetectFramework(t *testing.T) {
 		expected Framework
 	}{
 		{
-			name: "Laravel detection",
+			name: "Laravel detection via bootstrap",
 			setup: func(dir string) error {
-				return os.WriteFile(filepath.Join(dir, "artisan"), []byte("#!/usr/bin/env php"), 0644)
+				if err := os.WriteFile(filepath.Join(dir, "artisan"), []byte("#!/usr/bin/env php"), 0644); err != nil {
+					return err
+				}
+				if err := os.MkdirAll(filepath.Join(dir, "bootstrap"), 0755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(dir, "bootstrap", "app.php"), []byte("<?php"), 0644)
 			},
 			expected: FrameworkLaravel,
 		},
 		{
-			name: "Symfony detection",
+			name: "Laravel detection via composer dependency",
+			setup: func(dir string) error {
+				if err := os.WriteFile(filepath.Join(dir, "artisan"), []byte("#!/usr/bin/env php"), 0644); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(dir, "composer.json"), []byte(`{"require":{"laravel/framework":"^11.0"}}`), 0644)
+			},
+			expected: FrameworkLaravel,
+		},
+		{
+			name: "Stray artisan without corroboration is generic",
+			setup: func(dir string) error {
+				return os.WriteFile(filepath.Join(dir, "artisan"), []byte("#!/usr/bin/env php"), 0644)
+			},
+			expected: FrameworkGeneric,
+		},
+		{
+			name: "Symfony detection via symfony.lock",
 			setup: func(dir string) error {
 				if err := os.MkdirAll(filepath.Join(dir, "bin"), 0755); err != nil {
 					return err
@@ -161,9 +191,32 @@ func TestDetectFramework(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(dir, "bin", "console"), []byte("#!/usr/bin/env php"), 0644); err != nil {
 					return err
 				}
-				return os.MkdirAll(filepath.Join(dir, "var", "cache"), 0755)
+				return os.WriteFile(filepath.Join(dir, "symfony.lock"), []byte("{}"), 0644)
 			},
 			expected: FrameworkSymfony,
+		},
+		{
+			name: "Symfony fresh deploy without var/cache detects via composer",
+			setup: func(dir string) error {
+				if err := os.MkdirAll(filepath.Join(dir, "bin"), 0755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(dir, "bin", "console"), []byte("#!/usr/bin/env php"), 0644); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(dir, "composer.json"), []byte(`{"require":{"symfony/framework-bundle":"^7.0"}}`), 0644)
+			},
+			expected: FrameworkSymfony,
+		},
+		{
+			name: "bin/console without corroboration is generic",
+			setup: func(dir string) error {
+				if err := os.MkdirAll(filepath.Join(dir, "bin"), 0755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(dir, "bin", "console"), []byte("#!/usr/bin/env php"), 0644)
+			},
+			expected: FrameworkGeneric,
 		},
 		{
 			name: "WordPress detection",
