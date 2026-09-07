@@ -6,6 +6,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // Framework represents a detected PHP framework
@@ -42,13 +43,22 @@ func NewPermissionManager(workdir string, log *slog.Logger) *PermissionManager {
 
 // detectFramework identifies the PHP framework in the working directory
 func (pm *PermissionManager) detectFramework() Framework {
-	// Laravel: check for artisan file
-	if fileExists(filepath.Join(pm.workdir, "artisan")) {
+	// Laravel: `artisan` plus corroborating evidence (composer dependency or
+	// the framework bootstrap, which artisan itself requires) so a stray file
+	// named artisan does not pull a generic app into Laravel handling.
+	if fileExists(filepath.Join(pm.workdir, "artisan")) &&
+		(composerRequires(pm.workdir, "laravel/framework") ||
+			fileExists(filepath.Join(pm.workdir, "bootstrap", "app.php"))) {
 		return FrameworkLaravel
 	}
-	// Symfony: check for bin/console and var/cache
+	// Symfony: `bin/console` plus corroborating evidence. var/cache cannot be
+	// the marker - it is exactly what setupSymfony() creates, so requiring it
+	// meant a fresh deploy was never detected and its cache dir never created.
+	// symfony.lock covers Flex-managed apps; the composer dependency covers
+	// the rest.
 	if fileExists(filepath.Join(pm.workdir, "bin", "console")) &&
-		dirExists(filepath.Join(pm.workdir, "var", "cache")) {
+		(fileExists(filepath.Join(pm.workdir, "symfony.lock")) ||
+			composerRequires(pm.workdir, "symfony/framework-bundle")) {
 		return FrameworkSymfony
 	}
 	// WordPress: check for wp-config.php
@@ -56,6 +66,18 @@ func (pm *PermissionManager) detectFramework() Framework {
 		return FrameworkWordPress
 	}
 	return FrameworkGeneric
+}
+
+// composerRequires reports whether the app's composer.json mentions the given
+// package. A plain substring match mirrors the shell entrypoints and is
+// deliberate: composer.json is developer-controlled input and the result only
+// steers directory and permission setup.
+func composerRequires(workdir, pkg string) bool {
+	data, err := os.ReadFile(filepath.Join(workdir, "composer.json"))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), pkg)
 }
 
 func fileExists(path string) bool {
