@@ -19,6 +19,49 @@ global:
   metrics_path: /metrics
 ```
 
+## One Endpoint: Federation and Embedded Engines
+
+Since 3.2.0 the main `/metrics` response can carry the whole container's
+story, so Prometheus scrapes one port:
+
+- **Embedded engines merge natively.** The runtime PHP-FPM autotuner's
+  `fpm_tune_*` series always appear on the main endpoint when `fpm_tune` is
+  enabled. `fpm_tune.metrics_addr` remains optional, for parity with the
+  standalone tool.
+- **Local exporters federate.** Declare them under
+  `global.metrics_federate` and their exposition is appended to every
+  scrape, with a short cache so heavy scraping does not multiply load:
+
+```yaml
+global:
+  metrics_federate:
+    - name: fpm-exporter
+      url: http://127.0.0.1:9114/metrics
+      timeout: 2s     # per-fetch (default)
+      cache_ttl: 5s   # cached between fetches (default)
+```
+
+Each source contributes a health gauge; a source that is down degrades
+instead of failing the scrape:
+
+```text
+cbox_init_federate_up{name="fpm-exporter"} 1
+```
+
+Rules and caveats:
+
+- URLs must point at **loopback** (`127.0.0.1`, `::1`, `localhost`) —
+  federation merges exporters inside the container; it is not a proxy, and
+  config validation rejects anything else.
+- Bodies over 8 MiB and non-200 responses count as down.
+- Metric names must not collide across sources — federation appends
+  expositions verbatim and does not rewrite names.
+- With federation enabled the endpoint always serves the plain-text
+  exposition format (no content negotiation), because federated bodies are
+  appended as-is.
+
+A complete example lives in `configs/examples/metrics-federate.yaml`.
+
 ## Available Metrics
 
 ### Process Lifecycle Metrics

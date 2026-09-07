@@ -13,7 +13,10 @@ import (
 	"github.com/cboxdk/init/internal/acl"
 	"github.com/cboxdk/init/internal/config"
 	tlsmgr "github.com/cboxdk/init/internal/tls"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 )
 
 // Server serves Prometheus metrics
@@ -29,6 +32,73 @@ type Server struct {
 	aclInitErr error // ACL was enabled but its checker failed to build; fail closed at Start
 	tlsConfig  *config.TLSConfig
 	tlsManager *tlsmgr.Manager
+
+	// extraGatherers are merged into every scrape alongside the default
+	// registry — embedded engines (fpm-tune) register here so their series
+	// appear on the main endpoint without a second listener. Guarded by a
+	// mutex because the tuner starts after the metrics server does.
+	extraMu        sync.RWMutex
+	extraGatherers []prometheus.Gatherer
+	federator      *Federator
+}
+
+// AddGatherer merges an additional registry into the main /metrics response.
+// Safe to call after Start; the next scrape picks it up.
+func (s *Server) AddGatherer(g prometheus.Gatherer) {
+	if g == nil {
+		return
+	}
+	s.extraMu.Lock()
+	s.extraGatherers = append(s.extraGatherers, g)
+	s.extraMu.Unlock()
+}
+
+// SetFederator merges declared local exporters into the main /metrics
+// response. Must be called before Start.
+func (s *Server) SetFederator(f *Federator) *Server {
+	s.federator = f
+	return s
+}
+
+// gatherer snapshots the default registry plus any extra gatherers per scrape.
+func (s *Server) gatherer() prometheus.Gatherer {
+	return prometheus.GathererFunc(func() ([]*dto.MetricFamily, error) {
+		s.extraMu.RLock()
+		gs := make(prometheus.Gatherers, 0, len(s.extraGatherers)+1)
+		gs = append(gs, prometheus.DefaultGatherer)
+		gs = append(gs, s.extraGatherers...)
+		s.extraMu.RUnlock()
+		return gs.Gather()
+	})
+}
+
+// metricsHandler serves the merged exposition. Without federation the standard
+// promhttp handler (with its content negotiation) runs over the merged
+// gatherer; with federation the response is always plain text, because the
+// federated bodies are appended verbatim and must not disagree with a
+// negotiated encoding.
+func (s *Server) metricsHandler() http.Handler {
+	g := s.gatherer()
+	if s.federator == nil {
+		return promhttp.HandlerFor(g, promhttp.HandlerOpts{})
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		mfs, err := g.Gather()
+		if err != nil {
+			// Gatherers returns partial families alongside a MultiError; a
+			// half-full scrape beats an empty one, so log and keep going.
+			s.logger.Warn("Metrics gather reported errors", "error", err)
+		}
+		enc := expfmt.NewEncoder(w, expfmt.NewFormat(expfmt.TypeTextPlain))
+		for _, mf := range mfs {
+			if encErr := enc.Encode(mf); encErr != nil {
+				s.logger.Warn("Metrics encode failed", "error", encErr)
+				return
+			}
+		}
+		s.federator.Append(r.Context(), w)
+	})
 }
 
 // NewServer creates a new metrics server
@@ -90,7 +160,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 
 	// Prometheus metrics endpoint
-	mux.Handle(s.path, promhttp.Handler())
+	mux.Handle(s.path, s.metricsHandler())
 
 	// Health endpoint for the metrics server itself
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **One metrics endpoint for the whole container ([#135]).** The main
+  `/metrics` response can now tell the complete story in a single scrape:
+  - The embedded runtime PHP-FPM autotuner's `fpm_tune_*` series always
+    appear on the main endpoint while the tuner runs — no second listener
+    required. `fpm_tune.metrics_addr` stays as an optional extra listener
+    for standalone-tool parity.
+  - `global.metrics_federate` declares local exporters whose exposition is
+    appended to every scrape (per-source timeout and TTL cache, 8 MiB body
+    cap). Each source contributes `cbox_init_federate_up{name}`; one that is
+    down degrades to 0 there instead of failing the scrape. URLs are
+    validated to loopback only — federation merges exporters inside the
+    container, it is not a proxy.
+  - With federation enabled the endpoint serves the plain-text exposition
+    format unconditionally, since federated bodies are appended verbatim.
+  See `configs/examples/metrics-federate.yaml` and
+  [Prometheus Metrics](docs/observability/metrics.md).
+
+[#135]: https://github.com/cboxdk/init/issues/135
+
 ## [3.1.2] - 2026-09-04
 
 ### Fixed
