@@ -56,6 +56,8 @@ func startFPMTune(ctx context.Context, cfg *config.Config, log *slog.Logger) (fu
 		MetricsAddr:     ft.MetricsAddr,
 		RecommendPath:   ft.RecommendPath,
 		ReserveFraction: ft.ReserveFraction,
+		CPUCeiling:      ft.CPUCeiling,
+		CPUHeadroom:     ft.CPUHeadroom,
 		Workload:        resolveFPMWorkload(ft.Workload, log),
 		Version:         version, // reported on the loop's /history.json
 

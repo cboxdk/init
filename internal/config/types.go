@@ -331,6 +331,8 @@ type FPMTuneConfig struct {
 	BackupDir       string        `yaml:"backup_dir" json:"backup_dir"`             // Rollback / self-repair directory (empty = fpm-tune's default)
 	MetricsAddr     string        `yaml:"metrics_addr" json:"metrics_addr"`         // OPTIONAL separate listener for fpm-tune's own /metrics, e.g. ":9110". Since 3.2.0 the fpm_tune_* series are always on the main metrics endpoint too; this exists for standalone-tool parity
 	RecommendPath   string        `yaml:"recommend_path" json:"recommend_path"`     // Advisory mode: write the plan here for copying by hand (empty disables it)
+	CPUCeiling      bool          `yaml:"cpu_ceiling" json:"cpu_ceiling"`           // Cap pools at what fills the CPU (measured), not what memory allows - for CPU-bound workloads (fpm-tune's --cpu)
+	CPUHeadroom     float64       `yaml:"cpu_headroom" json:"cpu_headroom"`         // Oversubscription factor on the CPU fill count with cpu_ceiling (0 = fpm-tune's default, 2.0)
 }
 
 // FederateSourceConfig declares one local metrics endpoint whose exposition is

@@ -209,6 +209,9 @@ func (c *Config) validateGlobalFPMTuneSettings(result *ValidationResult) {
 	if ft.Interval < 0 {
 		result.AddError("global.fpm_tune.interval", "Must not be negative", "Use a value like 30s, or leave unset for the 30s default")
 	}
+	if ft.CPUHeadroom < 0 {
+		result.AddError("global.fpm_tune.cpu_headroom", fmt.Sprintf("Must not be negative (%v)", ft.CPUHeadroom), "Use a factor like 2.0, or leave unset for fpm-tune's default")
+	}
 	if ft.ReserveFraction < 0 || ft.ReserveFraction >= 1 {
 		result.AddError("global.fpm_tune.reserve_fraction", fmt.Sprintf("Out of range (%v)", ft.ReserveFraction), "Must be in [0, 1); leave unset for fpm-tune's default")
 	}
