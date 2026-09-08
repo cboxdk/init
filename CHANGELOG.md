@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`initial_delay` no longer defaults to 5 seconds.** An unset delay now
+  means "probe immediately" - the old silent default made every container's
+  readiness gate sleep 5s before the FIRST health probe, which was the
+  single largest component of cold start (php-fpm listens ~50ms after
+  start; nginx then waited out the delay on the dependency chain). An
+  explicitly configured `initial_delay` is honored unchanged, and
+  fast-start probing (below) keeps failure semantics on the steady-state
+  schedule.
+- **Fast-start health probing.** Until a process's first successful health
+  check, the monitor probes every 250ms instead of waiting the steady-state
+  period - php-fpm listens ~50ms after start, and losing the race against
+  the immediate first probe used to cost a full period (5s in the shipped
+  images) of container cold start. Failure semantics are unchanged: at most
+  one failure is counted per period (the extra discovery probes are silent),
+  so a never-up process is declared unhealthy on exactly the old schedule.
+  Restarted instances get the same fast discovery. Measured on the
+  php-baseimages benchmark: the dependency gate between php-fpm and nginx
+  dropped from ~5.0s to sub-second.
+
 - **`fpm_tune.cpu_ceiling` and `fpm_tune.cpu_headroom`.** The embedded
   autotuner sizes pools to the memory budget; on CPU-bound workloads that
   oversubscribes the CPU and costs throughput (measured: a 2-CPU container

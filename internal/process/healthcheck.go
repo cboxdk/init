@@ -178,7 +178,24 @@ type HealthMonitor struct {
 	consecutiveSuccess int
 	currentlyHealthy   bool
 	graceUntil         time.Time // checks are skipped until this time (warmup after (re)start)
+
+	// Fast-start probing: until the first successful check after (re)start,
+	// probe at FastStartInterval instead of the steady-state period. Success
+	// is discovered within one FastStartInterval; failures keep their exact
+	// steady-state timing - at most one failure is counted (and emitted) per
+	// period, the extra discovery probes that fail are silent. Readiness gets
+	// fast without changing how quickly a never-up process goes unhealthy.
+	// fastUntil bounds the window as a safety valve.
+	everSucceeded   bool
+	fastUntil       time.Time
+	lastCountedFail time.Time
 }
+
+// FastStartInterval is the probe cadence before the first success. First
+// readiness is a discovery problem, not a failure-detection problem: php-fpm
+// listens ~50ms after start, and waiting a full period to notice was the
+// single largest component of container cold start.
+const FastStartInterval = 100 * time.Millisecond
 
 // NewHealthMonitor creates a new health monitor
 func NewHealthMonitor(processName string, cfg *config.HealthCheck, log *slog.Logger) (*HealthMonitor, error) {
@@ -216,10 +233,12 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 		// Guard the send on ctx: if the consumer has already exited (its own ctx
 		// cancelled) with a status buffered, an unguarded send on the
 		// capacity-1 channel blocks this goroutine — and its ticker — forever.
-		select {
-		case statusCh <- status:
-		case <-ctx.Done():
-			return
+		if !status.suppress {
+			select {
+			case statusCh <- status:
+			case <-ctx.Done():
+				return
+			}
 		}
 
 		// A non-positive period panics time.NewTicker, and this runs in a
@@ -233,24 +252,28 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 			hm.logger.Warn("Health check period is not positive; using the default",
 				"configured", hm.config.Period, "using", period)
 		}
-		ticker := time.NewTicker(period)
-		defer ticker.Stop()
+		hm.armFastStart(period)
+
+		timer := time.NewTimer(hm.nextInterval(period))
+		defer timer.Stop()
 
 		for {
 			select {
-			case <-ticker.C:
+			case <-timer.C:
 				// Skip checks during a warmup grace window (initial start or a
 				// re-arm after a health-triggered restart), so a slow-booting
 				// replacement isn't killed before it can come up.
-				if hm.inGrace() {
-					continue
+				if !hm.inGrace() {
+					status := hm.performCheck(ctx)
+					if !status.suppress {
+						select {
+						case statusCh <- status:
+						case <-ctx.Done():
+							return
+						}
+					}
 				}
-				status := hm.performCheck(ctx)
-				select {
-				case statusCh <- status:
-				case <-ctx.Done():
-					return
-				}
+				timer.Reset(hm.nextInterval(period))
 			case <-ctx.Done():
 				return
 			}
@@ -275,6 +298,19 @@ func (hm *HealthMonitor) Rearm() {
 	if hm.config != nil && hm.config.InitialDelay > 0 {
 		hm.graceUntil = time.Now().Add(time.Duration(hm.config.InitialDelay) * time.Second)
 	}
+	// The replacement instance gets the same fast readiness discovery the
+	// first instance got.
+	period := DefaultHealthCheckPeriod
+	if hm.config != nil && hm.config.Period > 0 {
+		period = time.Duration(hm.config.Period) * time.Second
+	}
+	threshold := 1
+	if hm.config != nil && hm.config.FailureThreshold > 0 {
+		threshold = hm.config.FailureThreshold
+	}
+	hm.everSucceeded = false
+	hm.lastCountedFail = time.Time{}
+	hm.fastUntil = time.Now().Add(time.Duration(threshold) * period)
 }
 
 // inGrace reports whether the monitor is inside a warmup grace window, during
@@ -283,6 +319,32 @@ func (hm *HealthMonitor) inGrace() bool {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
 	return !hm.graceUntil.IsZero() && time.Now().Before(hm.graceUntil)
+}
+
+// armFastStart opens the fast-probing window for a fresh start: probes run at
+// FastStartInterval until the first success, bounded by failure_threshold x
+// period (when steady-state semantics would have settled the question anyway).
+func (hm *HealthMonitor) armFastStart(period time.Duration) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	threshold := 1
+	if hm.config != nil && hm.config.FailureThreshold > 0 {
+		threshold = hm.config.FailureThreshold
+	}
+	hm.everSucceeded = false
+	hm.lastCountedFail = time.Time{}
+	hm.fastUntil = time.Now().Add(time.Duration(threshold) * period)
+}
+
+// nextInterval picks the probe cadence: FastStartInterval inside the
+// fast-start window (pre-first-success), the steady-state period otherwise.
+func (hm *HealthMonitor) nextInterval(period time.Duration) time.Duration {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	if !hm.everSucceeded && time.Now().Before(hm.fastUntil) && period > FastStartInterval {
+		return FastStartInterval
+	}
+	return period
 }
 
 func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
@@ -304,6 +366,21 @@ func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
 	}
 
 	if err != nil {
+		// Inside the fast-start window, failures are throttled to steady-state
+		// timing: at most one is counted (and emitted) per period, so the
+		// extra discovery probes change nothing about failure semantics.
+		if !hm.everSucceeded && time.Now().Before(hm.fastUntil) {
+			period := DefaultHealthCheckPeriod
+			if hm.config != nil && hm.config.Period > 0 {
+				period = time.Duration(hm.config.Period) * time.Second
+			}
+			if !hm.lastCountedFail.IsZero() && time.Since(hm.lastCountedFail) < period {
+				hm.logger.Debug("Health check not yet passing (fast-start window)",
+					"error", err)
+				return HealthStatus{Healthy: true, LastCheckSucceeded: false, suppress: true}
+			}
+			hm.lastCountedFail = time.Now()
+		}
 		// Health check failed
 		hm.consecutiveFails++
 		hm.consecutiveSuccess = 0 // Reset success counter on failure
@@ -334,6 +411,7 @@ func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
 	}
 
 	// Health check succeeded
+	hm.everSucceeded = true
 	hm.consecutiveSuccess++
 	hm.consecutiveFails = 0 // Reset failure counter on success
 
@@ -366,6 +444,10 @@ func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
 
 // HealthStatus represents the result of a health check
 type HealthStatus struct {
+	// suppress marks a fast-start probe whose failure was throttled (not
+	// counted); the monitor loop drops it instead of emitting.
+	suppress bool
+
 	Healthy            bool  // Whether process should be considered healthy (for liveness/restart decisions)
 	LastCheckSucceeded bool  // Whether the most recent health check actually succeeded (for readiness)
 	Error              error // Error from the health check, if any
