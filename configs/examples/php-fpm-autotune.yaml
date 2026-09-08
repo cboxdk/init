@@ -35,6 +35,13 @@ global:
     # state_path = /var/lib/fpm-tune/state.json, backup_dir = its default.
     # reserve_fraction: 0.2   # hold 20% of the budget back from the pools
     # workload: web           # default class for pools that spawn no children
+    # CPU-bound pools: cap each pool at its measured CPU fill instead of what
+    # memory allows. Memory-sizing oversubscribes CPU-bound workloads - a
+    # 2-CPU container measured 30% faster at 4 workers than at the 21 its
+    # memory budget allowed. cpu_headroom is the oversubscription factor on
+    # the fill count (unset = 2.0).
+    # cpu_ceiling: true
+    # cpu_headroom: 2.0
 
 processes:
   php-fpm:

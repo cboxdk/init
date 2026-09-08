@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`fpm_tune.cpu_ceiling` and `fpm_tune.cpu_headroom`.** The embedded
+  autotuner sizes pools to the memory budget; on CPU-bound workloads that
+  oversubscribes the CPU and costs throughput (measured: a 2-CPU container
+  ran 30% faster at 4 workers than at the 21 the memory budget allowed).
+  fpm-tune has always had the mechanism (the standalone `--cpu` flag);
+  the embedded runtime now exposes it: `cpu_ceiling: true` caps each pool
+  at its measured CPU fill times `cpu_headroom` (default 2.0). Also
+  settable as `CBOX_INIT_GLOBAL_FPM_TUNE_CPU_CEILING` / `_CPU_HEADROOM`.
+
 ## [3.2.0] - 2026-09-07
 
 ### Added
