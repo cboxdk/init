@@ -171,8 +171,11 @@ func TestSetDefaults(t *testing.T) {
 			},
 			validate: func(t *testing.T, c *Config) {
 				hc := c.Processes["test"].HealthCheck
-				if hc.InitialDelay != 5 {
-					t.Errorf("InitialDelay = %v, want 5", hc.InitialDelay)
+				// initial_delay has no default anymore: unset means probe immediately
+				// (fast-start probing discovers readiness; the old default of 5 added
+				// five silent seconds to every container cold start).
+				if hc.InitialDelay != 0 {
+					t.Errorf("InitialDelay = %v, want 0 (no default)", hc.InitialDelay)
 				}
 				if hc.Period != 10 {
 					t.Errorf("Period = %v, want 10", hc.Period)

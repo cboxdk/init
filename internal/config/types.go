@@ -566,9 +566,13 @@ func (c *Config) setProcessHealthCheckDefaults(proc *Process) {
 		return
 	}
 	hc := proc.HealthCheck
-	if hc.InitialDelay == 0 {
-		hc.InitialDelay = 5
-	}
+	// initial_delay deliberately has NO default: an unset delay means probing
+	// starts immediately, and fast-start probing (see process.HealthMonitor)
+	// discovers readiness within FastStartInterval while still counting
+	// failures at steady-state cadence. The old default of 5 silently added
+	// five seconds to every container's cold start - the readiness gate slept
+	// through the dependency chain even though php-fpm listens within ~50ms.
+	// An explicitly configured initial_delay is honored unchanged.
 	if hc.Period == 0 {
 		hc.Period = 10
 	}
