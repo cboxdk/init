@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-09-09
+
+### Added
+
+- **Embedded fpm-tune bumped to v1.2.0.** The CPU ceiling now works for
+  fast requests: the tuner computes an aggregate CPU shape from worker
+  tick deltas whenever per-request sampling is blind (requests under
+  50ms, or a pool so saturated no worker is idle at scrape time -
+  cboxdk/fpm-tune#14). Verified end-to-end embedded in this binary: a
+  3ms-request flood that always left `cpu_readings` at 0 now classifies,
+  the ceiling engages, and the pool holds its size through 100s of
+  saturation.
+
 ## [3.3.0] - 2026-09-09
 
 ### Added
