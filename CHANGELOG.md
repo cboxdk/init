@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-09-09
+
 ### Added
 
+- **Embedded fpm-tune bumped to v1.1.0.** A pool that queues while the
+  host's CPU is full is now HELD at its current size instead of grown -
+  the tuner no longer trades 16% CPU-bound throughput for workers no core
+  can run (cboxdk/fpm-tune#15). Verified end-to-end: 90s of saturated
+  CPU load, pool steady, throughput equal to the untuned default.
 - **`initial_delay` no longer defaults to 5 seconds.** An unset delay now
   means "probe immediately" - the old silent default made every container's
   readiness gate sleep 5s before the FIRST health probe, which was the

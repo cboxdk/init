@@ -84,7 +84,7 @@
       "version": "v1.2.0"
     },
     {
-      "bom-ref": "pkg:golang/github.com/cboxdk/fpm-tune@v1.0.0?type=module",
+      "bom-ref": "pkg:golang/github.com/cboxdk/fpm-tune@v1.1.0?type=module",
       "externalReferences": [
         {
           "type": "vcs",
@@ -94,7 +94,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "16ef550ddc3d1be19269976775c5f095e57e6071c77c39857afecda2c9fa8dfd"
+          "content": "4976a169a35ca51bfcf9ec81302a9c572f277dabc566723a446c894ef1c03934"
         }
       ],
       "licenses": [
@@ -105,10 +105,10 @@
         }
       ],
       "name": "github.com/cboxdk/fpm-tune",
-      "purl": "pkg:golang/github.com/cboxdk/fpm-tune@v1.0.0?type=module",
+      "purl": "pkg:golang/github.com/cboxdk/fpm-tune@v1.1.0?type=module",
       "scope": "required",
       "type": "library",
-      "version": "v1.0.0"
+      "version": "v1.1.0"
     },
     {
       "bom-ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module",
@@ -1746,7 +1746,7 @@
   "dependencies": [
     {
       "dependsOn": [
-        "pkg:golang/github.com/cboxdk/fpm-tune@v1.0.0?type=module",
+        "pkg:golang/github.com/cboxdk/fpm-tune@v1.1.0?type=module",
         "pkg:golang/github.com/charmbracelet/bubbles@v1.0.0?type=module",
         "pkg:golang/github.com/charmbracelet/bubbletea@v1.3.10?type=module",
         "pkg:golang/github.com/charmbracelet/lipgloss@v1.1.0?type=module",
@@ -1819,7 +1819,7 @@
         "pkg:golang/golang.org/x/text@v0.41.0?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module"
       ],
-      "ref": "pkg:golang/github.com/cboxdk/fpm-tune@v1.0.0?type=module"
+      "ref": "pkg:golang/github.com/cboxdk/fpm-tune@v1.1.0?type=module"
     },
     {
       "dependsOn": [
