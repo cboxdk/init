@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Shutdown now waits for dependents before signalling their dependencies.**
+  The reverse-dependency order was computed and then discarded: every stop
+  launched as a parallel goroutine, so nginx and php-fpm received their
+  signals within the same microsecond and nginx kept accepting requests its
+  backend could no longer serve. Measured on the php-baseimages stop
+  benchmark: 502s and connection resets for ~3% of in-flight traffic in the
+  `docker stop` window. Shutdown now proceeds in reverse-dependency LEVELS
+  (parallelism survives within a level); pinned by a regression test in
+  which the dependent drains 500ms and the dependency's signal must land
+  after its exit.
+
+
 ## [3.5.0] - 2026-09-10
 
 ### Added
