@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-09-10
+
+### Added
+
+- **Embedded fpm-tune bumped to v1.3.0.** A CPU-saturated pool now converges
+  to its MEASURED parallelism instead of being held oversized: the tuner
+  reads the cores the pool actually drives from kernel tick deltas and cuts
+  `pm.max_children` to cores x headroom (cboxdk/fpm-tune#18, closes #14).
+  Verified end-to-end embedded in this binary: a 24-worker pool saturating
+  2 cores was cut to 4 at the trust point - +25% throughput, fifteen stable
+  measurement windows, a single resize event in 46 minutes. The regime
+  choice is visible in the logs (`agg_cores`, `agg_busy`,
+  `saturation_measured` on the CPU-bound line).
+
 ## [3.4.0] - 2026-09-09
 
 ### Added
