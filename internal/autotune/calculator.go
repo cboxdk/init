@@ -236,9 +236,16 @@ func sizeWorkers(limitMB, cpus int, threshold float64, p ProfileConfig, strict b
 	if softPool := int(float64(limitMB)*threshold) - overhead; softPool > 0 {
 		desired = softPool / perWorker
 	}
-	if cpuCap := cpus * 4; cpuCap > 0 && desired > cpuCap {
+	// 2.5 workers per core, measured, not guessed: at 8 CPUs the old 4x cap
+	// booted 32 workers and LOST to a 20-worker competitor on every PHP axis
+	// (Laravel 2291 vs 2426 rps); at a matched 20 workers the same stack WON
+	// (2543). The 2c sweep agrees (Laravel optimum 4-6 workers there). Pure
+	// CPU work wants even fewer (~1x) and IO-heavy wants more (~5x) - that
+	// spread is the runtime tuner's job; the boot profile just has to start
+	// in the sane band instead of at the memory ceiling.
+	if cpuCap := cpus * 5 / 2; cpuCap > 1 && desired > cpuCap {
 		warnings = append(warnings,
-			fmt.Sprintf("memory allows %d workers, limiting to %d for %d CPUs (max 4 per core)", desired, cpuCap, cpus))
+			fmt.Sprintf("memory allows %d workers, limiting to %d for %d CPUs (2.5 per core; the runtime tuner refines from live measurements)", desired, cpuCap, cpus))
 		desired = cpuCap
 	}
 	if p.MaxWorkers > 0 && desired > p.MaxWorkers {

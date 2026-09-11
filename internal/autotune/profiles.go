@@ -111,15 +111,19 @@ var Profiles = map[Profile]ProfileConfig{
 
 	// Bursty: Handle traffic spikes with aggressive spare server settings
 	ProfileBursty: {
-		Name:                "Bursty Traffic",
-		Description:         "Handle traffic spikes with dynamic scaling (~44MB per worker)",
-		ProcessManagerType:  "dynamic",
-		AvgMemoryPerWorker:  44,  // Runtime ~30MB + request ~6MB + overhead ~8MB (app code in OPcache)
-		OPcacheMemoryMB:     128, // Compiled opcodes for standard Laravel (same as medium)
-		MinWorkers:          4,
-		MaxWorkers:          0,   // Auto-calculate
-		SpareMinRatio:       0.4, // Keep more workers ready
-		SpareMaxRatio:       0.7, // Higher ceiling for spikes
+		Name:               "Bursty Traffic",
+		Description:        "Handle traffic spikes with dynamic scaling (~44MB per worker)",
+		ProcessManagerType: "dynamic",
+		AvgMemoryPerWorker: 44,  // Runtime ~30MB + request ~6MB + overhead ~8MB (app code in OPcache)
+		OPcacheMemoryMB:    128, // Compiled opcodes for standard Laravel (same as medium)
+		MinWorkers:         4,
+		MaxWorkers:         0,    // Auto-calculate
+		SpareMinRatio:      0.4,  // Keep more workers ready
+		SpareMaxRatio:      0.75, // Higher ceiling for spikes. 0.75, not 0.7:
+		// with the measured 2.5x-per-core worker cap, small pools round
+		// ceil(10*0.7)=7 against start=5 - a 1.4 spare ratio that no longer
+		// LOOKS bursty. 0.75 keeps the spike headroom >= 1.5x start at every
+		// pool size the cap produces.
 		StartServersRatio:   0.5, // Start with more workers
 		MaxRequestsPerChild: 1000,
 		MaxMemoryUsage:      0.75,

@@ -72,8 +72,10 @@ func TestCalculator_MediumProfile(t *testing.T) {
 	// Reserved: 192MB (system) + 128MB (OPcache) = 320MB
 	// Worker memory: 1536 - 320 = 1216MB
 	// Workers: 1216 / 42MB = 28.9 → 28 workers
-	// CPU limit: 4 CPUs * 4 = 16 max workers (CPU LIMITING!)
-	expectedWorkers := 16
+	// CPU limit: 4 CPUs * 2.5 = 10 max workers (CPU LIMITING! - the 2.5x cap
+	// is measured: 4x booted pools that lost to matched competitors on every
+	// PHP axis; see sizeWorkers)
+	expectedWorkers := 10
 	if cfg.MaxChildren != expectedWorkers {
 		t.Errorf("Expected %d workers, got %d", expectedWorkers, cfg.MaxChildren)
 	}
@@ -112,8 +114,8 @@ func TestCalculator_HeavyProfile(t *testing.T) {
 	// Reserved: 384MB (system) + 256MB (OPcache) = 640MB
 	// Worker memory: 6553 - 640 = 5913MB
 	// Workers: 5913 / 128MB = 46.1 → 46 workers
-	// CPU limit: 8 CPUs * 4 = 32 max workers (limiting!)
-	expectedWorkers := 32
+	// CPU limit: 8 CPUs * 2.5 = 20 max workers (limiting! - measured cap)
+	expectedWorkers := 20
 	if cfg.MaxChildren != expectedWorkers {
 		t.Errorf("Expected %d workers, got %d", expectedWorkers, cfg.MaxChildren)
 	}
@@ -337,8 +339,8 @@ func TestCalculator_MemoryThresholdOverride(t *testing.T) {
 	// With 60% threshold: 2048 * 0.6 = 1228MB
 	// Reserved: 320MB → Worker pool: 908MB
 	// Workers: 908 / 42MB = 21 workers
-	// CPU limit: 4 * 4 = 16 workers (LIMITED)
-	expectedWorkers := 16
+	// CPU limit: 4 * 2.5 = 10 workers (LIMITED - measured cap)
+	expectedWorkers := 10
 
 	if cfg.MaxChildren != expectedWorkers {
 		t.Errorf("Expected %d workers with 60%% threshold, got %d", expectedWorkers, cfg.MaxChildren)
@@ -365,8 +367,8 @@ func TestCalculator_MemoryThresholdOversubscription(t *testing.T) {
 	// With 130% threshold: 2048 * 1.3 = 2662MB (MORE than container has!)
 	// Reserved: 320MB → Worker pool: 2342MB
 	// Workers: 2342 / 42MB = 55 workers
-	// CPU limit: 4 * 4 = 16 workers (LIMITED)
-	expectedWorkers := 16
+	// CPU limit: 4 * 2.5 = 10 workers (LIMITED - measured cap)
+	expectedWorkers := 10
 
 	if cfg.MaxChildren != expectedWorkers {
 		t.Errorf("Expected %d workers with oversubscription, got %d", expectedWorkers, cfg.MaxChildren)

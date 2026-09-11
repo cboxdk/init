@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Boot-profile CPU cap: 2.5 workers per core (was 4).** Measured at
+  8 CPUs: the 4x cap booted 32 workers and lost to a 20-worker competitor
+  on every PHP axis (Laravel 2291 vs 2426 rps); at a matched 20 the same
+  stack won (2543). The 2-CPU sweep agrees (Laravel optimum 4-6 workers).
+  Pure-CPU work wants ~1x and IO-heavy ~5x - that spread is the runtime
+  tuner's job; the boot profile now starts in the sane band instead of at
+  the memory ceiling. Bursty profile's spare ceiling nudged 0.70 -> 0.75
+  so its spike-headroom character survives the smaller pools.
+
+
 ## [3.6.0] - 2026-09-10
 
 ### Fixed
