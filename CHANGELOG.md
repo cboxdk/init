@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-09-11
+
 ### Changed
 
 - **Boot-profile CPU cap: 2.5 workers per core (was 4).** Measured at
