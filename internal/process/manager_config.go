@@ -186,6 +186,10 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 		if stats := m.scheduler.Stats(); stats.TotalJobs > 0 && !stats.Started {
 			m.scheduler.Start()
 		}
+		// A scheduled process exports no process metrics, so whatever its old
+		// supervisor left (process_up at 0, desired_scale, health checks) is
+		// stale from here on.
+		m.forgetProcessTelemetry(name)
 
 		m.logger.Info("Scheduled process updated", "name", name, "schedule", procCfg.Schedule)
 		m.auditLogger.LogProcessUpdated(name, procCfg.Command, procCfg.Scale)
@@ -242,6 +246,7 @@ func (m *Manager) updateProcessLocked(ctx context.Context, name string, procCfg 
 			}
 
 			m.processes[name] = newSupervisor
+			m.retainSupervisorTelemetry(name, newSupervisor)
 			m.logger.Info("Process updated and restarted", "name", name)
 		} else {
 			// New config is disabled, just remove from running processes
@@ -421,6 +426,16 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 	for _, name := range toStop {
 		m.forgetProcessTelemetry(name)
 	}
+	// Changed processes run on a new supervisor now. One that became scheduled
+	// exports no process metrics at all; one that runs fewer instances than
+	// before must not keep the old higher instances' series.
+	for _, name := range toUpdate {
+		if procCfg := newCfg.Processes[name]; procCfg != nil && procCfg.Enabled && procCfg.Schedule != "" {
+			m.forgetProcessTelemetry(name)
+		} else if sup, ok := m.processes[name]; ok {
+			m.retainSupervisorTelemetry(name, sup)
+		}
+	}
 
 	m.logger.Info("Configuration reloaded successfully")
 
@@ -440,6 +455,27 @@ func (m *Manager) forgetProcessTelemetry(name string) {
 	metrics.RemoveProcessMetrics(name)
 	if m.resourceCollector != nil {
 		m.resourceCollector.RemoveProcess(name)
+	}
+}
+
+// retainSupervisorTelemetry drops the per-instance series and resource buffers
+// of every instance of name that sup does not run. Call it after sup replaced
+// an earlier supervisor: the earlier one's instance list is gone, and lowering
+// the scale that way would otherwise leave its higher instances at process_up
+// 0 forever. A supervisor that runs no instances (defined but not started)
+// changes nothing, because a stopped process keeps its series.
+func (m *Manager) retainSupervisorTelemetry(name string, sup *Supervisor) {
+	infos := sup.GetInstances()
+	if len(infos) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(infos))
+	for _, info := range infos {
+		ids = append(ids, info.ID)
+	}
+	metrics.RetainInstances(name, ids)
+	if m.resourceCollector != nil {
+		m.resourceCollector.RetainInstances(name, ids)
 	}
 }
 

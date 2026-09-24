@@ -1,9 +1,11 @@
 package metrics
 
 import (
+	"runtime"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"runtime"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // Adding a metric labelled per process or per instance? Add it to
@@ -356,6 +358,70 @@ func RemoveInstanceMetrics(processName, instanceID string) {
 			labelInstance:  instanceID,
 		})
 	}
+}
+
+// RetainInstances drops the per-instance series of every instance of
+// processName that is not in keep.
+//
+// RemoveInstanceMetrics needs to know which instances went away. When a
+// supervisor is replaced (a reload or an API edit restarts the process with a
+// new definition), the manager only knows the instances the new supervisor
+// runs; the old supervisor's list is gone. Lowering the scale that way left
+// the higher instances at process_up 0 forever. This reads the instance IDs
+// from the series themselves, so it drops whatever the new supervisor does not
+// run, however it came to exist.
+func RetainInstances(processName string, keep []string) {
+	kept := make(map[string]bool, len(keep))
+	for _, id := range keep {
+		kept[id] = true
+	}
+	for _, f := range instanceSeries {
+		for _, id := range instanceIDs(f, processName) {
+			if !kept[id] {
+				f.vec.DeletePartialMatch(prometheus.Labels{
+					f.processLabel: processName,
+					labelInstance:  id,
+				})
+			}
+		}
+	}
+}
+
+// instanceIDs returns the distinct instance label values that processName
+// currently has in the family f.
+func instanceIDs(f seriesFamily, processName string) []string {
+	c, ok := f.vec.(prometheus.Collector)
+	if !ok {
+		return nil
+	}
+	ch := make(chan prometheus.Metric)
+	go func() {
+		c.Collect(ch)
+		close(ch)
+	}()
+
+	seen := make(map[string]bool)
+	var ids []string
+	for m := range ch {
+		var pb dto.Metric
+		if err := m.Write(&pb); err != nil {
+			continue
+		}
+		var proc, inst string
+		for _, lp := range pb.GetLabel() {
+			switch lp.GetName() {
+			case f.processLabel:
+				proc = lp.GetValue()
+			case labelInstance:
+				inst = lp.GetValue()
+			}
+		}
+		if proc == processName && inst != "" && !seen[inst] {
+			seen[inst] = true
+			ids = append(ids, inst)
+		}
+	}
+	return ids
 }
 
 // RemoveProcessMetrics drops every series belonging to a process that has been
