@@ -1,7 +1,11 @@
-package process
+// Package credentials resolves the user and group a child command runs as:
+// supervised processes, exec health checks and lifecycle hooks alike.
+package credentials
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"os/user"
 	"strconv"
 	"syscall"
@@ -17,10 +21,10 @@ type Credentials struct {
 	Gid uint32 // Group ID for the process
 }
 
-// ResolveCredentials resolves user and group names/IDs to numeric credentials.
+// Resolve resolves user and group names/IDs to numeric credentials.
 // Returns nil if no user/group is specified.
 // Supports both numeric IDs ("82") and names ("www-data").
-func ResolveCredentials(userName, groupName string) (*Credentials, error) {
+func Resolve(userName, groupName string) (*Credentials, error) {
 	if userName == "" && groupName == "" {
 		return nil, nil
 	}
@@ -116,12 +120,49 @@ func lookupUser(nameOrID string) (*user.User, error) {
 // This should be called when setting up exec.Cmd.SysProcAttr.
 // The credentials will be applied when the child process starts.
 // Note: Requires root privileges to switch to a different user.
+//
+// Credentials that match the identity cbox-init already runs as are left off.
+// No switch is needed then, and asking for one is not free: a Credential makes
+// the child call setgroups, which fails with EPERM for anyone but root — so
+// `user: <self>` used to fail on a non-root cbox-init for no reason.
 func (c *Credentials) ApplySysProcAttr(attr *syscall.SysProcAttr) {
 	if c == nil {
+		return
+	}
+	if c.Uid == uint32(os.Geteuid()) && c.Gid == uint32(os.Getegid()) {
 		return
 	}
 	attr.Credential = &syscall.Credential{
 		Uid: c.Uid,
 		Gid: c.Gid,
 	}
+}
+
+// ApplyToCmd resolves userName/groupName and sets the result on cmd, so the
+// command runs as that user. It is a no-op when both are empty, and adds to an
+// existing cmd.SysProcAttr rather than replacing it.
+//
+// Resolution happens here, at run time, rather than once at startup: the
+// commands this serves (health checks, hooks) run repeatedly, and a user that
+// an entrypoint creates or remaps after cbox-init starts should be picked up.
+//
+// An unresolvable user or group is an error and cmd is left untouched. The
+// caller must not run the command then: running it as cbox-init's own uid —
+// usually root — would be a silent privilege escalation.
+func ApplyToCmd(cmd *exec.Cmd, userName, groupName string) error {
+	if userName == "" && groupName == "" {
+		return nil
+	}
+
+	creds, err := Resolve(userName, groupName)
+	if err != nil {
+		return fmt.Errorf("cannot run as user=%q group=%q: %w", userName, groupName, err)
+	}
+
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	creds.ApplySysProcAttr(cmd.SysProcAttr)
+
+	return nil
 }

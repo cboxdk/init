@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/credentials"
 	"github.com/cboxdk/init/internal/metrics"
 	"github.com/cboxdk/init/internal/signals"
 )
@@ -58,7 +59,7 @@ func NewHealthChecker(cfg *config.HealthCheck) (HealthChecker, error) {
 			expectedStatus: cfg.ExpectedStatus,
 		}, nil
 	case "exec":
-		return &ExecHealthChecker{command: cfg.Command}, nil
+		return &ExecHealthChecker{command: cfg.Command, user: cfg.User, group: cfg.Group}, nil
 	default:
 		return nil, fmt.Errorf("unknown health check type: %s", cfg.Type)
 	}
@@ -136,14 +137,19 @@ var httpHealthClient = &http.Client{}
 // ExecHealthChecker runs a command and checks exit code
 type ExecHealthChecker struct {
 	command []string
+
+	// user and group, when set, are who the command runs as (health_check.user
+	// / health_check.group). Empty means cbox-init's own identity.
+	user  string
+	group string
 }
 
 func (e *ExecHealthChecker) Check(ctx context.Context) error {
-	if len(e.command) == 0 {
-		return fmt.Errorf("no command specified")
+	cmd, err := e.buildCmd(ctx)
+	if err != nil {
+		return err
 	}
 
-	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
 	// Run under reaper coordination: as PID 1 the wildcard reaper can collect
 	// this probe before our Wait(), which would otherwise report a passing check
 	// as failed and trigger a spurious restart.
@@ -152,6 +158,25 @@ func (e *ExecHealthChecker) Check(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// buildCmd prepares the check command, running as the configured user.
+//
+// A user that cannot be resolved fails the check without running anything.
+// Running the probe as cbox-init's own uid instead would be a silent privilege
+// escalation, and a probe that passes because it ran with more rights than the
+// service has proves nothing about the service.
+func (e *ExecHealthChecker) buildCmd(ctx context.Context) (*exec.Cmd, error) {
+	if len(e.command) == 0 {
+		return nil, fmt.Errorf("no command specified")
+	}
+
+	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
+	if err := credentials.ApplyToCmd(cmd, e.user, e.group); err != nil {
+		return nil, fmt.Errorf("health check not run: %w", err)
+	}
+
+	return cmd, nil
 }
 
 // HealthMonitor continuously monitors process health using the configured checker.
