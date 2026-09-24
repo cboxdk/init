@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-09-24
+
 ### Fixed
 
 - **Scale-down now actually drops the removed instances' series.**
