@@ -105,7 +105,8 @@ Label values:
 - **`process`** is the process name from the config. Only the resource
   metrics use it.
 - **`instance`** is the instance ID, `<process>-<index>` counting from 0
-  (`php-fpm-0`, `php-fpm-1`, ...).
+  (`php-fpm-0`, `php-fpm-1`, ...). See the note below on how Prometheus
+  stores it.
 - **`reason`** (restarts): `crash`, `normal_exit`, `health_check`,
   `memory_limit`.
 - **`type`**: the health check type (`tcp`, `http`, `exec`) on health check
@@ -124,9 +125,26 @@ returns nothing. To combine them, rename one side with `label_replace`:
 ```promql
 # CPU of instances that are currently up
 cbox_init_process_cpu_percent
-  and on (process, instance)
+  and on (instance, exported_instance, process)
 label_replace(cbox_init_process_up == 1, "process", "$1", "name", "(.*)")
 ```
+
+#### `instance` and `exported_instance`
+
+Prometheus attaches its own `instance` label (the scrape target, e.g.
+`app:9090`) to every series. With the default `honor_labels: false`, a
+conflicting `instance` label in the scraped data is renamed to
+`exported_instance`. So once scraped, the instance ID above is in
+`exported_instance` and `instance` is the target:
+
+```promql
+# One instance of one container
+cbox_init_process_up{instance="app:9090", name="php-fpm", exported_instance="php-fpm-0"}
+```
+
+The examples on this page use `exported_instance` in PromQL. With
+`honor_labels: true` the instance ID stays in `instance` instead, and the
+scrape target's `instance` is dropped for these series.
 
 #### Series lifecycle
 
@@ -254,7 +272,7 @@ cbox_init_process_current_scale - cbox_init_process_desired_scale
 
 Exposed when `resource_metrics_enabled` and `metrics_enabled` are both true.
 These use **`process`**, not `name`, for the process name. Collection
-details and more queries: [Resource Monitoring](resource-monitoring.md).
+details and more queries: [Resource Monitoring](resource-monitoring).
 
 #### `cbox_init_process_cpu_percent`
 **Type:** Gauge
@@ -414,7 +432,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Process {{ $labels.name }} instance {{ $labels.instance }} is down"
+          summary: "Process {{ $labels.name }} ({{ $labels.exported_instance }}) on {{ $labels.instance }} is down"
 
       # Frequent restarts
       - alert: FrequentRestarts

@@ -325,10 +325,11 @@ server {
 # Count running instances
 sum(cbox_init_process_up{name="queue-default"})
 
-# Per-instance status (instance IDs count from 0)
-cbox_init_process_up{name="queue-default", instance="queue-default-0"}
-cbox_init_process_up{name="queue-default", instance="queue-default-1"}
-cbox_init_process_up{name="queue-default", instance="queue-default-2"}
+# Per-instance status (instance IDs count from 0; Prometheus stores them as
+# exported_instance by default, see the metrics label reference)
+cbox_init_process_up{name="queue-default", exported_instance="queue-default-0"}
+cbox_init_process_up{name="queue-default", exported_instance="queue-default-1"}
+cbox_init_process_up{name="queue-default", exported_instance="queue-default-2"}
 
 # Total restarts (counted per process, not per instance)
 sum(cbox_init_process_restarts_total{name="queue-default"})

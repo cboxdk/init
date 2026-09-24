@@ -25,7 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - The metrics reference now lists the exact label set of every
-  `cbox_init_` metric and explains `name` vs `process`. Examples that
+  `cbox_init_` metric, explains `name` vs `process`, and notes that
+  Prometheus' default scrape config renames the `instance` label to
+  `exported_instance`. Examples that
   queried lifecycle metrics with `process=`, or used metrics that do not
   exist (`cbox_init_manager_uptime_seconds`,
   `cbox_init_hook_execution_seconds`, `cbox_init_hook_failures_total`),
