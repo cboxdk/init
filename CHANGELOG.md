@@ -52,6 +52,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-existent `CBOX_INIT_PROCESS_<NAME>_PRIORITY` is gone; `CBOX_ENGINE`,
   `CBOX_WAKE_MODE` and `CBOX_ENGINE_CONFIG_PATH` are documented.
 
+
+## [3.7.1] - 2026-09-24
+
+### Fixed
+
+- **Scale-down now actually drops the removed instances' series.**
+  `RemoveInstanceMetrics` matched every metric on the `process` label, but
+  `cbox_init_process_up`, `_start_time_seconds` and `_last_exit_code` carry
+  the process name under `name`. A partial match on a label a metric does
+  not have deletes nothing, so after scaling php-fpm from 10 to 2,
+  `cbox_init_process_up{instance="php-fpm-9"}` sat at 0 forever and
+  `process_up == 0` alerts fired on instances scaled away on purpose. Each
+  metric is now matched on its own label key. `cbox_init_process_threads`,
+  `_file_descriptors` and `cbox_init_resource_collection_errors_total` are
+  now dropped as well; they were never in the list. `RemoveProcessMetrics`
+  had the same mismatch and missed the health check histogram and counter
+  and the desired-scale gauge. No label names changed.
+- **Removing a process now drops its series.** `RemoveProcessMetrics` was
+  never called, so a process removed through the API or dropped from the
+  config by a reload kept `cbox_init_process_up` at 0 forever, and
+  `process_up == 0` alerts fired for a process removed on purpose. Both paths
+  now drop every series of the process and its resource-history buffers,
+  including history kept for instances that exited on their own. A reload
+  cleans up only once it commits: a reload that fails and rolls back brings
+  the process back with its counters intact.
+- **Lowering `scale` through a reload or an API edit drops the old
+  instances' series.** Both paths replace the process's supervisor, and the
+  cleanup only ran for a live scale-down, so after editing `scale: 10` to
+  `scale: 2` instances 2-9 stayed at `cbox_init_process_up` 0 (with their
+  last CPU and memory readings) forever. The manager now keeps only the
+  series of the instances the new supervisor runs.
+- **Turning a process into a scheduled task drops its series.** A scheduled
+  task exports no process metrics, but the supervisor it replaced left
+  `process_up` at 0, `desired_scale` at its old value and the last
+  health check status behind, so `process_up == 0`, scale-drift and health
+  alerts fired for good.
+
+### Documentation
+
+- The metrics reference now lists the exact label set of every
+  `cbox_init_` metric, explains `name` vs `process`, and notes that
+  Prometheus' default scrape config renames the `instance` label to
+  `exported_instance`. Examples that queried lifecycle metrics with
+  `process=`, or used metrics that do not exist
+  (`cbox_init_manager_uptime_seconds`, `cbox_init_hook_execution_seconds`,
+  `cbox_init_hook_failures_total`), are corrected.
+
 ## [3.7.0] - 2026-09-11
 
 ### Changed

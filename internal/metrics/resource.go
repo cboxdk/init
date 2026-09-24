@@ -110,8 +110,13 @@ type ResourceCollector struct {
 	maxSamples int
 	buffers    map[string]*TimeSeriesBuffer // key: "process-instance"
 	handles    map[string]*procHandle       // key: "process-instance"; reused across ticks
-	mu         sync.RWMutex
-	logger     *slog.Logger
+	// instances records which instance IDs hold a buffer or handle, per
+	// process. The "process-instance" keys cannot be matched by prefix to find
+	// a process's entries: "php-fpm-" is also a prefix of every "php-fpm-worker"
+	// key. RemoveProcess uses this to drop exactly one process's entries.
+	instances map[string]map[string]struct{}
+	mu        sync.RWMutex
+	logger    *slog.Logger
 }
 
 // NewResourceCollector creates a new resource collector
@@ -121,6 +126,7 @@ func NewResourceCollector(interval time.Duration, maxSamples int, logger *slog.L
 		maxSamples: maxSamples,
 		buffers:    make(map[string]*TimeSeriesBuffer),
 		handles:    make(map[string]*procHandle),
+		instances:  make(map[string]map[string]struct{}),
 		logger:     logger.With("component", "resource_collector"),
 	}
 }
@@ -149,6 +155,7 @@ func (rc *ResourceCollector) Collect(pid int, processName, instanceID string) (*
 		}
 		h = &procHandle{pid: pid, proc: proc}
 		rc.handles[key] = h
+		rc.track(processName, instanceID)
 	}
 	rc.mu.Unlock()
 
@@ -184,6 +191,7 @@ func (rc *ResourceCollector) AddSample(processName, instanceID string, sample Re
 	// Lazy initialization of buffer
 	if _, exists := rc.buffers[key]; !exists {
 		rc.buffers[key] = NewTimeSeriesBuffer(rc.maxSamples)
+		rc.track(processName, instanceID)
 	}
 
 	rc.buffers[key].Add(sample)
@@ -204,9 +212,65 @@ func (rc *ResourceCollector) RemoveBuffer(processName, instanceID string) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
+	rc.removeLocked(processName, instanceID)
+}
+
+// RemoveProcess drops the buffers and handles of every instance of a process
+// that has been removed from the config. Unlike RemoveBuffer it also reaches
+// instances whose history was deliberately kept (a completed oneshot, an
+// instance that exited and was not restarted), because the process itself is
+// gone.
+func (rc *ResourceCollector) RemoveProcess(processName string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	for instanceID := range rc.instances[processName] {
+		rc.removeLocked(processName, instanceID)
+	}
+}
+
+// RetainInstances drops the buffers and handles of every instance of
+// processName that is not in keep: the counterpart of metrics.RetainInstances
+// for a process whose supervisor was replaced by one running fewer instances.
+func (rc *ResourceCollector) RetainInstances(processName string, keep []string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	kept := make(map[string]bool, len(keep))
+	for _, id := range keep {
+		kept[id] = true
+	}
+	for instanceID := range rc.instances[processName] {
+		if !kept[instanceID] {
+			rc.removeLocked(processName, instanceID)
+		}
+	}
+}
+
+// track records that instanceID of processName holds a buffer or handle.
+// Callers hold rc.mu.
+func (rc *ResourceCollector) track(processName, instanceID string) {
+	ids := rc.instances[processName]
+	if ids == nil {
+		ids = make(map[string]struct{})
+		rc.instances[processName] = ids
+	}
+	ids[instanceID] = struct{}{}
+}
+
+// removeLocked drops one instance's buffer, handle and tracking entry.
+// Callers hold rc.mu.
+func (rc *ResourceCollector) removeLocked(processName, instanceID string) {
 	key := processName + "-" + instanceID
 	delete(rc.buffers, key)
 	delete(rc.handles, key)
+
+	if ids := rc.instances[processName]; ids != nil {
+		delete(ids, instanceID)
+		if len(ids) == 0 {
+			delete(rc.instances, processName)
+		}
+	}
 }
 
 // GetBufferSizes returns memory usage info

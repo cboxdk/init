@@ -764,3 +764,73 @@ func TestResourceCollector_CPUPercentTracksRecentUsage(t *testing.T) {
 		t.Errorf("idle CPU reading %.1f%% should be near zero", idle.CPUPercent)
 	}
 }
+
+// TestResourceCollector_RemoveProcess covers dropping a removed process's
+// buffers. It must reach instances whose history was deliberately kept (a
+// completed oneshot only releases its handle), and it must not touch a process
+// whose name merely starts with the removed one: the "process-instance" keys
+// of "php-fpm" are a prefix of those of "php-fpm-worker".
+func TestResourceCollector_RemoveProcess(t *testing.T) {
+	rc := NewResourceCollector(time.Second, 10, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	sample := ResourceSample{Timestamp: time.Now(), CPUPercent: 1}
+	for _, id := range []string{"php-fpm-0", "php-fpm-1"} {
+		rc.AddSample("php-fpm", id, sample)
+	}
+	rc.AddSample("php-fpm-worker", "php-fpm-worker-0", sample)
+	// Instance 1 exited as a oneshot would: handle gone, history kept.
+	rc.ReleaseHandle("php-fpm", "php-fpm-1")
+
+	rc.RemoveProcess("php-fpm")
+
+	for _, id := range []string{"php-fpm-0", "php-fpm-1"} {
+		if _, ok := rc.GetLatest("php-fpm", id); ok {
+			t.Errorf("buffer for removed instance %s survived", id)
+		}
+	}
+	if _, ok := rc.GetLatest("php-fpm-worker", "php-fpm-worker-0"); !ok {
+		t.Error("buffer of php-fpm-worker was removed along with php-fpm (prefix over-match)")
+	}
+	if got := len(rc.GetBufferSizes()); got != 1 {
+		t.Errorf("%d buffers left, want 1 (php-fpm-worker's)", got)
+	}
+	if _, tracked := rc.instances["php-fpm"]; tracked {
+		t.Error("removed process is still tracked")
+	}
+
+	// Removing it again, or a process that never existed, is a no-op.
+	rc.RemoveProcess("php-fpm")
+	rc.RemoveProcess("never-existed")
+	if got := len(rc.GetBufferSizes()); got != 1 {
+		t.Errorf("%d buffers left after no-op removals, want 1", got)
+	}
+}
+
+// TestResourceCollector_RetainInstances drops the buffers of instances outside
+// keep and leaves both the kept instance and other processes alone.
+func TestResourceCollector_RetainInstances(t *testing.T) {
+	rc := NewResourceCollector(time.Second, 10, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	sample := ResourceSample{Timestamp: time.Now(), CPUPercent: 1}
+	for _, id := range []string{"php-fpm-0", "php-fpm-1", "php-fpm-2"} {
+		rc.AddSample("php-fpm", id, sample)
+	}
+	rc.AddSample("php-fpm-worker", "php-fpm-worker-1", sample)
+
+	rc.RetainInstances("php-fpm", []string{"php-fpm-0"})
+
+	if _, ok := rc.GetLatest("php-fpm", "php-fpm-0"); !ok {
+		t.Error("kept instance lost its buffer")
+	}
+	for _, id := range []string{"php-fpm-1", "php-fpm-2"} {
+		if _, ok := rc.GetLatest("php-fpm", id); ok {
+			t.Errorf("buffer for %s survived though it is not in keep", id)
+		}
+	}
+	if _, ok := rc.GetLatest("php-fpm-worker", "php-fpm-worker-1"); !ok {
+		t.Error("another process's buffer was removed")
+	}
+	if got := len(rc.GetBufferSizes()); got != 2 {
+		t.Errorf("%d buffers left, want 2", got)
+	}
+}
