@@ -1,10 +1,24 @@
 package signals
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"syscall"
+	"time"
 )
+
+// OutputDrainGrace bounds how long, after a child has exited, its captured
+// output is still waited for.
+//
+// The output pipe is only closed when every process holding its write end has
+// closed it — and a child that started something in the background has handed
+// that end on. os/exec's default is to read until EOF, which means waiting for
+// the background process too: a hook or scheduled job that launched a daemon
+// did not finish until the daemon did, whatever its timeout said. Commands that
+// capture output set cmd.WaitDelay to this; the child's own output has arrived
+// long before it runs out.
+const OutputDrainGrace = time.Second
 
 // RunSupervised starts and waits on an already-configured command under the
 // wildcard reaper's coordination, so a child reaped by the PID-1 reaper before
@@ -18,8 +32,9 @@ import (
 // *passing* exec health check triggers a restart. Registering the pid before
 // waiting lets the reaper stash the real status for recovery here.
 //
-// The normal (non-raced) path is unchanged: this returns exactly what cmd.Wait()
-// returned (nil on success, *exec.ExitError otherwise), so callers that inspect
+// The normal (non-raced) path is unchanged: this returns what cmd.Wait()
+// returned (nil on success, *exec.ExitError otherwise; see OutputDrainGrace for
+// exec.ErrWaitDelay), so callers that inspect
 // the ExitError keep working. Only when the reaper won the race does this recover
 // the captured status — returning nil for a clean exit (the status that matters
 // most) or a descriptive error otherwise.
@@ -42,6 +57,13 @@ func waitSupervised(cmd *exec.Cmd) error {
 	// verbatim so exit-code extraction downstream is unaffected.
 	if cmd.ProcessState != nil {
 		UnregisterSupervised(pid)
+		// ErrWaitDelay means the child exited successfully but something it
+		// left running still held its output when cmd.WaitDelay ran out. The
+		// command did what was asked; the lingering process is not its result.
+		// (A non-zero exit is reported as the *exec.ExitError either way.)
+		if errors.Is(waitErr, exec.ErrWaitDelay) && cmd.ProcessState.Success() {
+			return nil
+		}
 		return waitErr
 	}
 

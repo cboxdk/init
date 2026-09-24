@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -194,11 +193,15 @@ type Instance struct {
 	pid           int
 	started       time.Time
 	restartCount  int
-	doneCh        chan struct{} // Closed when process exits (monitored by monitorInstance)
+	doneCh        chan struct{} // Closed when monitorInstance is done with the exit
+	exitedCh      chan struct{} // Closed as soon as the process is reaped, before its output is drained; nil = use doneCh
+	exitOnce      sync.Once
 	stdoutWriter  *logger.ProcessWriter
 	stderrWriter  *logger.ProcessWriter
 	stdoutStream  *snapshot.Stream // supervisor-owned pipe, survives a checkpoint
 	stderrStream  *snapshot.Stream
+	stdoutPipe    *outputPipe // supervisor-owned pipe, for a process that is not checkpointed
+	stderrPipe    *outputPipe
 	checkpointing bool // the pending exit is a checkpoint, not a crash
 	allowRestart  bool
 	oneshotExecID int64 // Tracks oneshot execution history entry ID (0 if not oneshot)
@@ -727,17 +730,28 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		}
 	}
 
-	// Hand os/exec an *os.File rather than an io.Writer when this process may be
-	// checkpointed.
+	// Hand os/exec an *os.File, never an io.Writer. Given an io.Writer, os/exec
+	// allocates a pipe of its own, copies through a goroutine, and makes
+	// cmd.Wait() wait for that pipe to reach EOF — which a descendant still
+	// holding it postpones indefinitely (see outputPipe). Given an *os.File it
+	// dups the descriptor straight onto the child's fd and waits for the
+	// process alone.
 	//
-	// The difference is not stylistic. Given an io.Writer, os/exec allocates a
-	// pipe of its own and copies through a goroutine, and the write end is
-	// unreachable from here — so after a dump there is nothing to give CRIU,
-	// which then creates a fresh pipe and the restored process dies on its
-	// first write with no reader. Given an *os.File it dups the descriptor
-	// straight onto the child's fd and runs no goroutine, and we keep the write
-	// end for as long as the process is supervised.
+	// A process that may be checkpointed gets a snapshot.Stream, whose write
+	// end cbox-init keeps for as long as the process is supervised: after a dump
+	// that is what CRIU hands back, or the restored process dies on its first
+	// write with no reader. Everything else gets an outputPipe, whose write end
+	// is released once the child holds it. A disabled stream is nil — /dev/null
+	// — rather than io.Discard, which os/exec also serves through a pipe.
 	var stdoutStream, stderrStream *snapshot.Stream
+	var stdoutPipe, stderrPipe *outputPipe
+	releasePipes := func() {
+		for _, p := range []*outputPipe{stdoutPipe, stderrPipe} {
+			if p != nil {
+				p.release()
+			}
+		}
+	}
 
 	if stdoutWriter != nil {
 		if s.snapshotStreams {
@@ -747,10 +761,12 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 			}
 			cmd.Stdout = stdoutStream.Writer()
 		} else {
-			cmd.Stdout = stdoutWriter
+			stdoutPipe, err = newOutputPipe(stdoutWriter)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+			}
+			cmd.Stdout = stdoutPipe.childEnd()
 		}
-	} else {
-		cmd.Stdout = io.Discard
 	}
 	if stderrWriter != nil {
 		if s.snapshotStreams {
@@ -763,10 +779,13 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 			}
 			cmd.Stderr = stderrStream.Writer()
 		} else {
-			cmd.Stderr = stderrWriter
+			stderrPipe, err = newOutputPipe(stderrWriter)
+			if err != nil {
+				releasePipes()
+				return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+			}
+			cmd.Stderr = stderrPipe.childEnd()
 		}
-	} else {
-		cmd.Stderr = io.Discard
 	}
 
 	// Start the process and register it with the zombie reaper atomically, so
@@ -774,7 +793,12 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 	// the exit status for us instead of leaving cmd.Wait() with a nil
 	// ProcessState — and so a child that exits immediately cannot be reaped in
 	// the gap between starting and registering. See signals.StartSupervised.
-	if err := signals.StartSupervised(cmd); err != nil {
+	err = signals.StartSupervised(cmd)
+	// Started or not, cbox-init's copy of the write ends must go: the child
+	// holds its own duplicates, and while ours is open the pipes never reach
+	// EOF.
+	releasePipes()
+	if err != nil {
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
@@ -787,10 +811,13 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 		pid:          cmd.Process.Pid,
 		started:      startTime,
 		doneCh:       make(chan struct{}),
+		exitedCh:     make(chan struct{}),
 		stdoutWriter: stdoutWriter,
 		stderrWriter: stderrWriter,
 		stdoutStream: stdoutStream,
 		stderrStream: stderrStream,
+		stdoutPipe:   stdoutPipe,
+		stderrPipe:   stderrPipe,
 		allowRestart: true,
 	}
 
@@ -818,6 +845,28 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 	}()
 
 	return instance, nil
+}
+
+// drainOutput waits, bounded by signals.OutputDrainGrace in total, for an
+// exited instance's output pipes to reach EOF, and logs when they have not.
+func (s *Supervisor) drainOutput(instance *Instance) {
+	deadline := time.Now().Add(signals.OutputDrainGrace)
+	for _, p := range []*outputPipe{instance.stdoutPipe, instance.stderrPipe} {
+		if p == nil {
+			continue
+		}
+		if !p.drain(time.Until(deadline)) {
+			// Almost always something the process started, still holding the
+			// pipe. It can also be cbox-init's own log output being too slow to
+			// take the rest in time — either way, nothing is dropped.
+			s.logger.Warn("Process exited before all of its output was logged; acting on the exit "+
+				"and logging the rest as it arrives (usually something the process started still holds its stdout/stderr)",
+				"instance_id", instance.id,
+				"waited", signals.OutputDrainGrace,
+			)
+			return
+		}
+	}
 }
 
 // startFileTailers starts file tailers for all configured log files.
@@ -911,17 +960,24 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 			instance.mu.Unlock()
 		}
 		// CRITICAL: Always close doneCh to unblock stopInstance
+		instance.markExited()
 		close(instance.doneCh)
 	}()
 
 	err := instance.cmd.Wait()
+	instance.markExited()
 
-	// The process is gone: flush whatever its writers still hold. A crash
-	// message is characteristically an UNTERMINATED final line ("fatal: ..."
-	// then abort, or a line cut short by SIGKILL), and with multiline enabled
-	// the whole buffered stack trace sits there too. Without this flush that
-	// last output — the one log you actually need to debug a crash loop — is
-	// silently dropped.
+	// The process is gone. Let what it wrote before exiting reach its writers
+	// first — normally that takes microseconds. If a descendant still holds the
+	// pipe, stop waiting after the grace period: the exit is what matters here,
+	// and the descendant's output goes on being logged regardless.
+	s.drainOutput(instance)
+
+	// Then flush whatever the writers still hold. A crash message is
+	// characteristically an UNTERMINATED final line ("fatal: ..." then abort, or
+	// a line cut short by SIGKILL), and with multiline enabled the whole
+	// buffered stack trace sits there too. Without this flush that last output —
+	// the one log you actually need to debug a crash loop — is silently dropped.
 	if instance.stdoutWriter != nil {
 		instance.stdoutWriter.Flush()
 	}
@@ -1163,6 +1219,7 @@ func (s *Supervisor) EndCheckpoint() int {
 		instance.checkpointing = false
 		instance.allowRestart = true
 		instance.doneCh = make(chan struct{})
+		instance.exitedCh = nil // polled, not waited on: its exit IS the end of the watch
 		done := instance.doneCh
 		pid := instance.pid
 		instance.mu.Unlock()
@@ -1672,13 +1729,15 @@ func (s *Supervisor) stopInstance(ctx context.Context, instance *Instance) error
 	// apart with one timer and no goroutine.
 	gracePeriod, deadlineBound := effectiveStopTimeout(ctx, timeout)
 
-	// CRITICAL: Wait on doneCh instead of calling Wait() again to avoid double-Wait race
-	// The monitorInstance goroutine is already calling Wait() and will close doneCh when done
+	// CRITICAL: Wait on the instance's channels instead of calling Wait() again
+	// to avoid a double-Wait race: monitorInstance is already calling Wait().
 	timer := time.NewTimer(gracePeriod)
 	defer timer.Stop()
 
+	exited, done := instance.exitChannels()
 	select {
-	case <-instance.doneCh:
+	case <-exited:
+		awaitMonitor(done)
 		s.logger.Info("Process instance stopped gracefully",
 			"instance_id", instance.id,
 		)
@@ -1786,16 +1845,64 @@ func (s *Supervisor) forceKillInstance(instance *Instance, pid int, reason strin
 	return fmt.Errorf("instance %s (pid %d) did not exit after SIGKILL", instance.id, pid)
 }
 
-// waitForInstanceExit waits up to d for monitorInstance to close doneCh,
-// reporting whether the instance exited.
+// waitForInstanceExit waits up to d for the instance's process to exit,
+// reporting whether it did.
+//
+// d bounds the PROCESS, not cbox-init's handling of its exit: once the process
+// has been reaped, the (bounded) drain of its output is waited for separately,
+// so kill_timeout means what it says even when a descendant still holds the
+// output pipe.
 func (s *Supervisor) waitForInstanceExit(instance *Instance, d time.Duration) bool {
+	exited, done := instance.exitChannels()
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 	select {
-	case <-instance.doneCh:
+	case <-exited:
+		awaitMonitor(done)
 		return true
 	case <-timer.C:
 		return false
+	}
+}
+
+// exitChannels returns the channel closed when the instance's process has been
+// reaped, and the one closed when monitorInstance has finished with the exit.
+// A restored instance has only the latter, and it serves as both.
+func (i *Instance) exitChannels() (exited, done <-chan struct{}) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	done = i.doneCh
+	exited = i.exitedCh
+	if exited == nil {
+		exited = done
+	}
+	return exited, done
+}
+
+// markExited signals that the process has been reaped. Idempotent: the panic
+// path in monitorInstance calls it too.
+func (i *Instance) markExited() {
+	i.exitOnce.Do(func() {
+		i.mu.RLock()
+		ch := i.exitedCh
+		i.mu.RUnlock()
+		if ch != nil {
+			close(ch)
+		}
+	})
+}
+
+// awaitMonitor waits for monitorInstance to finish with an exit it has already
+// observed. That takes as long as draining the instance's output — bounded by
+// signals.OutputDrainGrace — plus bookkeeping; the extra second is margin. It
+// gives up rather than block a stop on a monitor that does not finish, since
+// the process itself is gone either way.
+func awaitMonitor(done <-chan struct{}) {
+	timer := time.NewTimer(signals.OutputDrainGrace + time.Second)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
 	}
 }
 
