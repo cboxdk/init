@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,33 @@ func formatLabels(labels map[string]string) string {
 	for k, v := range labels {
 		parts = append(parts, k+"="+v)
 	}
+	sort.Strings(parts)
 	return "{" + strings.Join(parts, ",") + "}"
+}
+
+// familyName returns the metric name of a single-family collector, for
+// readable failure messages.
+func familyName(c prometheus.Collector) string {
+	ch := make(chan *prometheus.Desc, 1)
+	c.Describe(ch)
+	desc := (<-ch).String()
+	const marker = `fqName: "`
+	if i := strings.Index(desc, marker); i >= 0 {
+		rest := desc[i+len(marker):]
+		if j := strings.IndexByte(rest, '"'); j >= 0 {
+			return rest[:j]
+		}
+	}
+	return desc
+}
+
+// seriesPerInstance is how many series one instance contributes to a family:
+// one, except ProcessMemoryBytes, which has an rss and a vms series.
+func seriesPerInstance(f seriesFamily) int {
+	if f.vec == partialDeleter(ProcessMemoryBytes) {
+		return 2
+	}
+	return 1
 }
 
 // instanceSelectors covers both process-label keys in use, so an instance's
@@ -106,9 +133,9 @@ func TestRemoveInstanceMetrics_ScaleDownLeavesNoSeries(t *testing.T) {
 
 	// Baseline totals per family, so the delta proves exactly two instances'
 	// worth of series went away and nothing else did.
-	before := make(map[*seriesFamily]int)
-	for i := range instanceSeries {
-		before[&instanceSeries[i]] = testutil.CollectAndCount(instanceSeries[i].vec.(prometheus.Collector))
+	before := make([]int, len(instanceSeries))
+	for i, f := range instanceSeries {
+		before[i] = testutil.CollectAndCount(f.vec.(prometheus.Collector))
 	}
 
 	// Every per-instance family must have been populated, otherwise the
@@ -118,7 +145,7 @@ func TestRemoveInstanceMetrics_ScaleDownLeavesNoSeries(t *testing.T) {
 		for _, sel := range instanceSelectors(proc, id) {
 			got += len(seriesWith(t, sel))
 		}
-		// 9 families, ProcessMemoryBytes has two series (rss, vms).
+		// One series per family, plus the second ProcessMemoryBytes series.
 		if want := len(instanceSeries) + 1; got != want {
 			t.Fatalf("instance %s: populated %d series, want %d", id, got, want)
 		}
@@ -137,23 +164,17 @@ func TestRemoveInstanceMetrics_ScaleDownLeavesNoSeries(t *testing.T) {
 		}
 	}
 
-	for i := range instanceSeries {
-		f := &instanceSeries[i]
-		perInstance := 1
-		if f.vec == partialDeleter(ProcessMemoryBytes) {
-			perInstance = 2
-		}
-		after := testutil.CollectAndCount(f.vec.(prometheus.Collector))
-		if want := before[f] - 2*perInstance; after != want {
-			t.Errorf("family %d (%s label): %d series after removal, want %d", i, f.processLabel, after, want)
+	for i, f := range instanceSeries {
+		c := f.vec.(prometheus.Collector)
+		after := testutil.CollectAndCount(c)
+		if want := before[i] - 2*seriesPerInstance(f); after != want {
+			t.Errorf("%s (%s label): %d series after removal, want %d", familyName(c), f.processLabel, after, want)
 		}
 	}
 
 	// The surviving instance, the other process and the per-process series are
-	// untouched.
-	if got := testutil.ToFloat64(ProcessUp.WithLabelValues(proc, instances[0])); got != 0 {
-		t.Errorf("surviving instance process_up = %v, want 0 (it was stopped, not removed)", got)
-	}
+	// untouched. Checked through the registry only: WithLabelValues would
+	// recreate a wrongly deleted series and hide the over-match.
 	for _, sel := range [][]prometheus.Labels{
 		instanceSelectors(proc, instances[0]),
 		instanceSelectors(other, instances[2]),
@@ -180,10 +201,12 @@ func TestRemoveProcessMetrics_LeavesNoSeries(t *testing.T) {
 		populateProcess(p)
 	}
 
+	otherBefore := make(map[string]int)
 	for _, key := range []string{labelName, labelProcess} {
 		if len(seriesWith(t, prometheus.Labels{key: proc})) == 0 {
 			t.Fatalf("no %s=%q series populated; test would pass vacuously", key, proc)
 		}
+		otherBefore[key] = len(seriesWith(t, prometheus.Labels{key: other}))
 	}
 
 	RemoveProcessMetrics(proc)
@@ -194,8 +217,8 @@ func TestRemoveProcessMetrics_LeavesNoSeries(t *testing.T) {
 		}
 	}
 	for _, key := range []string{labelName, labelProcess} {
-		if len(seriesWith(t, prometheus.Labels{key: other})) == 0 {
-			t.Errorf("series for %q under %q were deleted too (over-match)", other, key)
+		if got := len(seriesWith(t, prometheus.Labels{key: other})); got != otherBefore[key] {
+			t.Errorf("%s=%q: %d series after removing %q, want %d (over-match)", key, other, got, proc, otherBefore[key])
 		}
 	}
 }

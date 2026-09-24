@@ -6,6 +6,9 @@ import (
 	"runtime"
 )
 
+// Adding a metric labelled per process or per instance? Add it to
+// instanceSeries or processSeries below as well, or it is never cleaned up
+// when an instance is scaled away or a process is removed.
 var (
 	// Process metrics
 	ProcessUp = promauto.NewGaugeVec(
