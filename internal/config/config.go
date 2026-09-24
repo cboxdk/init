@@ -322,7 +322,8 @@ func IsValidSignalName(name string) bool {
 	return KnownSignalNames[key]
 }
 
-// validateProcessShutdown validates the per-process shutdown signal names
+// validateProcessShutdown validates the per-process shutdown signal names and
+// the kill_timeout bounds
 func (c *Config) validateProcessShutdown(name string, proc *Process) error {
 	if proc.Shutdown == nil {
 		return nil
@@ -332,6 +333,12 @@ func (c *Config) validateProcessShutdown(name string, proc *Process) error {
 	}
 	if proc.Shutdown.KillSignal != "" && !IsValidSignalName(proc.Shutdown.KillSignal) {
 		return fmt.Errorf("process %s has invalid shutdown.kill_signal: %q", name, proc.Shutdown.KillSignal)
+	}
+	if proc.Shutdown.KillTimeout < 0 {
+		return fmt.Errorf("process %s has negative shutdown.kill_timeout (%d)", name, proc.Shutdown.KillTimeout)
+	}
+	if proc.Shutdown.KillTimeout > MaxKillTimeout {
+		return fmt.Errorf("process %s has shutdown.kill_timeout %ds, above the %ds maximum", name, proc.Shutdown.KillTimeout, MaxKillTimeout)
 	}
 	return nil
 }
@@ -408,6 +415,11 @@ func (c *Config) validateProcessHealthCheck(name string, proc *Process) error {
 	}
 	if hc.Type == "exec" && len(hc.Command) == 0 {
 		return fmt.Errorf("process %s has exec health check but no command", name)
+	}
+	// user/group change who runs the check command; a tcp or http check runs
+	// none, so the setting would be accepted and do nothing.
+	if hc.Type != "exec" && (hc.User != "" || hc.Group != "") {
+		return fmt.Errorf("process %s sets health_check.user/group on a %s check; they only apply to exec checks", name, hc.Type)
 	}
 	// Numeric fields must be sane. A non-positive period is not merely odd: the
 	// health loop builds a time.Ticker from it, and a non-positive interval

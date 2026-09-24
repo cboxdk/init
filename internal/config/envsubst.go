@@ -294,6 +294,7 @@ func applyEnvOverridesMap(raw map[string]any) error {
 	globalMap := ensureGlobalMap(raw)
 	processesMap := ensureProcessMap(raw)
 	hookCollector := map[string]map[int]map[string]any{}
+	var processOverrides [][2]string
 
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
@@ -315,9 +316,24 @@ func applyEnvOverridesMap(raw map[string]any) error {
 			segment := strings.TrimPrefix(key, "CBOX_INIT_HOOK_")
 			collectHookEnvOverride(hookCollector, segment, value)
 		case strings.HasPrefix(key, "CBOX_INIT_PROCESS_"):
-			segment := strings.TrimPrefix(key, "CBOX_INIT_PROCESS_")
-			applyProcessEnvOverride(processesMap, segment, value)
+			processOverrides = append(processOverrides, [2]string{strings.TrimPrefix(key, "CBOX_INIT_PROCESS_"), value})
 		}
+	}
+
+	// Shortest first, then by name. Resolving a variable prefers a process that
+	// already exists (see applyProcessEnvOverride), so a process defined only in
+	// the environment must exist before its nested fields are read: its
+	// top-level keys (NAME_COMMAND, NAME_ENABLED) are shorter than its nested
+	// ones (NAME_HEALTH_CHECK_USER). os.Environ order would make that luck.
+	sort.Slice(processOverrides, func(i, j int) bool {
+		a, b := processOverrides[i][0], processOverrides[j][0]
+		if len(a) != len(b) {
+			return len(a) < len(b)
+		}
+		return a < b
+	})
+	for _, override := range processOverrides {
+		applyProcessEnvOverride(processesMap, override[0], override[1])
 	}
 
 	applyHookEnvOverrides(raw, hookCollector)
@@ -485,25 +501,45 @@ func applyProcessEnvOverride(processes map[string]any, segment string, value str
 		lowerTokens[i] = strings.ToLower(token)
 	}
 
+	// Where the process name ends and the field begins is ambiguous: in
+	// DB_HEALTH_CHECK_USER both "db" + health_check.user and "db-health-check"
+	// + user are valid readings. A process that already exists wins, so a nested
+	// field reaches the process it names instead of creating a phantom one.
+	// Only when no split names an existing process is the longest name taken —
+	// the reading that defines a new process from the environment alone.
+	type reading struct {
+		name string
+		path []string
+	}
+	var fallback *reading
 	for split := len(tokens) - 1; split >= 1; split-- {
-		fieldTokens := lowerTokens[split:]
-		path, ok := matchFieldPath(processFieldTree, fieldTokens)
+		path, ok := matchFieldPath(processFieldTree, lowerTokens[split:])
 		if !ok {
 			continue
 		}
 		procEncoded := strings.Join(tokens[:split], "_")
-		name := decodeProcessName(processes, procEncoded)
-		if name == "" {
-			name = normalizeProcessName(procEncoded)
+		if name := decodeProcessName(processes, procEncoded); name != "" {
+			setProcessField(ensureMap(processes, name), path, value)
+			return
 		}
-		procMap := ensureMap(processes, name)
-		if len(path) == 1 && path[0] == "command" {
-			setNestedValue(procMap, path, parseCommandValue(value))
-		} else {
-			setNestedValue(procMap, path, parseEnvValue(value))
+		if fallback == nil {
+			fallback = &reading{name: normalizeProcessName(procEncoded), path: path}
 		}
+	}
+
+	if fallback != nil {
+		setProcessField(ensureMap(processes, fallback.name), fallback.path, value)
+	}
+}
+
+// setProcessField sets one overridden field on a raw process map. A top-level
+// command accepts the comma-separated form as well as a JSON array.
+func setProcessField(procMap map[string]any, path []string, value string) {
+	if len(path) == 1 && path[0] == "command" {
+		setNestedValue(procMap, path, parseCommandValue(value))
 		return
 	}
+	setNestedValue(procMap, path, parseEnvValue(value))
 }
 
 func decodeProcessName(processes map[string]any, encoded string) string {
