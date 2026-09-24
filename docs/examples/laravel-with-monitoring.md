@@ -108,12 +108,13 @@ processes:
 curl http://localhost:9090/metrics
 
 # Key metrics:
-cbox_init_manager_uptime_seconds               # Manager uptime
-cbox_init_process_up{process="nginx"}          # Process status (1=up, 0=down)
-cbox_init_process_restarts_total{process="*"}  # Restart count
-cbox_init_health_check_status{name="*",type="*"}  # Health check status
-cbox_init_process_start_time{process="*"}      # Process start timestamp
-cbox_init_hook_execution_seconds{hook="*"}     # Hook execution time
+cbox_init_manager_start_time_seconds                  # Manager start (uptime = time() - this)
+cbox_init_process_up{name="nginx"}                    # Process status (1=up, 0=down), per instance
+cbox_init_process_restarts_total{name="nginx"}        # Restart count, by reason
+cbox_init_health_check_status{name="nginx"}           # Health check status, by type
+cbox_init_process_start_time_seconds{name="nginx"}    # Instance start timestamp
+cbox_init_hook_duration_seconds{name="migrate"}       # Hook execution time (name = hook name)
+cbox_init_process_memory_bytes{process="nginx"}       # Resource metrics use process=, not name=
 ```
 
 ### Grafana Dashboard
@@ -130,8 +131,8 @@ datasources:
 
 **Example Queries:**
 ```promql
-# Process uptime
-cbox_init_manager_uptime_seconds
+# Manager uptime in seconds
+time() - cbox_init_manager_start_time_seconds
 
 # Total restarts (all processes)
 sum(cbox_init_process_restarts_total)
@@ -139,12 +140,12 @@ sum(cbox_init_process_restarts_total)
 # Unhealthy processes
 count(cbox_init_health_check_status == 0)
 
-# Processes by state
-count by (state) (cbox_init_process_up)
+# Running instances per process
+sum by (name) (cbox_init_process_up)
 
 # Hook execution duration
-rate(cbox_init_hook_execution_seconds_sum[5m]) /
-rate(cbox_init_hook_execution_seconds_count[5m])
+rate(cbox_init_hook_duration_seconds_sum[5m]) /
+rate(cbox_init_hook_duration_seconds_count[5m])
 ```
 
 ### Prometheus Alerts
@@ -161,8 +162,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Process {{ $labels.process }} is down"
-          description: "{{ $labels.process }} has been down for 1 minute"
+          summary: "Process {{ $labels.name }} is down"
+          description: "{{ $labels.name }} has been down for 1 minute"
 
       # Excessive restarts
       - alert: FrequentRestarts
@@ -171,7 +172,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Process {{ $labels.process }} restarting frequently"
+          summary: "Process {{ $labels.name }} restarting frequently"
 
       # Unhealthy process
       - alert: ProcessUnhealthy
@@ -180,15 +181,15 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Process {{ $labels.process }} is unhealthy"
+          summary: "Process {{ $labels.name }} is unhealthy"
 
       # Hook failures
       - alert: HookFailed
-        expr: cbox_init_hook_failures_total > 0
+        expr: increase(cbox_init_hook_executions_total{status="failure"}[5m]) > 0
         labels:
           severity: warning
         annotations:
-          summary: "Hook {{ $labels.hook }} failed"
+          summary: "Hook {{ $labels.name }} failed"
 ```
 
 ## Management API
@@ -572,9 +573,9 @@ receivers:
     "title": "Cbox Init - Laravel Monitoring",
     "panels": [
       {
-        "title": "Process Uptime",
+        "title": "Manager Uptime",
         "targets": [{
-          "expr": "cbox_init_manager_uptime_seconds"
+          "expr": "time() - cbox_init_manager_start_time_seconds"
         }]
       },
       {
@@ -598,7 +599,7 @@ receivers:
       {
         "title": "Hook Execution Time",
         "targets": [{
-          "expr": "rate(cbox_init_hook_execution_seconds_sum[5m]) / rate(cbox_init_hook_execution_seconds_count[5m])"
+          "expr": "rate(cbox_init_hook_duration_seconds_sum[5m]) / rate(cbox_init_hook_duration_seconds_count[5m])"
         }]
       }
     ]
@@ -853,11 +854,11 @@ global:
 ```yaml
 # ❌ Bad - scheduled tasks restart by design
 - alert: SchedulerRestarted
-  expr: cbox_init_process_restarts_total{process="scheduler"} > 0
+  expr: cbox_init_process_restarts_total{name="scheduler"} > 0
 
 # ✅ Good - only alert on unexpected restarts
 - alert: UnexpectedRestart
-  expr: cbox_init_process_restarts_total{process!~"scheduler|.*-task"} > threshold
+  expr: cbox_init_process_restarts_total{name!~"scheduler|.*-task"} > threshold
 ```
 
 **Don't expose API publicly:**

@@ -64,6 +64,81 @@ A complete example lives in `configs/examples/metrics-federate.yaml`.
 
 ## Available Metrics
 
+### Label Reference
+
+Every series Cbox Init exposes under the `cbox_init_` prefix, with its exact
+label set. Selectors must use these keys: a selector on a label a metric does
+not carry matches nothing.
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cbox_init_process_up` | Gauge | `name`, `instance` |
+| `cbox_init_process_start_time_seconds` | Gauge | `name`, `instance` |
+| `cbox_init_process_last_exit_code` | Gauge | `name`, `instance` |
+| `cbox_init_process_restarts_total` | Counter | `name`, `reason` |
+| `cbox_init_process_desired_scale` | Gauge | `name` |
+| `cbox_init_process_current_scale` | Gauge | `name` |
+| `cbox_init_health_check_status` | Gauge | `name`, `type` |
+| `cbox_init_health_check_duration_seconds` | Histogram | `name`, `type` |
+| `cbox_init_health_check_total` | Counter | `name`, `type`, `status` |
+| `cbox_init_health_check_consecutive_fails` | Gauge | `name` |
+| `cbox_init_process_cpu_percent` | Gauge | `process`, `instance` |
+| `cbox_init_process_memory_bytes` | Gauge | `process`, `instance`, `type` |
+| `cbox_init_process_memory_percent` | Gauge | `process`, `instance` |
+| `cbox_init_process_threads` | Gauge | `process`, `instance` |
+| `cbox_init_process_file_descriptors` | Gauge | `process`, `instance` |
+| `cbox_init_resource_collection_errors_total` | Counter | `process`, `instance` |
+| `cbox_init_resource_collection_duration_seconds` | Histogram | none |
+| `cbox_init_hook_executions_total` | Counter | `name`, `type`, `status` |
+| `cbox_init_hook_duration_seconds` | Histogram | `name`, `type` |
+| `cbox_init_manager_process_count` | Gauge | none |
+| `cbox_init_manager_start_time_seconds` | Gauge | none |
+| `cbox_init_shutdown_duration_seconds` | Histogram | none |
+| `cbox_init_build_info` | Gauge | `version`, `go_version` |
+| `cbox_init_federate_up` | Gauge | `name` |
+
+Label values:
+
+- **`name`** is the process name from the config (`php-fpm`), except on the
+  hook metrics, where it is the hook's name, and on
+  `cbox_init_federate_up`, where it is the federated source's name.
+- **`process`** is the process name from the config. Only the resource
+  metrics use it.
+- **`instance`** is the instance ID, `<process>-<index>` counting from 0
+  (`php-fpm-0`, `php-fpm-1`, ...).
+- **`reason`** (restarts): `crash`, `normal_exit`, `health_check`,
+  `memory_limit`.
+- **`type`**: the health check type (`tcp`, `http`, `exec`) on health check
+  metrics, the hook type (`pre_start`, `post_start`, `pre_stop`,
+  `post_stop`) on hook metrics, and `rss` or `vms` on
+  `cbox_init_process_memory_bytes`.
+- **`status`**: `success` or `failure`.
+
+#### `name` vs `process`
+
+The process name sits under **`name`** on the lifecycle, health check and
+scaling metrics, and under **`process`** on the resource metrics. The two
+sets are not interchangeable: `cbox_init_process_up{process="php-fpm"}`
+returns nothing. To combine them, rename one side with `label_replace`:
+
+```promql
+# CPU of instances that are currently up
+cbox_init_process_cpu_percent
+  and on (process, instance)
+label_replace(cbox_init_process_up == 1, "process", "$1", "name", "(.*)")
+```
+
+#### Series lifecycle
+
+- A **stopped or crashed** instance keeps its series, with
+  `cbox_init_process_up` at `0`. That is the signal to alert on.
+- An instance **removed by a scale-down** has all of its per-instance series
+  deleted (`cbox_init_process_up`, `_start_time_seconds`,
+  `_last_exit_code`, and every resource metric), so
+  `cbox_init_process_up == 0` does not keep firing for an instance that was
+  scaled away on purpose. The process-level series (`restarts_total`,
+  `desired_scale`, `current_scale`, health checks) stay.
+
 ### Process Lifecycle Metrics
 
 #### `cbox_init_process_up`
@@ -79,7 +154,7 @@ cbox_init_process_up{name="php-fpm"}
 #### `cbox_init_process_restarts_total`
 **Type:** Counter
 **Labels:** `name`, `reason`
-**Description:** Total number of process restarts by reason (crash, health_check, normal_exit)
+**Description:** Total number of process restarts by reason (`crash`, `normal_exit`, `health_check`, `memory_limit`)
 
 ```promql
 # Total restarts for all processes
@@ -175,11 +250,62 @@ cbox_init_process_desired_scale
 cbox_init_process_current_scale - cbox_init_process_desired_scale
 ```
 
+### Resource Metrics
+
+Exposed when `resource_metrics_enabled` and `metrics_enabled` are both true.
+These use **`process`**, not `name`, for the process name. Collection
+details and more queries: [Resource Monitoring](resource-monitoring.md).
+
+#### `cbox_init_process_cpu_percent`
+**Type:** Gauge
+**Labels:** `process`, `instance`
+**Description:** CPU usage in percent of one core (can exceed 100 on multi-core)
+
+```promql
+# Average CPU across php-fpm instances
+avg(cbox_init_process_cpu_percent{process="php-fpm"})
+```
+
+#### `cbox_init_process_memory_bytes`
+**Type:** Gauge
+**Labels:** `process`, `instance`, `type` (`rss`, `vms`)
+**Description:** Memory usage in bytes
+
+```promql
+# Resident memory per process
+sum(cbox_init_process_memory_bytes{type="rss"}) by (process)
+```
+
+#### `cbox_init_process_memory_percent`
+**Type:** Gauge
+**Labels:** `process`, `instance`
+**Description:** Memory usage as a percentage of total system memory
+
+#### `cbox_init_process_threads`
+**Type:** Gauge
+**Labels:** `process`, `instance`
+**Description:** Number of threads in the process
+
+#### `cbox_init_process_file_descriptors`
+**Type:** Gauge
+**Labels:** `process`, `instance`
+**Description:** Open file descriptors (Linux only; absent where unavailable)
+
+#### `cbox_init_resource_collection_errors_total`
+**Type:** Counter
+**Labels:** `process`, `instance`
+**Description:** Failed resource samples
+
+#### `cbox_init_resource_collection_duration_seconds`
+**Type:** Histogram
+**Labels:** none
+**Description:** Time taken by one resource collection pass
+
 ### Hook Execution Metrics
 
 #### `cbox_init_hook_executions_total`
 **Type:** Counter
-**Labels:** `name`, `type`, `status`
+**Labels:** `name` (hook name), `type`, `status`
 **Description:** Total hook executions by type and status
 
 ```promql
@@ -189,7 +315,7 @@ cbox_init_hook_executions_total{type="pre_start", status="failure"}
 
 #### `cbox_init_hook_duration_seconds`
 **Type:** Histogram
-**Labels:** `name`, `type`
+**Labels:** `name` (hook name), `type`
 **Description:** Hook execution duration in seconds
 
 ```promql
@@ -219,6 +345,11 @@ cbox_init_manager_process_count
 time() - cbox_init_manager_start_time_seconds
 ```
 
+#### `cbox_init_shutdown_duration_seconds`
+**Type:** Histogram
+**Labels:** none
+**Description:** Duration of graceful shutdown in seconds
+
 #### `cbox_init_build_info`
 **Type:** Gauge
 **Labels:** `version`, `go_version`
@@ -234,7 +365,7 @@ cbox_init_build_info
 ### Process Health Overview
 
 ```promql
-# Count of healthy processes
+# Running instances per process
 sum(cbox_init_process_up) by (name)
 
 # Count of processes with health check failures

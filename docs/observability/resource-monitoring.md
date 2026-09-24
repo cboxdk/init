@@ -242,6 +242,12 @@ All metrics use the prefix `cbox_init_process_` and include labels:
 - `process` - Process name
 - `instance` - Instance ID
 
+The lifecycle metrics (`cbox_init_process_up`, `_start_time_seconds`,
+`_last_exit_code`, `_restarts_total`) carry the process name under `name`
+instead, so `{process="php-fpm"}` only works on the resource metrics. See
+the [label reference](metrics.md#label-reference) for every metric's exact
+labels.
+
 **Available metrics:**
 
 ```promql

@@ -323,15 +323,15 @@ server {
 
 ```bash
 # Count running instances
-count(cbox_init_process_up{process=~"queue-default-.*"})
+sum(cbox_init_process_up{name="queue-default"})
 
-# Per-instance uptime
-cbox_init_process_up{process="queue-default-1"}
-cbox_init_process_up{process="queue-default-2"}
-cbox_init_process_up{process="queue-default-3"}
+# Per-instance status (instance IDs count from 0)
+cbox_init_process_up{name="queue-default", instance="queue-default-0"}
+cbox_init_process_up{name="queue-default", instance="queue-default-1"}
+cbox_init_process_up{name="queue-default", instance="queue-default-2"}
 
-# Total restarts across all instances
-sum(cbox_init_process_restarts_total{process=~"queue-default-.*"})
+# Total restarts (counted per process, not per instance)
+sum(cbox_init_process_restarts_total{name="queue-default"})
 ```
 
 ### Management API

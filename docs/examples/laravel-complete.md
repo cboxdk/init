@@ -732,9 +732,9 @@ CBOX_INIT_PROCESS_QUEUE_DEFAULT_SCALE=10
 curl http://localhost:9090/metrics
 
 # Key metrics:
-# - cbox_init_process_up{process="php-fpm"}
-# - cbox_init_process_restarts_total{process="nginx"}
-# - cbox_init_health_check_status{process="horizon"}
+# - cbox_init_process_up{name="php-fpm"}
+# - cbox_init_process_restarts_total{name="nginx"}
+# - cbox_init_health_check_status{name="horizon"}
 ```
 
 ### Health Status
