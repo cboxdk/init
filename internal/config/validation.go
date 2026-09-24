@@ -492,6 +492,9 @@ func (c *Config) validateSingleProcess(name string, proc *Process, result *Valid
 		c.validateHealthCheck(name, proc.HealthCheck, result)
 	}
 
+	// Shutdown validation
+	c.validateProcessShutdownConfig(name, proc, result)
+
 	// Logging validation
 	c.validateProcessLoggingConfig(name, proc, result)
 
@@ -547,6 +550,25 @@ func (c *Config) validateOneshotConstraints(name string, proc *Process, result *
 	}
 }
 
+// validateProcessShutdownConfig validates the per-process stop sequence.
+func (c *Config) validateProcessShutdownConfig(name string, proc *Process, result *ValidationResult) {
+	sd := proc.Shutdown
+	if sd == nil {
+		return
+	}
+	if sd.Signal != "" && !IsValidSignalName(sd.Signal) {
+		result.AddProcessError(name, "shutdown.signal", fmt.Sprintf("Unknown signal: %q", sd.Signal), "Use a signal name such as SIGTERM, SIGINT or SIGQUIT")
+	}
+	if sd.KillSignal != "" && !IsValidSignalName(sd.KillSignal) {
+		result.AddProcessError(name, "shutdown.kill_signal", fmt.Sprintf("Unknown signal: %q", sd.KillSignal), "Use a signal name such as SIGKILL or SIGQUIT")
+	}
+	if sd.KillTimeout < 0 {
+		result.AddProcessError(name, "shutdown.kill_timeout", fmt.Sprintf("Negative timeout (%ds)", sd.KillTimeout), fmt.Sprintf("Set to 0 for the %ds default, or a positive number of seconds", DefaultKillTimeout))
+	} else if sd.KillTimeout > MaxKillTimeout {
+		result.AddProcessError(name, "shutdown.kill_timeout", fmt.Sprintf("Exceeds maximum (%ds > %ds)", sd.KillTimeout, MaxKillTimeout), fmt.Sprintf("Set to %d seconds or less", MaxKillTimeout))
+	}
+}
+
 // validateProcessLoggingConfig validates logging configuration
 func (c *Config) validateProcessLoggingConfig(name string, proc *Process, result *ValidationResult) {
 	if proc.Logging == nil {
@@ -596,6 +618,10 @@ func (c *Config) validateHealthCheck(processName string, hc *HealthCheck, result
 		if len(hc.Command) == 0 {
 			result.AddProcessError(processName, "health_check.command", "Exec health check requires command", "Set command array (e.g., ['php', 'artisan', 'health'])")
 		}
+	}
+
+	if hc.Type != "exec" && (hc.User != "" || hc.Group != "") {
+		result.AddProcessError(processName, "health_check.user", fmt.Sprintf("user/group set on a %s check, which runs no command", hc.Type), "Remove user/group, or use an exec check")
 	}
 
 	if hc.Period < 1 {

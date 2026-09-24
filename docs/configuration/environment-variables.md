@@ -77,6 +77,36 @@ PHP_FPM_AUTOTUNE_PROFILE=heavy
 
 See [PHP-FPM Auto-Tuning](php-fpm-autotune) for complete guide.
 
+### Database Engine Auto-Tuning
+
+At startup, before any process starts, cbox-init can size a database engine to
+the container's memory and CPU limits and write the result as a config fragment
+the engine reads. The file is rewritten on every start.
+
+| Variable | Values | Description |
+|----------|--------|-------------|
+| `CBOX_ENGINE` | `percona`, `valkey`, `postgres` | Engine to tune (case-insensitive). Unset: nothing is tuned |
+| `CBOX_WAKE_MODE` | `resident` (default), `warm` | `warm` is for a database that is checkpointed while idle: Percona's buffer pool is capped at 512MB so a wake stays fast |
+| `CBOX_ENGINE_CONFIG_PATH` | a file path | Write the fragment here instead of the engine's default path |
+
+| Engine | Fragment | Settings |
+|--------|----------|----------|
+| `percona` | `/etc/my.cnf.d/zz-cbox-autotune.cnf` | `innodb_buffer_pool_size`, `innodb_buffer_pool_chunk_size`, `innodb_buffer_pool_instances`, `innodb_redo_log_capacity`, `max_connections`, `innodb_flush_method` |
+| `valkey` | `/etc/valkey/cbox-autotune.conf` (the image must load it) | `maxmemory`, `maxmemory-policy noeviction` |
+| `postgres` | none | Not tuned — see below |
+
+Each setting is also exported to the supervised processes as
+`CBOX_<ENGINE>_<SETTING>`, for example `CBOX_VALKEY_MAXMEMORY`.
+
+- With no container memory limit, nothing is written and the engine keeps its
+  own defaults.
+- An unknown `CBOX_ENGINE` or `CBOX_WAKE_MODE` stops cbox-init before anything
+  starts, so a typo does not silently leave a database untuned. So does a
+  Percona container too small for any buffer pool that fits.
+- `postgres` (or `postgresql`) is recognised but has no tuning profile.
+  cbox-init prints a notice, writes nothing, and starts normally; PostgreSQL
+  runs with its own configuration.
+
 ## Startup Performance Controls
 
 These variables are useful for production images where framework directories and php-fpm/nginx configuration have already been prepared during image build.
@@ -213,9 +243,6 @@ CBOX_INIT_PROCESS_<NAME>_ENABLED=true
 CBOX_INIT_PROCESS_<NAME>_COMMAND='["php-fpm","-F","-R"]'
 CBOX_INIT_PROCESS_<NAME>_COMMAND=php-fpm,-F,-R
 
-# Priority (startup order)
-CBOX_INIT_PROCESS_<NAME>_PRIORITY=10
-
 # Restart policy (always|on-failure|never)
 CBOX_INIT_PROCESS_<NAME>_RESTART=always
 
@@ -225,6 +252,23 @@ CBOX_INIT_PROCESS_<NAME>_SCALE=3
 # Working directory
 CBOX_INIT_PROCESS_<NAME>_WORKING_DIR=/var/www/html
 ```
+
+### Nested Process Settings
+
+Nested fields join their YAML path with underscores:
+
+```bash
+CBOX_INIT_PROCESS_<NAME>_HEALTH_CHECK_USER=postgres
+CBOX_INIT_PROCESS_<NAME>_HEALTH_CHECK_COMMAND='["pg_isready","-q"]'
+CBOX_INIT_PROCESS_<NAME>_SHUTDOWN_SIGNAL=SIGINT
+CBOX_INIT_PROCESS_<NAME>_SHUTDOWN_KILL_SIGNAL=SIGQUIT
+CBOX_INIT_PROCESS_<NAME>_SHUTDOWN_KILL_TIMEOUT=10
+```
+
+A name like `POSTGRES_HEALTH_CHECK_USER` can be read two ways: process
+`postgres`, field `health_check.user` — or process `postgres-health-check`,
+field `user`. A process already in the config file wins; only when none
+matches is the longest name taken, defining a new process from the environment.
 
 ### Process Environment Variables
 
@@ -268,6 +312,10 @@ CBOX_INIT_HOOK_PRE_START_0_RETRY_DELAY=5
 # Working directory and hook-local environment variables
 CBOX_INIT_HOOK_PRE_START_0_WORKING_DIR=/var/www/html
 CBOX_INIT_HOOK_PRE_START_0_ENV_APP_ENV=production
+
+# Run as another user (name or uid) and, optionally, group
+CBOX_INIT_HOOK_PRE_START_0_USER=www-data
+CBOX_INIT_HOOK_PRE_START_0_GROUP=www-data
 ```
 
 Env-defined hooks are appended after any YAML-defined hooks in the same list, ordered by their index. See [Lifecycle Hooks](lifecycle-hooks.md) for hook semantics.

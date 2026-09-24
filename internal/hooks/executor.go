@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/credentials"
 	"github.com/cboxdk/init/internal/metrics"
 	"github.com/cboxdk/init/internal/signals"
 )
@@ -45,11 +46,11 @@ func (e *Executor) Execute(ctx context.Context, hook *config.Hook) error {
 
 // ExecuteWithType runs a single hook with retry logic and records metrics with hook type
 func (e *Executor) ExecuteWithType(ctx context.Context, hook *config.Hook, hookType Type) error {
-	e.logger.Info("Executing hook",
-		"name", hook.Name,
-		"type", hookType,
-		"command", hook.Command,
-	)
+	attrs := []any{"name", hook.Name, "type", hookType, "command", hook.Command}
+	if hook.User != "" || hook.Group != "" {
+		attrs = append(attrs, "user", hook.User, "group", hook.Group)
+	}
+	e.logger.Info("Executing hook", attrs...)
 
 	startTime := time.Now()
 	var lastErr error
@@ -125,10 +126,6 @@ func exitCode(err error) int {
 }
 
 func (e *Executor) executeOnce(ctx context.Context, hook *config.Hook) error {
-	if len(hook.Command) == 0 {
-		return fmt.Errorf("empty command")
-	}
-
 	// Create command with timeout
 	timeout := time.Duration(hook.Timeout) * time.Second
 	if timeout == 0 {
@@ -138,16 +135,10 @@ func (e *Executor) executeOnce(ctx context.Context, hook *config.Hook) error {
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(cmdCtx, hook.Command[0], hook.Command[1:]...)
-
-	// Set working directory
-	if hook.WorkingDir != "" {
-		cmd.Dir = hook.WorkingDir
+	cmd, err := e.buildCmd(cmdCtx, hook)
+	if err != nil {
+		return err
 	}
-
-	// Set environment variables
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, e.buildEnv(hook)...)
 
 	// Capture combined output for logging. Run under reaper coordination (rather
 	// than cmd.CombinedOutput/Run) so the PID-1 wildcard reaper can't collect the
@@ -168,6 +159,32 @@ func (e *Executor) executeOnce(ctx context.Context, hook *config.Hook) error {
 	}
 
 	return nil
+}
+
+// buildCmd prepares the hook command: working directory, environment, and the
+// configured user. A user that cannot be resolved is an error and nothing is
+// run — not as cbox-init's own uid, which is usually root.
+func (e *Executor) buildCmd(ctx context.Context, hook *config.Hook) (*exec.Cmd, error) {
+	if len(hook.Command) == 0 {
+		return nil, fmt.Errorf("empty command")
+	}
+
+	cmd := exec.CommandContext(ctx, hook.Command[0], hook.Command[1:]...)
+
+	// Set working directory
+	if hook.WorkingDir != "" {
+		cmd.Dir = hook.WorkingDir
+	}
+
+	// Set environment variables
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, e.buildEnv(hook)...)
+
+	if err := credentials.ApplyToCmd(cmd, hook.User, hook.Group); err != nil {
+		return nil, fmt.Errorf("hook not run: %w", err)
+	}
+
+	return cmd, nil
 }
 
 func (e *Executor) buildEnv(hook *config.Hook) []string {

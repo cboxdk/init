@@ -86,6 +86,24 @@ hooks:
 | `continue_on_error` | bool | `false` | Log the failure and continue instead of aborting startup |
 | `env` | map | — | Extra environment variables for the hook command |
 | `working_dir` | string | — | Working directory for the hook command |
+| `user` | string | cbox-init's own | Run the hook as this user (name or uid) |
+| `group` | string | the user's primary group | Run the hook with this group (name or gid) |
+
+**Running a hook as another user:** hooks run as cbox-init itself — usually
+root — unless `user` is set. The same rules apply as for an exec health check:
+the user is looked up each time the hook runs; if it cannot be found the hook
+fails without running (never as root instead), and `retry` and
+`continue_on_error` then apply as for any other failure; switching to another
+user needs cbox-init to run as root. A process's `shutdown.pre_stop_hook` does
+not inherit the process's `user`.
+
+```yaml
+hooks:
+  pre-start:
+    - name: warm-cache
+      command: ["php", "artisan", "cache:warm"]
+      user: www-data
+```
 
 **Fail-fast vs. best-effort:** a failing or timed-out pre-start hook aborts container startup by default — the right behavior for migrations. For best-effort work like cache warming, where a cold cache is degraded but not down, set `continue_on_error: true`:
 
@@ -262,7 +280,7 @@ The pattern is `CBOX_INIT_HOOK_<TYPE>_<N>_<FIELD>` where `<TYPE>` is `PRE_START`
 
 - `COMMAND` accepts a comma-separated list (`php,please,stache:warm`) or a JSON array (`["php","please","stache:warm"]`). Use the JSON form when an argument contains a comma.
 - `ALLOW_FAILURE` is the env spelling of `continue_on_error` (both are accepted).
-- All other hook fields map by name: `NAME`, `TIMEOUT`, `RETRY`, `RETRY_DELAY`, `WORKING_DIR`, and `ENV_<KEY>` for hook environment variables.
+- All other hook fields map by name: `NAME`, `TIMEOUT`, `RETRY`, `RETRY_DELAY`, `WORKING_DIR`, `USER`, `GROUP`, and `ENV_<KEY>` for hook environment variables.
 - `NAME` defaults to `<hook-list>-<n>` (e.g. `pre-start-0`).
 
 See [Environment Variables](environment-variables.md) for the full override reference.

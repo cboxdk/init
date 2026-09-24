@@ -91,6 +91,8 @@ type Hook struct {
 	ContinueOnError bool              `yaml:"continue_on_error" json:"continue_on_error"`
 	Env             map[string]string `yaml:"env" json:"env"`
 	WorkingDir      string            `yaml:"working_dir" json:"working_dir"`
+	User            string            `yaml:"user" json:"user"`   // Run as user (name or uid)
+	Group           string            `yaml:"group" json:"group"` // Run as group (name or gid; default: the user's primary group)
 }
 
 // Process represents a managed process definition
@@ -141,16 +143,33 @@ type HealthCheck struct {
 	SuccessThreshold int      `yaml:"success_threshold" json:"success_threshold"`
 	ExpectedStatus   int      `yaml:"expected_status" json:"expected_status"` // For HTTP
 	Mode             string   `yaml:"mode" json:"mode"`                       // liveness | readiness | both (default: both)
+	User             string   `yaml:"user" json:"user"`                       // For exec: run as user (name or uid)
+	Group            string   `yaml:"group" json:"group"`                     // For exec: run as group (name or gid; default: the user's primary group)
 }
 
-// ShutdownConfig configures graceful shutdown behavior
+// ShutdownConfig configures graceful shutdown behavior.
+//
+// A stop runs: pre_stop_hook → Signal → wait Timeout → KillSignal → wait
+// KillTimeout → SIGKILL (only when KillSignal is not already SIGKILL).
 type ShutdownConfig struct {
-	Signal      string `yaml:"signal" json:"signal"`               // SIGTERM, SIGQUIT, etc.
-	Timeout     int    `yaml:"timeout" json:"timeout"`             // seconds
-	KillSignal  string `yaml:"kill_signal" json:"kill_signal"`     // SIGKILL
+	Signal      string `yaml:"signal" json:"signal"`               // Graceful stop signal (default SIGTERM)
+	Timeout     int    `yaml:"timeout" json:"timeout"`             // Seconds to wait after Signal (default 30)
+	KillSignal  string `yaml:"kill_signal" json:"kill_signal"`     // Sent when Timeout expires (default SIGKILL)
+	KillTimeout int    `yaml:"kill_timeout" json:"kill_timeout"`   // Seconds to wait after KillSignal before SIGKILL (default 5)
 	Graceful    bool   `yaml:"graceful" json:"graceful"`           // Wait for connections
 	PreStopHook *Hook  `yaml:"pre_stop_hook" json:"pre_stop_hook"` // Per-process pre-stop hook
 }
+
+// DefaultKillTimeout is how long, in seconds, a stop waits after the kill
+// signal before escalating to SIGKILL. It was a fixed 5s before kill_timeout
+// existed, and stays the default so existing configs behave exactly as before.
+const DefaultKillTimeout = 5
+
+// MaxKillTimeout bounds shutdown.kill_timeout. The wait after the kill signal
+// is not cut short by the global shutdown deadline — it is the step that makes
+// sure the process is gone — so an unbounded value could hold PID 1 for as long
+// as the config says.
+const MaxKillTimeout = 600
 
 // LoggingConfig configures per-process logging
 type LoggingConfig struct {
@@ -189,11 +208,13 @@ type MultilineConfig struct {
 
 // JSONConfig configures JSON log parsing
 type JSONConfig struct {
-	Enabled        bool `yaml:"enabled" json:"enabled"`
-	DetectAuto     bool `yaml:"detect_auto" json:"detect_auto"`         // Auto-detect JSON logs
-	ExtractLevel   bool `yaml:"extract_level" json:"extract_level"`     // Extract 'level' field
-	ExtractMessage bool `yaml:"extract_message" json:"extract_message"` // Extract 'message' field
-	MergeFields    bool `yaml:"merge_fields" json:"merge_fields"`       // Merge other fields as attributes
+	Enabled        bool   `yaml:"enabled" json:"enabled"`
+	DetectAuto     bool   `yaml:"detect_auto" json:"detect_auto"`         // Auto-detect JSON logs
+	ExtractLevel   bool   `yaml:"extract_level" json:"extract_level"`     // Lift the level field into the entry's level
+	ExtractMessage bool   `yaml:"extract_message" json:"extract_message"` // Lift the message field into the entry's message
+	MergeFields    bool   `yaml:"merge_fields" json:"merge_fields"`       // Merge other fields as attributes
+	MessageField   string `yaml:"message_field" json:"message_field"`     // Key extract_message lifts (default: "message", then "msg")
+	LevelField     string `yaml:"level_field" json:"level_field"`         // Key extract_level lifts (default: "level")
 }
 
 // LevelDetectionConfig configures log level detection from log content
@@ -608,6 +629,9 @@ func (c *Config) setProcessShutdownDefaults(proc *Process) {
 	if sd.KillSignal == "" {
 		sd.KillSignal = "SIGKILL"
 	}
+	if sd.KillTimeout == 0 {
+		sd.KillTimeout = DefaultKillTimeout
+	}
 }
 
 // setProcessLoggingDefaults sets logging defaults for a process
@@ -924,6 +948,8 @@ func healthCheckEqual(a, b *HealthCheck) bool {
 		a.SuccessThreshold == b.SuccessThreshold &&
 		a.ExpectedStatus == b.ExpectedStatus &&
 		a.Mode == b.Mode &&
+		a.User == b.User &&
+		a.Group == b.Group &&
 		stringSliceEqual(a.Command, b.Command)
 }
 
@@ -938,6 +964,7 @@ func shutdownConfigEqual(a, b *ShutdownConfig) bool {
 	if a.Signal != b.Signal ||
 		a.Timeout != b.Timeout ||
 		a.KillSignal != b.KillSignal ||
+		a.KillTimeout != b.KillTimeout ||
 		a.Graceful != b.Graceful {
 		return false
 	}
@@ -959,6 +986,8 @@ func hookEqual(a, b *Hook) bool {
 		a.RetryDelay == b.RetryDelay &&
 		a.ContinueOnError == b.ContinueOnError &&
 		a.WorkingDir == b.WorkingDir &&
+		a.User == b.User &&
+		a.Group == b.Group &&
 		stringSliceEqual(a.Command, b.Command) &&
 		stringMapEqual(a.Env, b.Env)
 }

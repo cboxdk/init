@@ -936,9 +936,11 @@ const (
 	defaultAPIActionTimeout = 30 * time.Second
 
 	// stopEscalationMargin is the headroom left beyond a process's configured
-	// shutdown.timeout, so the force-kill escalation behind it has room to run
-	// rather than being cut off by the deadline that triggered it.
-	stopEscalationMargin = 15 * time.Second
+	// shutdown.timeout and shutdown.kill_timeout, so the SIGKILL escalation and
+	// the reap behind them have room to run rather than being cut off by the
+	// deadline that triggered them. With the default 5s kill_timeout the total
+	// margin is the 15s it has always been.
+	stopEscalationMargin = 10 * time.Second
 )
 
 // stopContext builds the context for a stop, sized to what the process is
@@ -958,9 +960,13 @@ func (s *Server) stopContext(r *http.Request, processName string) (context.Conte
 
 	if cfg, err := s.manager.GetProcessConfig(processName); err == nil && cfg != nil &&
 		cfg.Shutdown != nil && cfg.Shutdown.Timeout > 0 {
-		configured := time.Duration(cfg.Shutdown.Timeout) * time.Second
-		if configured+stopEscalationMargin > budget {
-			budget = configured + stopEscalationMargin
+		killTimeout := time.Duration(config.DefaultKillTimeout) * time.Second
+		if cfg.Shutdown.KillTimeout > 0 {
+			killTimeout = time.Duration(cfg.Shutdown.KillTimeout) * time.Second
+		}
+		needed := time.Duration(cfg.Shutdown.Timeout)*time.Second + killTimeout + stopEscalationMargin
+		if needed > budget {
+			budget = needed
 		}
 	}
 

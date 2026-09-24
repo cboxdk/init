@@ -1,4 +1,4 @@
-package process
+package credentials
 
 import (
 	"os/user"
@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-func TestResolveCredentials_NoUserOrGroup(t *testing.T) {
-	creds, err := ResolveCredentials("", "")
+func TestResolve_NoUserOrGroup(t *testing.T) {
+	creds, err := Resolve("", "")
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -17,7 +17,7 @@ func TestResolveCredentials_NoUserOrGroup(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_NumericUID(t *testing.T) {
+func TestResolve_NumericUID(t *testing.T) {
 	// When specifying only UID, it tries to get primary group which may fail if user doesn't exist
 	// Test with current user's UID which should always exist
 	currentUser, err := user.Current()
@@ -25,7 +25,7 @@ func TestResolveCredentials_NumericUID(t *testing.T) {
 		t.Skipf("Could not get current user: %v", err)
 	}
 
-	creds, err := ResolveCredentials(currentUser.Uid, "")
+	creds, err := Resolve(currentUser.Uid, "")
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -39,8 +39,8 @@ func TestResolveCredentials_NumericUID(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_NumericGID(t *testing.T) {
-	creds, err := ResolveCredentials("", "1000")
+func TestResolve_NumericGID(t *testing.T) {
+	creds, err := Resolve("", "1000")
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -52,8 +52,8 @@ func TestResolveCredentials_NumericGID(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_BothNumeric(t *testing.T) {
-	creds, err := ResolveCredentials("500", "501")
+func TestResolve_BothNumeric(t *testing.T) {
+	creds, err := Resolve("500", "501")
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -68,14 +68,14 @@ func TestResolveCredentials_BothNumeric(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_CurrentUser(t *testing.T) {
+func TestResolve_CurrentUser(t *testing.T) {
 	// Get current user for testing with real user lookup
 	currentUser, err := user.Current()
 	if err != nil {
 		t.Skipf("Could not get current user: %v", err)
 	}
 
-	creds, err := ResolveCredentials(currentUser.Username, "")
+	creds, err := Resolve(currentUser.Username, "")
 	if err != nil {
 		t.Errorf("Expected no error resolving current user %q, got: %v", currentUser.Username, err)
 	}
@@ -89,15 +89,15 @@ func TestResolveCredentials_CurrentUser(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_InvalidUser(t *testing.T) {
-	_, err := ResolveCredentials("nonexistent_user_12345", "")
+func TestResolve_InvalidUser(t *testing.T) {
+	_, err := Resolve("nonexistent_user_12345", "")
 	if err == nil {
 		t.Error("Expected error for nonexistent user, got nil")
 	}
 }
 
-func TestResolveCredentials_InvalidGroup(t *testing.T) {
-	_, err := ResolveCredentials("", "nonexistent_group_12345")
+func TestResolve_InvalidGroup(t *testing.T) {
+	_, err := Resolve("", "nonexistent_group_12345")
 	if err == nil {
 		t.Error("Expected error for nonexistent group, got nil")
 	}
@@ -239,7 +239,7 @@ func TestResolveUser_Invalid(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_UserAndGroup(t *testing.T) {
+func TestResolve_UserAndGroup(t *testing.T) {
 	// Get current user for testing with real lookups
 	currentUser, err := user.Current()
 	if err != nil {
@@ -253,7 +253,7 @@ func TestResolveCredentials_UserAndGroup(t *testing.T) {
 	}
 
 	// Test with both user name and group name
-	creds, err := ResolveCredentials(currentUser.Username, g.Name)
+	creds, err := Resolve(currentUser.Username, g.Name)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestResolveCredentials_UserAndGroup(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_UserWithDifferentGroup(t *testing.T) {
+func TestResolve_UserWithDifferentGroup(t *testing.T) {
 	// Get current user
 	currentUser, err := user.Current()
 	if err != nil {
@@ -280,7 +280,7 @@ func TestResolveCredentials_UserWithDifferentGroup(t *testing.T) {
 	}
 
 	// Test with user and numeric group (different from primary)
-	creds, err := ResolveCredentials(currentUser.Username, "1234")
+	creds, err := Resolve(currentUser.Username, "1234")
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestResolveCredentials_UserWithDifferentGroup(t *testing.T) {
 	}
 }
 
-func TestResolveCredentials_OnlyGroup(t *testing.T) {
+func TestResolve_OnlyGroup(t *testing.T) {
 	// Get current user's group for testing
 	currentUser, err := user.Current()
 	if err != nil {
@@ -311,7 +311,7 @@ func TestResolveCredentials_OnlyGroup(t *testing.T) {
 	}
 
 	// Test with only group name
-	creds, err := ResolveCredentials("", g.Name)
+	creds, err := Resolve("", g.Name)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}

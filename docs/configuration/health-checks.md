@@ -111,7 +111,35 @@ health_check:
 
 **Settings:**
 - `command` - Command to execute (array format, exec only)
+- `user` / `group` - Who runs the command (see below)
 - Process is healthy if exit code is `0`
+
+**Running the check as another user:**
+
+By default the command runs as cbox-init itself — usually root. Set `user`
+(name or uid) to run it as someone else, and `group` (name or gid) to override
+that user's primary group:
+
+```yaml
+processes:
+  postgres:
+    command: ["docker-entrypoint.sh", "postgres"]
+    health_check:
+      type: exec
+      command: ["pg_isready", "-q", "-h", "/var/run/postgresql"]
+      user: postgres
+```
+
+- The user is looked up each time the check runs, so a user created by an
+  entrypoint after cbox-init started is found.
+- If the user or group cannot be found, the check fails and the command does
+  not run. It never falls back to running as root.
+- Switching to another user needs cbox-init to run as root. Naming the user
+  cbox-init already runs as works without root.
+- `user`/`group` are only valid on `exec` checks; on `tcp` or `http` they are a
+  config error.
+- The check does not inherit the process's own `user`. Set it on both when both
+  should run as that user.
 
 **Best for:**
 - Custom health logic
@@ -154,6 +182,8 @@ All health check types share these fields. Defaults are applied automatically.
 | `success_threshold` | int | `1` | all | Consecutive successes before healthy |
 | `expected_status` | int | `200` | http | Required HTTP status code |
 | `mode` | string | `both` | all | `liveness`, `readiness`, or `both` |
+| `user` | string | cbox-init's own | exec | Run the command as this user (name or uid) |
+| `group` | string | the user's primary group | exec | Run the command with this group (name or gid) |
 
 ### initial_delay
 

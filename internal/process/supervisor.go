@@ -16,6 +16,7 @@ import (
 
 	"github.com/cboxdk/init/internal/audit"
 	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/credentials"
 	"github.com/cboxdk/init/internal/hooks"
 	"github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/logtail"
@@ -84,10 +85,11 @@ const (
 	// DefaultGoroutineStopTimeout is the timeout for supervisor goroutines to stop during shutdown.
 	DefaultGoroutineStopTimeout = 5 * time.Second
 
-	// forceKillGrace bounds how long a force-kill waits for the process to be
-	// reaped before escalating to SIGKILL (or giving up after it). The kernel
-	// delivers SIGKILL promptly, so this only needs to cover reaping.
-	forceKillGrace = 5 * time.Second
+	// forceKillGrace bounds how long a force-kill waits for a SIGKILLed process
+	// to be reaped before giving up on it. The kernel delivers SIGKILL promptly,
+	// so this only needs to cover reaping. It is also the default wait after the
+	// kill signal (shutdown.kill_timeout); see killTimeout.
+	forceKillGrace = config.DefaultKillTimeout * time.Second
 
 	// minStopGrace is the shortest graceful window an instance gets, even when
 	// the caller's deadline has already passed. Zero would deliver SIGTERM and
@@ -139,7 +141,7 @@ type Supervisor struct {
 	resourceCollector      *metrics.ResourceCollector    // Shared resource collector (can be nil)
 	oneshotHistory         *OneshotHistory               // Shared oneshot history (can be nil)
 	deathNotifier          func(string)                  // Callback when all instances are dead
-	credentials            *Credentials                  // Resolved user/group credentials (nil = inherit)
+	credentials            *credentials.Credentials      // Resolved user/group credentials (nil = inherit)
 	credentialErr          error                         // user/group was configured but could not be resolved; fail closed at start
 	logBroadcaster         *logger.LogBroadcaster        // Shared broadcaster for real-time log subscriptions
 	fileTailers            map[string]context.CancelFunc // active file tailers, keyed by config name
@@ -250,11 +252,11 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 	}
 
 	// Resolve user/group credentials at initialization
-	var creds *Credentials
+	var creds *credentials.Credentials
 	var credErr error
 	if cfg.User != "" || cfg.Group != "" {
 		var err error
-		creds, err = ResolveCredentials(cfg.User, cfg.Group)
+		creds, err = credentials.Resolve(cfg.User, cfg.Group)
 		if err != nil {
 			logger.Error("Failed to resolve configured user/group; process will not be started as root",
 				"process", name,
@@ -1733,10 +1735,12 @@ func effectiveStopTimeout(ctx context.Context, configured time.Duration) (time.D
 // here always completes.
 func (s *Supervisor) forceKillInstance(instance *Instance, pid int, reason string) error {
 	killSig := s.killSignal()
+	killTimeout := s.killTimeout()
 	s.logger.Warn("Force killing process instance",
 		"instance_id", instance.id,
 		"pid", pid,
 		"kill_signal", killSig,
+		"kill_timeout", killTimeout,
 		"reason", reason,
 	)
 
@@ -1750,7 +1754,14 @@ func (s *Supervisor) forceKillInstance(instance *Instance, pid int, reason strin
 	// wait must be bounded: an unbounded wait here hangs PID 1 while the manager
 	// lock is held. If the configured signal did not do it, escalate to a real
 	// SIGKILL, which cannot be caught, blocked or ignored.
-	if s.waitForInstanceExit(instance, forceKillGrace) {
+	//
+	// How long to give the kill signal is shutdown.kill_timeout. A kill signal
+	// is not always a death sentence to be carried out in milliseconds: for
+	// PostgreSQL it is SIGQUIT, an immediate shutdown in which the postmaster
+	// waits up to 5s for its backends and then SIGKILLs the stragglers itself.
+	// A fixed 5s here raced that and SIGKILLed the postmaster first, orphaning
+	// exactly the backends it was about to clean up.
+	if s.waitForInstanceExit(instance, killTimeout) {
 		s.cleanupInstanceResources(instance, pid, reason)
 		return nil
 	}
@@ -1854,6 +1865,17 @@ func (s *Supervisor) sendShutdownSignal(instance *Instance) error {
 	}
 
 	return s.signalProcessGroup(instance, sig, "shutdown")
+}
+
+// killTimeout returns how long to wait after the kill signal before escalating
+// to SIGKILL (or, when the kill signal is SIGKILL, before giving up on the
+// instance being reaped). Honors the per-process shutdown.kill_timeout; an unset
+// or non-positive value keeps the historical 5s.
+func (s *Supervisor) killTimeout() time.Duration {
+	if s.config.Shutdown != nil && s.config.Shutdown.KillTimeout > 0 {
+		return time.Duration(s.config.Shutdown.KillTimeout) * time.Second
+	}
+	return forceKillGrace
 }
 
 // killSignal returns the signal used to force-kill an instance that did not
