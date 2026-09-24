@@ -848,8 +848,7 @@ func (s *Supervisor) startInstance(ctx context.Context, instanceID string, insta
 }
 
 // drainOutput waits, bounded by signals.OutputDrainGrace in total, for an
-// exited instance's output pipes to reach EOF, and logs when a descendant is
-// still holding one.
+// exited instance's output pipes to reach EOF, and logs when they have not.
 func (s *Supervisor) drainOutput(instance *Instance) {
 	deadline := time.Now().Add(signals.OutputDrainGrace)
 	for _, p := range []*outputPipe{instance.stdoutPipe, instance.stderrPipe} {
@@ -857,9 +856,13 @@ func (s *Supervisor) drainOutput(instance *Instance) {
 			continue
 		}
 		if !p.drain(time.Until(deadline)) {
-			s.logger.Warn("Process exited but a process it started still holds its output; "+
-				"acting on the exit, and still logging that output",
+			// Almost always something the process started, still holding the
+			// pipe. It can also be cbox-init's own log output being too slow to
+			// take the rest in time — either way, nothing is dropped.
+			s.logger.Warn("Process exited before all of its output was logged; acting on the exit "+
+				"and logging the rest as it arrives (usually something the process started still holds its stdout/stderr)",
 				"instance_id", instance.id,
+				"waited", signals.OutputDrainGrace,
 			)
 			return
 		}

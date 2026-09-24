@@ -61,9 +61,9 @@ func (p *outputPipe) childEnd() *os.File { return p.w }
 // is closed, the pipe can never reach EOF.
 func (p *outputPipe) release() { _ = p.w.Close() }
 
-// drain waits up to timeout for the pipe to reach EOF, reporting whether it
-// did. A false return means a descendant still holds the pipe; its output keeps
-// being copied regardless.
+// drain waits up to timeout for the pipe to reach EOF and be copied out,
+// reporting whether it was. A false return usually means a descendant still
+// holds the pipe; copying continues regardless.
 func (p *outputPipe) drain(timeout time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()

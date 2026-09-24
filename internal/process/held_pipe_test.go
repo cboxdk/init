@@ -103,7 +103,7 @@ func TestOutputOfLingeringChildIsStillLogged(t *testing.T) {
 	killPIDFile(t, pidFile)
 
 	sup := heldPipeSupervisor(t, "lingering",
-		"(sleep 1.5; echo from-the-child; sleep 20) & echo $! > "+pidFile+"; echo from-the-parent; exit 0", true)
+		"(sleep 1.5; echo from-the-child; exec sleep 20) & echo $! > "+pidFile+"; echo from-the-parent; exit 0", true)
 	if err := sup.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}

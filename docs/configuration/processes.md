@@ -393,8 +393,9 @@ processes:
 
 An instance counts as stopped when its own process has exited, even if
 something it started — a backgrounded helper, or a child in a session of its own
-— still holds its stdout or stderr. That output keeps being logged, with a
-warning saying so. The same goes for a process that crashes: the exit is acted
+— still holds its stdout or stderr. What the process wrote is drained for up to
+a second first; after that the exit is acted on, a warning is logged, and
+anything written later is still logged as it arrives. The same goes for a process that crashes: the exit is acted
 on, and the restart policy applied, within a second.
 
 Signal names are case-insensitive and the `SIG` prefix is optional (`SIGQUIT`,
