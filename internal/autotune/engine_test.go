@@ -202,8 +202,8 @@ func TestEnvVarsArePrefixedPerEngine(t *testing.T) {
 }
 
 func TestParsersRejectUnknownValues(t *testing.T) {
-	if _, err := ParseEngine("postgres"); err == nil {
-		t.Fatal("Postgres runs under CloudNativePG and is not tuned here; it must be refused")
+	if _, err := ParseEngine("mongodb"); err == nil {
+		t.Fatal("an unknown engine must be refused rather than guessed")
 	}
 
 	if _, err := ParseWakeMode("sometimes"); err == nil {
@@ -242,6 +242,46 @@ func TestPerconaPoolSurvivesInnoDBRounding(t *testing.T) {
 
 		if pool >= limit {
 			t.Fatalf("limit %dMB: pool %dMB leaves no headroom", limit, pool)
+		}
+	}
+}
+
+// PostgreSQL is a known engine that cbox-init does not tune. Naming it must not
+// stop the container — an image may set CBOX_ENGINE for every engine it ships
+// — but it must never be tuned by accident either.
+func TestPostgresIsRecognisedButNotTuned(t *testing.T) {
+	for _, name := range []string{"postgres", "PostgreSQL", " postgresql "} {
+		engine, err := ParseEngine(name)
+		if err != nil {
+			t.Fatalf("ParseEngine(%q) = %v; a known engine must not be an error", name, err)
+		}
+		if engine != EnginePostgres {
+			t.Errorf("ParseEngine(%q) = %q, want %q", name, engine, EnginePostgres)
+		}
+		if engine.Tuned() {
+			t.Errorf("%q reports itself as tuned", engine)
+		}
+	}
+
+	for _, engine := range []Engine{EnginePercona, EngineValkey} {
+		if !engine.Tuned() {
+			t.Errorf("%q reports itself as not tuned", engine)
+		}
+	}
+
+	if _, err := calcFor(EnginePostgres, WakeResident, 4096, 2).Calculate(); err == nil {
+		t.Error("Calculate() produced settings for postgres; nothing may be written for an engine without a profile")
+	}
+}
+
+func TestUnknownEngineErrorNamesTheChoices(t *testing.T) {
+	_, err := ParseEngine("mysql")
+	if err == nil {
+		t.Fatal("ParseEngine accepted mysql")
+	}
+	for _, want := range []string{"percona", "valkey", "postgres"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %s", err, want)
 		}
 	}
 }

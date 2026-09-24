@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -138,7 +139,7 @@ func runServe(cmd *cobra.Command, args []string) {
 	// settings that matter most — the buffer pool, maxmemory — are read at
 	// startup even though they can later be changed on a running server.
 	if engineName := os.Getenv("CBOX_ENGINE"); engineName != "" {
-		if err := runEngineAutoTuning(engineName, os.Getenv("CBOX_WAKE_MODE")); err != nil {
+		if err := runEngineAutoTuning(engineName, os.Getenv("CBOX_WAKE_MODE"), os.Stderr); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Engine auto-tuning failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -486,7 +487,7 @@ func runStartupPhase(name string, enabled bool, fn func() error) error {
 // It writes a configuration fragment rather than rewriting the engine's own
 // config: the customer's file stays theirs, ours is additive and clearly marked,
 // and an operator can see exactly what we decided by reading one file.
-func runEngineAutoTuning(engineName, wakeName string) error {
+func runEngineAutoTuning(engineName, wakeName string, out io.Writer) error {
 	engine, err := autotune.ParseEngine(engineName)
 	if err != nil {
 		return err
@@ -495,6 +496,16 @@ func runEngineAutoTuning(engineName, wakeName string) error {
 	wake, err := autotune.ParseWakeMode(wakeName)
 	if err != nil {
 		return err
+	}
+
+	// A known engine without a profile (PostgreSQL) is not a reason to stop the
+	// container: say so, write nothing, and let the engine's own configuration
+	// stand. A misspelled engine still fails above — the operator asked for
+	// tuning, and silently not getting it would be worse than not starting.
+	if !engine.Tuned() {
+		fmt.Fprintf(out, "ℹ️  CBOX_ENGINE=%s: cbox-init has no autotune profile for this engine; "+
+			"its configuration is left unchanged and nothing is written\n", engine)
+		return nil
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -538,11 +549,11 @@ func runEngineAutoTuning(engineName, wakeName string) error {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "🎯 %s auto-tuned for %dMB (%s): %s\n",
+	fmt.Fprintf(out, "🎯 %s auto-tuned for %dMB (%s): %s\n",
 		engine, cfg.MemoryLimitMB, cfg.WakeMode, strings.TrimSpace(strings.ReplaceAll(cfg.RenderConfig(), "\n", " ")))
 
 	for _, warning := range cfg.Warnings {
-		fmt.Fprintf(os.Stderr, "   ⚠ %s\n", warning)
+		fmt.Fprintf(out, "   ⚠ %s\n", warning)
 	}
 
 	return nil

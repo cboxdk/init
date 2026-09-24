@@ -14,7 +14,17 @@ type Engine string
 const (
 	EnginePercona Engine = "percona"
 	EngineValkey  Engine = "valkey"
+
+	// EnginePostgres is recognised but not tuned: there is no profile for it,
+	// and Calculate refuses it. Naming it is not an error, so an image can set
+	// CBOX_ENGINE uniformly across the engines it ships without PID 1 exiting.
+	EnginePostgres Engine = "postgres"
 )
+
+// Tuned reports whether cbox-init has an autotune profile for the engine.
+func (e Engine) Tuned() bool {
+	return e == EnginePercona || e == EngineValkey
+}
 
 // WakeMode says whether the engine is expected to stay resident or to be
 // checkpointed while idle and restored on the next connection.
@@ -101,8 +111,10 @@ func ParseEngine(name string) (Engine, error) {
 		return EnginePercona, nil
 	case EngineValkey:
 		return EngineValkey, nil
+	case EnginePostgres, "postgresql":
+		return EnginePostgres, nil
 	default:
-		return "", fmt.Errorf("unknown engine %q (want percona or valkey)", name)
+		return "", fmt.Errorf("unknown engine %q (want percona or valkey to autotune; postgres is recognised and left untuned)", name)
 	}
 }
 
@@ -135,6 +147,10 @@ func NewEngineCalculator(engine Engine, wake WakeMode, logger *slog.Logger) (*En
 
 // Calculate derives the settings for the engine.
 func (c *EngineCalculator) Calculate() (*EngineConfig, error) {
+	if !c.engine.Tuned() {
+		return nil, fmt.Errorf("no autotune profile for engine %q", c.engine)
+	}
+
 	cfg := &EngineConfig{
 		Engine:        c.engine,
 		WakeMode:      c.wake,
