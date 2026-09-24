@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.1] - 2026-09-24
+
 ### Fixed
 
 - **An exit went unnoticed while something the process started still held its
@@ -24,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   close the output it inherited — past their own timeout — so such a
   pre-start hook held container startup, and such a job counted as running,
   with every later run skipped as an overlap, for as long as it lived.
+- **Release notes named Docker tags that do not exist.** They said
+  `ghcr.io/cboxdk/init:vX.Y.Z`; images are tagged `X.Y.Z`, `X.Y`, `X` and
+  `latest`, without the `v`. The copy-the-binary example now uses
+  `COPY --from` the multi-arch image instead of always fetching amd64.
+
 
 ## [3.8.0] - 2026-09-24
 
