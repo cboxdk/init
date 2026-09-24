@@ -26,7 +26,13 @@ jobs:
 
       - name: Get version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          {
+            echo "VERSION=$VERSION"
+            echo "MAJOR=${VERSION%%.*}"
+            echo "MINOR=${VERSION%.*}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build all platforms
         run: make build-all VERSION=${{ steps.version.outputs.VERSION }}
@@ -102,26 +108,24 @@ jobs:
 
           ## Docker
 
-          Docker images are available on GitHub Container Registry:
+          Multi-arch images (linux/amd64, linux/arm64) on GitHub Container Registry,
+          tagged \`${{ steps.version.outputs.VERSION }}\`, \`${{ steps.version.outputs.MINOR }}\`, \`${{ steps.version.outputs.MAJOR }}\` and \`latest\` — without a \`v\`:
           \`\`\`bash
-          docker pull ghcr.io/cboxdk/init:v${{ steps.version.outputs.VERSION }}
-          # or
-          docker pull ghcr.io/cboxdk/init:latest
+          docker pull ghcr.io/cboxdk/init:${{ steps.version.outputs.VERSION }}
           \`\`\`
 
-          Use in your Dockerfile:
+          The image is Alpine with cbox-init as its entrypoint, running as the non-root
+          user \`cbox\` (uid 1000). Use it as a base:
           \`\`\`dockerfile
-          FROM ghcr.io/cboxdk/init:v${{ steps.version.outputs.VERSION }}
+          FROM ghcr.io/cboxdk/init:${{ steps.version.outputs.VERSION }}
           COPY cbox-init.yaml /etc/cbox-init/cbox-init.yaml
           \`\`\`
 
-          Or copy binary from release:
+          Or copy the binary into your own image — the right architecture is picked
+          for you:
           \`\`\`dockerfile
-          FROM alpine:3.19
-          RUN apk add --no-cache ca-certificates tzdata wget
-          RUN wget -O /usr/local/bin/cbox-init \\
-              https://github.com/cboxdk/init/releases/download/v${{ steps.version.outputs.VERSION }}/cbox-init-linux-amd64 && \\
-              chmod +x /usr/local/bin/cbox-init
+          FROM your-base-image
+          COPY --from=ghcr.io/cboxdk/init:${{ steps.version.outputs.VERSION }} /usr/local/bin/cbox-init /usr/local/bin/cbox-init
           ENTRYPOINT ["/usr/local/bin/cbox-init"]
           \`\`\`
 
