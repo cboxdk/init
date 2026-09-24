@@ -453,7 +453,7 @@ spec:
 # - cbox_init_process_up
 # - cbox_init_process_restarts_total
 # - cbox_init_health_check_status
-# - cbox_init_manager_uptime_seconds
+# - cbox_init_manager_start_time_seconds
 ```
 
 ## Resource Planning

@@ -6,6 +6,9 @@ import (
 	"runtime"
 )
 
+// Adding a metric labelled per process or per instance? Add it to
+// instanceSeries or processSeries below as well, or it is never cleaned up
+// when an instance is scaled away or a process is removed.
 var (
 	// Process metrics
 	ProcessUp = promauto.NewGaugeVec(
@@ -280,6 +283,57 @@ func SetBuildInfo(version, goVersion string) {
 	BuildInfo.WithLabelValues(version, goVersion).Set(1)
 }
 
+// Label keys that carry the process name. They differ between metric families
+// for historical reasons: the lifecycle, health-check and scaling metrics use
+// "name", the resource metrics use "process". Both are part of the public
+// metric contract (dashboards and alerts match on them), so the cleanup below
+// matches each family on its own key instead of renaming either.
+const (
+	labelName     = "name"
+	labelProcess  = "process"
+	labelInstance = "instance"
+)
+
+// partialDeleter is the part of GaugeVec, CounterVec and HistogramVec that the
+// cleanup helpers need.
+type partialDeleter interface {
+	DeletePartialMatch(labels prometheus.Labels) int
+}
+
+// seriesFamily pairs a metric vector with the label key that holds the process
+// name in that vector.
+type seriesFamily struct {
+	vec          partialDeleter
+	processLabel string
+}
+
+// instanceSeries are the families labelled per instance. Every one of them must
+// be dropped when an instance is removed, or it is left behind as a stale
+// series.
+var instanceSeries = []seriesFamily{
+	{ProcessUp, labelName},
+	{ProcessStartTime, labelName},
+	{ProcessExitCode, labelName},
+	{ProcessCPUPercent, labelProcess},
+	{ProcessMemoryBytes, labelProcess},
+	{ProcessMemoryPercent, labelProcess},
+	{ProcessThreads, labelProcess},
+	{ProcessFileDescriptors, labelProcess},
+	{ResourceCollectionErrors, labelProcess},
+}
+
+// processSeries are the families labelled per process but not per instance.
+// They survive a scale-down and are only dropped when the process itself goes.
+var processSeries = []seriesFamily{
+	{ProcessRestarts, labelName},
+	{ProcessDesiredScale, labelName},
+	{ProcessCurrentScale, labelName},
+	{HealthCheckStatus, labelName},
+	{HealthCheckDuration, labelName},
+	{HealthCheckTotal, labelName},
+	{HealthCheckConsecutiveFails, labelName},
+}
+
 // RemoveInstanceMetrics drops the per-instance series for an instance that no
 // longer exists.
 //
@@ -292,32 +346,27 @@ func RemoveInstanceMetrics(processName, instanceID string) {
 	// DeletePartialMatch rather than DeleteLabelValues: some of these carry an
 	// extra label (ProcessMemoryBytes has "type"), and DeleteLabelValues only
 	// matches a FULL label set — it would silently delete nothing there.
-	match := prometheus.Labels{"process": processName, "instance": instanceID}
-
-	ProcessUp.DeletePartialMatch(match)
-	ProcessStartTime.DeletePartialMatch(match)
-	ProcessExitCode.DeletePartialMatch(match)
-	ProcessCPUPercent.DeletePartialMatch(match)
-	ProcessMemoryBytes.DeletePartialMatch(match)
-	ProcessMemoryPercent.DeletePartialMatch(match)
+	//
+	// The match must use the family's own process-label key. A label the vector
+	// does not have never matches, so matching "process" against a "name"
+	// family is also a silent no-op.
+	for _, f := range instanceSeries {
+		f.vec.DeletePartialMatch(prometheus.Labels{
+			f.processLabel: processName,
+			labelInstance:  instanceID,
+		})
+	}
 }
 
 // RemoveProcessMetrics drops every series belonging to a process that has been
 // removed from the config entirely, including the process-level ones that carry
 // no instance label.
 func RemoveProcessMetrics(processName string) {
-	match := prometheus.Labels{"process": processName}
-
-	ProcessUp.DeletePartialMatch(match)
-	ProcessStartTime.DeletePartialMatch(match)
-	ProcessExitCode.DeletePartialMatch(match)
-	ProcessCPUPercent.DeletePartialMatch(match)
-	ProcessMemoryBytes.DeletePartialMatch(match)
-	ProcessMemoryPercent.DeletePartialMatch(match)
-	ProcessCurrentScale.DeletePartialMatch(match)
-	ProcessRestarts.DeletePartialMatch(match)
-	HealthCheckStatus.DeletePartialMatch(match)
-	HealthCheckConsecutiveFails.DeletePartialMatch(match)
+	for _, families := range [][]seriesFamily{instanceSeries, processSeries} {
+		for _, f := range families {
+			f.vec.DeletePartialMatch(prometheus.Labels{f.processLabel: processName})
+		}
+	}
 }
 
 // RecordShutdownDuration records the duration of graceful shutdown

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Scale-down now actually drops the removed instances' series.**
+  `RemoveInstanceMetrics` matched every metric on the `process` label, but
+  `cbox_init_process_up`, `_start_time_seconds` and `_last_exit_code` carry
+  the process name under `name`. A partial match on a label a metric does
+  not have deletes nothing, so after scaling php-fpm from 10 to 2,
+  `cbox_init_process_up{instance="php-fpm-9"}` sat at 0 forever and
+  `process_up == 0` alerts fired on instances scaled away on purpose. Each
+  metric is now matched on its own label key. `cbox_init_process_threads`,
+  `_file_descriptors` and `cbox_init_resource_collection_errors_total` are
+  now dropped as well; they were never in the list. `RemoveProcessMetrics`
+  had the same mismatch and missed the health check histogram and counter
+  and the desired-scale gauge. No label names changed.
+
+### Documentation
+
+- The metrics reference now lists the exact label set of every
+  `cbox_init_` metric, explains `name` vs `process`, and notes that
+  Prometheus' default scrape config renames the `instance` label to
+  `exported_instance`. Examples that queried lifecycle metrics with
+  `process=`, or used metrics that do not exist
+  (`cbox_init_manager_uptime_seconds`, `cbox_init_hook_execution_seconds`,
+  `cbox_init_hook_failures_total`), are corrected.
+
 ## [3.7.0] - 2026-09-11
 
 ### Changed

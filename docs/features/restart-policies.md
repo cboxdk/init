@@ -284,10 +284,10 @@ processes:
 
 ```bash
 # Total restarts per process
-cbox_init_process_restarts_total{process="php-fpm"}
+cbox_init_process_restarts_total{name="php-fpm"}
 
 # Restart rate (restarts per second)
-rate(cbox_init_process_restarts_total{process="php-fpm"}[5m])
+rate(cbox_init_process_restarts_total{name="php-fpm"}[5m])
 ```
 
 ### Alert on Excessive Restarts
@@ -303,7 +303,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Process {{ $labels.process }} restarting frequently"
+          summary: "Process {{ $labels.name }} restarting frequently"
 
       - alert: RestartLoop
         expr: cbox_init_process_restarts_total > 10
@@ -311,7 +311,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Process {{ $labels.process }} in restart loop"
+          summary: "Process {{ $labels.name }} in restart loop"
 ```
 
 ## Troubleshooting
