@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An exit went unnoticed while something the process started still held its
+  output.** `cmd.Wait()` also waited for every holder of the stdout/stderr
+  pipe, so a service that crashed while a child it had backgrounded (or put
+  in its own session, like PostgreSQL's backends) lived on was never
+  restarted, and a stop whose SIGKILL had worked ended in "did not exit after
+  SIGKILL" and exit 1. Supervised processes now write to a pipe cbox-init
+  owns: the exit is acted on at once, output already written is drained for
+  up to 1s, and what the lingering child writes afterwards is still logged.
+  `kill_timeout` still measures the process itself. Also applies to
+  `stdout: false`/`stderr: false`, which went through the same kind of pipe.
+- **Hooks and scheduled jobs that leave something running in the background
+  finish when they exit.** They used to wait for the background process to
+  close the output it inherited — past their own timeout — so such a
+  pre-start hook held container startup, and such a job counted as running,
+  with every later run skipped as an overlap, for as long as it lived.
+
 ## [3.8.0] - 2026-09-24
 
 ### Added

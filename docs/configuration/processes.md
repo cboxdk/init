@@ -391,6 +391,12 @@ processes:
       kill_timeout: 10      # postgres SIGKILLs stuck backends itself after 5s
 ```
 
+An instance counts as stopped when its own process has exited, even if
+something it started — a backgrounded helper, or a child in a session of its own
+— still holds its stdout or stderr. That output keeps being logged, with a
+warning saying so. The same goes for a process that crashes: the exit is acted
+on, and the restart policy applied, within a second.
+
 Signal names are case-insensitive and the `SIG` prefix is optional (`SIGQUIT`,
 `QUIT` and `quit` are the same). Accepted: `SIGTERM`, `SIGINT`, `SIGQUIT`,
 `SIGKILL`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`, `SIGWINCH`, `SIGCONT`, `SIGSTOP`,

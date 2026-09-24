@@ -147,6 +147,9 @@ func (e *Executor) executeOnce(ctx context.Context, hook *config.Hook) error {
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
+	// A hook that starts something in the background is done when the hook
+	// exits, not when the background process closes the output it inherited.
+	cmd.WaitDelay = signals.OutputDrainGrace
 	if err := signals.RunSupervised(cmd); err != nil {
 		return fmt.Errorf("command failed: %w (output: %s)", err, output.String())
 	}

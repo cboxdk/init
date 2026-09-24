@@ -169,6 +169,13 @@ func (e *ProcessExecutor) setupCommand(ctx context.Context, processName string, 
 		cmd.Stderr = os.Stderr
 	}
 
+	// The job is over when it exits. Without a bound os/exec also waits for
+	// anything the job left running in the background to close the output it
+	// inherited — so the job stayed "running", and every later run was skipped
+	// as an overlap, for as long as that process lived. The same wait outlasted
+	// the job's timeout, which only kills the job itself.
+	cmd.WaitDelay = signals.OutputDrainGrace
+
 	return cmd
 }
 
