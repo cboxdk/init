@@ -229,6 +229,24 @@ func (rc *ResourceCollector) RemoveProcess(processName string) {
 	}
 }
 
+// RetainInstances drops the buffers and handles of every instance of
+// processName that is not in keep: the counterpart of metrics.RetainInstances
+// for a process whose supervisor was replaced by one running fewer instances.
+func (rc *ResourceCollector) RetainInstances(processName string, keep []string) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	kept := make(map[string]bool, len(keep))
+	for _, id := range keep {
+		kept[id] = true
+	}
+	for instanceID := range rc.instances[processName] {
+		if !kept[instanceID] {
+			rc.removeLocked(processName, instanceID)
+		}
+	}
+}
+
 // track records that instanceID of processName holds a buffer or handle.
 // Callers hold rc.mu.
 func (rc *ResourceCollector) track(processName, instanceID string) {

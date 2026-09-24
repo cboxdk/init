@@ -222,3 +222,55 @@ func TestRemoveProcessMetrics_LeavesNoSeries(t *testing.T) {
 		}
 	}
 }
+
+// TestRetainInstances covers the cleanup after a supervisor is replaced by one
+// running fewer instances: every instance series of the process outside keep
+// goes, under either label key, and nothing of any other process is touched,
+// including one whose name starts with this one's.
+func TestRetainInstances(t *testing.T) {
+	const proc = "retain-fpm"
+	const other = "retain-fpm-worker"
+
+	for _, id := range []string{proc + "-0", proc + "-1", proc + "-2"} {
+		populateInstance(proc, id)
+	}
+	populateProcess(proc)
+	populateInstance(other, other+"-0")
+
+	otherBefore := len(seriesWith(t, prometheus.Labels{labelName: other})) +
+		len(seriesWith(t, prometheus.Labels{labelProcess: other}))
+
+	RetainInstances(proc, []string{proc + "-0"})
+
+	for _, id := range []string{proc + "-1", proc + "-2"} {
+		for _, sel := range instanceSelectors(proc, id) {
+			if left := seriesWith(t, sel); len(left) > 0 {
+				t.Errorf("instance %s is not in keep but survived: %v", id, left)
+			}
+		}
+	}
+	kept := 0
+	for _, sel := range instanceSelectors(proc, proc+"-0") {
+		kept += len(seriesWith(t, sel))
+	}
+	if want := len(instanceSeries) + 1; kept != want {
+		t.Errorf("kept instance has %d series, want %d", kept, want)
+	}
+	if left := seriesWith(t, prometheus.Labels{labelName: proc, "reason": "crash"}); len(left) != 1 {
+		t.Errorf("per-process series must survive RetainInstances, got %v", left)
+	}
+	otherAfter := len(seriesWith(t, prometheus.Labels{labelName: other})) +
+		len(seriesWith(t, prometheus.Labels{labelProcess: other}))
+	if otherAfter != otherBefore {
+		t.Errorf("%q: %d series after retaining %q's instances, want %d (over-match)", other, otherAfter, proc, otherBefore)
+	}
+
+	// An empty keep drops every instance series but leaves the per-process ones.
+	RetainInstances(proc, nil)
+	if left := seriesWith(t, prometheus.Labels{labelInstance: proc + "-0"}); len(left) > 0 {
+		t.Errorf("empty keep left instance series %v", left)
+	}
+	if left := seriesWith(t, prometheus.Labels{labelName: proc, "reason": "crash"}); len(left) != 1 {
+		t.Errorf("empty keep removed per-process series, got %v", left)
+	}
+}

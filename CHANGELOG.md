@@ -29,6 +29,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including history kept for instances that exited on their own. A reload
   cleans up only once it commits: a reload that fails and rolls back brings
   the process back with its counters intact.
+- **Lowering `scale` through a reload or an API edit drops the old
+  instances' series.** Both paths replace the process's supervisor, and the
+  cleanup only ran for a live scale-down, so after editing `scale: 10` to
+  `scale: 2` instances 2-9 stayed at `cbox_init_process_up` 0 (with their
+  last CPU and memory readings) forever. The manager now keeps only the
+  series of the instances the new supervisor runs.
+- **Turning a process into a scheduled task drops its series.** A scheduled
+  task exports no process metrics, but the supervisor it replaced left
+  `process_up` at 0, `desired_scale` at its old value and the last
+  health check status behind, so `process_up == 0`, scale-drift and health
+  alerts fired for good.
 
 ### Documentation
 

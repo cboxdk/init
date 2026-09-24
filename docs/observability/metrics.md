@@ -155,7 +155,13 @@ scrape target's `instance` is dropped for these series.
   `_last_exit_code`, and every resource metric), so
   `cbox_init_process_up == 0` does not keep firing for an instance that was
   scaled away on purpose. The process-level series (`restarts_total`,
-  `desired_scale`, `current_scale`, health checks) stay.
+  `desired_scale`, `current_scale`, health checks) stay. This applies to a
+  live scale-down and to a config reload or API edit that lowers `scale`.
+- A process **removed from the config** (through the API or a reload) has
+  every one of its series deleted. So does a process that an edit or reload
+  turns into a **scheduled** task: scheduled tasks export no process
+  metrics (see [Scheduled Tasks](../features/scheduled-tasks)). A reload
+  that fails and rolls back keeps the series, because the process comes back.
 
 ### Process Lifecycle Metrics
 
