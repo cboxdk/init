@@ -109,7 +109,8 @@ jobs:
           ## Docker
 
           Multi-arch images (linux/amd64, linux/arm64) on GitHub Container Registry,
-          tagged \`${{ steps.version.outputs.VERSION }}\`, \`${{ steps.version.outputs.MINOR }}\`, \`${{ steps.version.outputs.MAJOR }}\` and \`latest\` — without a \`v\`:
+          tagged \`${{ steps.version.outputs.VERSION }}\` — without a \`v\`. \`${{ steps.version.outputs.MINOR }}\`, \`${{ steps.version.outputs.MAJOR }}\`
+          and \`latest\` always point to the newest matching release.
           \`\`\`bash
           docker pull ghcr.io/cboxdk/init:${{ steps.version.outputs.VERSION }}
           \`\`\`
