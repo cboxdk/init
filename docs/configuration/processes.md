@@ -359,19 +359,113 @@ processes:
 
 ## Shutdown Configuration
 
+Every stop — `docker stop`, `cbox-init stop <name>`, a scale-down, or a reload
+that replaces the process — runs the same sequence for each instance:
+
+1. `shutdown.pre_stop_hook`, if configured.
+2. `shutdown.signal` is sent to the instance's process group.
+3. Up to `shutdown.timeout` seconds for the instance to exit.
+4. If it has not, `shutdown.kill_signal` is sent.
+5. Up to `shutdown.kill_timeout` seconds for it to exit.
+6. If `kill_signal` was not already `SIGKILL`, `SIGKILL` is sent and the
+   instance gets 5 more seconds to be reaped.
+
+During container shutdown, step 3 is also bounded by `global.shutdown_timeout`:
+whichever runs out first moves the stop on to step 4. Steps 4–6 are never
+skipped, so after its pre-stop hook a single instance can take up to
+`timeout + kill_timeout` to stop (plus 5s when `kill_signal` is not `SIGKILL`).
+Processes that depend on each other stop one after another, dependents first,
+so their times add up. Give the container runtime more than the total — for
+Docker, `--stop-timeout` or `stop_grace_period`; for Kubernetes,
+`terminationGracePeriodSeconds` — or it kills the whole container before
+cbox-init is done.
+
+```yaml
+processes:
+  postgres:
+    command: ["docker-entrypoint.sh", "postgres"]
+    shutdown:
+      signal: SIGINT        # PostgreSQL "fast" shutdown
+      timeout: 100          # room for the shutdown checkpoint
+      kill_signal: SIGQUIT  # "immediate" shutdown instead of SIGKILL
+      kill_timeout: 10      # postgres SIGKILLs stuck backends itself after 5s
+```
+
+Signal names are case-insensitive and the `SIG` prefix is optional (`SIGQUIT`,
+`QUIT` and `quit` are the same). Accepted: `SIGTERM`, `SIGINT`, `SIGQUIT`,
+`SIGKILL`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`, `SIGWINCH`, `SIGCONT`, `SIGSTOP`,
+`SIGTSTP`, `SIGABRT`. Anything else fails config validation.
+
+### shutdown.signal
+
+**Type:** `string`
+**Default:** `SIGTERM`
+**Description:** The signal that asks the process to stop gracefully.
+
+Use the signal your program treats as "finish up and exit":
+
+| Program | Signal | Why |
+|---------|--------|-----|
+| Most programs, PHP-FPM | `SIGTERM` (default) | Graceful stop |
+| Nginx | `SIGQUIT` | Graceful stop; `SIGTERM` is nginx's *fast* stop |
+| PostgreSQL | `SIGINT` | Fast shutdown: rolls back open transactions, disconnects clients, writes a shutdown checkpoint. `SIGTERM` is *smart* shutdown, which waits for every client to leave |
+
+```yaml
+processes:
+  nginx:
+    command: ["nginx", "-g", "daemon off;"]
+    shutdown:
+      signal: SIGQUIT
+```
+
 ### shutdown.timeout
 
 **Type:** `integer` (seconds)
-**Default:** Inherits from `global.shutdown_timeout`
-**Description:** Process-specific shutdown timeout.
+**Default:** `30`
+**Description:** How long to wait after `signal` before sending `kill_signal`.
+
+It does not inherit `global.shutdown_timeout`. During container shutdown the
+global value is a deadline over the whole stop: a larger per-process `timeout`
+is cut short by it, so raise both when a process needs long to drain.
 
 ```yaml
+global:
+  shutdown_timeout: 150
 processes:
   horizon:
     command: ["php", "artisan", "horizon"]
     shutdown:
       timeout: 120  # Allow 2 minutes for graceful shutdown
 ```
+
+### shutdown.kill_signal
+
+**Type:** `string`
+**Default:** `SIGKILL`
+**Description:** Sent when `timeout` expires and the process is still running.
+
+The default ends the process at once. Some programs have a stronger stop that is
+still not `SIGKILL` and is better for them. PostgreSQL's `SIGQUIT` (immediate
+shutdown) makes the postmaster stop its own backends before it exits; a
+`SIGKILL` on the postmaster leaves its backends running with nobody in charge.
+
+If the process traps or ignores `kill_signal`, cbox-init still sends `SIGKILL`
+after `kill_timeout`, so a stop always ends.
+
+### shutdown.kill_timeout
+
+**Type:** `integer` (seconds)
+**Default:** `5`
+**Range:** `0`–`600` (`0` means the default)
+**Description:** How long to wait after `kill_signal` before sending `SIGKILL`.
+
+Raise it when `kill_signal` starts a shutdown that takes time of its own. With
+`kill_signal: SIGQUIT`, PostgreSQL waits 5 seconds for its backends and then
+`SIGKILL`s the ones still running; with the default `kill_timeout: 5`, cbox-init
+can `SIGKILL` the postmaster first. `kill_timeout: 10` lets PostgreSQL finish.
+
+When `kill_signal` is `SIGKILL`, `kill_timeout` is how long to wait for the
+process to be reaped before cbox-init reports it as not stopped.
 
 ### shutdown.pre_stop_hook
 

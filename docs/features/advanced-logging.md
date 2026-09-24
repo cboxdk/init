@@ -84,11 +84,44 @@ Parse JSON log lines and lift their fields into the structured output.
 logging:
   json:
     enabled: true
-    detect_auto: true       # auto-detect JSON lines
-    extract_level: true     # promote the "level" field
-    extract_message: true   # promote the "message" field
-    merge_fields: true      # merge remaining fields as attributes
+    detect_auto: true       # only treat lines starting with "{" as JSON
+    extract_level: true     # use the line's level field as the entry's level
+    extract_message: true   # use the line's message field as the entry's message
+    merge_fields: true      # add the remaining fields as attributes
+    message_field: msg      # optional; default: "message", then "msg"
+    level_field: severity   # optional; default: "level"
 ```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `message_field` | `message`, then `msg` | Key `extract_message` reads. Unset, the first of `message` and `msg` that holds a string is used — `msg` is what Go's `log/slog`, logrus, zap and pino write |
+| `level_field` | `level` | Key `extract_level` reads |
+
+A field that is extracted is not repeated as an attribute. When a line has no
+string under the message key, the whole line becomes the message.
+
+**Fields that clash with cbox-init's own.** Every entry cbox-init writes already
+has `time`, `level`, `msg`, `process`, `instance_id` and `stream`. A merged field
+with one of those names is kept with an `app_` prefix instead of being written
+twice — the process's own timestamp becomes `app_time`. (If `app_time` is taken
+too, the prefix is repeated.) Merged fields come out sorted by their original
+name.
+
+For example, with every option on, this line from `postgres_exporter`:
+
+```json
+{"time":"2026-09-24T10:15:02.123Z","level":"INFO","source":"tls_config.go:347","msg":"Listening on","address":"127.0.0.1:9187"}
+```
+
+is written by cbox-init (`log_format: json`) as:
+
+```json
+{"time":"2026-09-24T10:15:02.130Z","level":"INFO","msg":"Listening on","process":"postgres-exporter","instance_id":"postgres-exporter-0","stream":"stderr","address":"127.0.0.1:9187","source":"tls_config.go:347","app_time":"2026-09-24T10:15:02.123Z"}
+```
+
+Lines that are not JSON — logfmt, plain text — are passed through unchanged as
+the message. `level_detection` can still pick a level out of them, for example
+`warn: '\blevel=WARN\b'` for logfmt.
 
 ## Filtering
 

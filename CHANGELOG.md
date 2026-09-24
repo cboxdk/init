@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`shutdown.kill_timeout`: how long to wait after `kill_signal` before
+  SIGKILL.** The wait was a fixed 5s. PostgreSQL's immediate shutdown
+  (`kill_signal: SIGQUIT`) waits those same 5s before SIGKILLing its stuck
+  backends, so cbox-init SIGKILLed the postmaster first, orphaned the backends
+  and exited 1 with "did not exit after SIGKILL". Default stays 5s; range
+  0–600. API stops now budget for it too.
+- **`user` / `group` on exec health checks and on hooks** (global hooks and
+  `shutdown.pre_stop_hook`, YAML and `CBOX_INIT_HOOK_*_USER`/`_GROUP`). A check
+  like `pg_isready` as `postgres` no longer needs gosu. Resolved each run; an
+  unknown user fails the check or hook without running it — never as root.
+  Rejected on tcp/http checks.
+- **`logging.json.message_field` / `level_field`.** Unset, the message is taken
+  from `message`, then `msg` — so Go daemons (slog, logrus, zap) get their
+  message lifted instead of the whole raw line.
+
+### Changed
+
+- **`CBOX_ENGINE=postgres` no longer stops the container.** PostgreSQL (also
+  `postgresql`) is recognised and left untuned: a notice is printed, nothing is
+  written, and startup continues. Unknown engines still fail.
+- **Asking to run as the user cbox-init already is needs no privileges.** A
+  process, check or hook whose `user`/`group` match cbox-init's own identity no
+  longer requests a credential switch, which failed with EPERM when cbox-init
+  was not root.
+- **Merged JSON log fields come out sorted by name.**
+
+### Fixed
+
+- **JSON log parsing wrote `time`, `msg` (and `level`, `process`,
+  `instance_id`, `stream`) twice.** A child field that clashes with a key
+  cbox-init writes itself is now kept as `app_<name>` (the child's timestamp
+  becomes `app_time`).
+- **Env overrides of nested process fields could create a phantom process.**
+  `CBOX_INIT_PROCESS_DB_HEALTH_CHECK_COMMAND` was read as process
+  `db-health-check`, field `command`. A process that exists now wins, and
+  process overrides apply in a fixed order, so the result no longer depends
+  on how the environment is ordered.
+- **Docs:** `shutdown.signal`, `kill_signal` and the stop sequence are
+  documented; `shutdown.timeout` was documented as inheriting
+  `global.shutdown_timeout`, which it never did (default 30s); the
+  non-existent `CBOX_INIT_PROCESS_<NAME>_PRIORITY` is gone; `CBOX_ENGINE`,
+  `CBOX_WAKE_MODE` and `CBOX_ENGINE_CONFIG_PATH` are documented.
+
 ## [3.7.0] - 2026-09-11
 
 ### Changed
