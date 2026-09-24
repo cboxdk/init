@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now dropped as well; they were never in the list. `RemoveProcessMetrics`
   had the same mismatch and missed the health check histogram and counter
   and the desired-scale gauge. No label names changed.
+- **Removing a process now drops its series.** `RemoveProcessMetrics` was
+  never called, so a process removed through the API or dropped from the
+  config by a reload kept `cbox_init_process_up` at 0 forever, and
+  `process_up == 0` alerts fired for a process removed on purpose. Both paths
+  now drop every series of the process and its resource-history buffers,
+  including history kept for instances that exited on their own. A reload
+  cleans up only once it commits: a reload that fails and rolls back brings
+  the process back with its counters intact.
 
 ### Documentation
 

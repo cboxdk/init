@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/metrics"
 )
 
 // SetConfigPath sets the config file path for saving.
@@ -123,6 +124,7 @@ func (m *Manager) RemoveProcess(ctx context.Context, name string) error {
 
 	// Remove from config
 	delete(m.config.Processes, name)
+	m.forgetProcessTelemetry(name)
 
 	m.logger.Info("Process removed successfully", "name", name)
 
@@ -413,12 +415,32 @@ func (m *Manager) ReloadConfig(ctx context.Context) error {
 		return fmt.Errorf("reload failed and was rolled back to the previous configuration: %w", err)
 	}
 
+	// Only now, with the new config committed, are the removed processes gone
+	// for good. Dropping their series earlier would lose them on a rollback,
+	// which brings those processes back.
+	for _, name := range toStop {
+		m.forgetProcessTelemetry(name)
+	}
+
 	m.logger.Info("Configuration reloaded successfully")
 
 	// Audit log
 	m.auditLogger.LogConfigReloaded(m.configPath)
 
 	return nil
+}
+
+// forgetProcessTelemetry drops every metric series and resource buffer of a
+// process that has been removed from the config. Left behind, its
+// cbox_init_process_up sits at 0 forever, and Prometheus cannot tell that from
+// a process that is down, so a process_up == 0 alert fires permanently on a
+// process the operator removed on purpose. Only call it once the removal is
+// final: a stopped or disabled process keeps its series (0 is the truth there).
+func (m *Manager) forgetProcessTelemetry(name string) {
+	metrics.RemoveProcessMetrics(name)
+	if m.resourceCollector != nil {
+		m.resourceCollector.RemoveProcess(name)
+	}
 }
 
 // rollbackReload restores the previous configuration after a reload failed
