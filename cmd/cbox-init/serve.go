@@ -415,7 +415,7 @@ func runServe(cmd *cobra.Command, args []string) {
 			slog.Info("Hot-reloading configuration (only changed services)")
 
 			// Use the manager's ReloadConfig which selectively restarts only changed services
-			reloadCtx, reloadCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Global.ShutdownTimeout)*time.Second)
+			reloadCtx, reloadCancel := context.WithTimeout(context.Background(), cfg.ShutdownDeadline())
 			if err := pm.ReloadConfig(reloadCtx); err != nil {
 				slog.Error("Config reload failed", "error", err)
 			} else {
@@ -841,15 +841,14 @@ func waitForShutdownOrReload(
 
 // performGracefulShutdown gracefully shuts down all components
 func performGracefulShutdown(cfg *config.Config, pm *process.Manager, apiServer *api.Server, metricsServer *metrics.Server, stopFPMTune func(), auditLogger *audit.Logger, reason string) {
-	shutdownCtx, shutdownCancel := context.WithTimeout(
-		context.Background(),
-		time.Duration(cfg.Global.ShutdownTimeout)*time.Second,
-	)
+	deadline := cfg.ShutdownDeadline()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), deadline)
 	defer shutdownCancel()
 
 	slog.Info("Initiating graceful shutdown",
 		"reason", reason,
-		"timeout", cfg.Global.ShutdownTimeout,
+		"timeout", int(deadline.Seconds()),
+		"global_shutdown_timeout", cfg.Global.ShutdownTimeout,
 	)
 
 	// Stop the runtime autotuner FIRST, before php-fpm is drained: it rewrites
@@ -892,11 +891,7 @@ func performGracefulShutdown(cfg *config.Config, pm *process.Manager, apiServer 
 // os.Exit directly, so processes that had already started were never asked to
 // stop — they just died with PID 1.
 func shutdownStarted(pm *process.Manager, metricsServer *metrics.Server, cfg *config.Config, log *slog.Logger) {
-	timeout := time.Duration(cfg.Global.ShutdownTimeout) * time.Second
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownDeadline())
 	defer cancel()
 
 	if err := pm.Shutdown(ctx); err != nil {

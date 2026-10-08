@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`1` and `0` in an environment override no longer turn into booleans.**
+  Values were typed from their text with booleans tried first, so an integer
+  field set to `1` — `CBOX_INIT_PROCESS_<NAME>_SCHEDULE_MAX_CONCURRENT=1`,
+  `CBOX_INIT_GLOBAL_MAX_RESTART_ATTEMPTS=1` — failed to decode ("cannot
+  unmarshal !!bool into int") and the container did not start, and a text
+  field set to `1` or `0` became `"true"`/`"false"` (`..._USER=1` ran the
+  process as a user named `true`). A value is now converted to the type of the
+  field it sets; boolean fields still accept `1`/`0`.
+- **A process's own `shutdown.timeout` is no longer cut off by
+  `global.shutdown_timeout`.** The global value (default 30s) bounded the
+  whole shutdown, so a worker given `shutdown.timeout: 1800` to finish its job
+  was force-killed after 30 seconds. The shutdown (and a reload's stops) now
+  waits at least `global.shutdown_timeout` and as long as the longest stop an
+  enabled process asks for, up to 3600 seconds. `global.shutdown_timeout` /
+  `CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT` still sets the floor.
+
 ## [3.8.1] - 2026-09-24
 
 ### Fixed

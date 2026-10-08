@@ -400,6 +400,37 @@ func (c *Config) setGlobalFPMTuneDefaults() {
 	}
 }
 
+// ShutdownDeadline is how long a graceful shutdown (or a reload's stops) may
+// take: global.shutdown_timeout, extended to fit the longest stop an enabled
+// process asks for — its shutdown.timeout, plus kill_timeout when the kill
+// signal is not already SIGKILL. The global value used to cap those silently: a
+// queue worker given shutdown.timeout 1800 to finish its job was force-killed
+// after the default 30 seconds, and nothing said so until the job was lost.
+// Bounded by MaxShutdownTimeout; the container runtime's own grace period (a pod's
+// terminationGracePeriodSeconds) still has to allow it.
+func (c *Config) ShutdownDeadline() time.Duration {
+	seconds := c.Global.ShutdownTimeout
+	for _, proc := range c.Processes {
+		if proc == nil || !proc.Enabled || proc.Shutdown == nil {
+			continue
+		}
+		stop := proc.Shutdown.Timeout
+		if proc.Shutdown.KillSignal != "" && proc.Shutdown.KillSignal != "SIGKILL" {
+			stop += proc.Shutdown.KillTimeout
+		}
+		if stop > seconds {
+			seconds = stop
+		}
+	}
+	if seconds > MaxShutdownTimeout {
+		seconds = MaxShutdownTimeout
+	}
+	if seconds <= 0 {
+		seconds = 30
+	}
+	return time.Duration(seconds) * time.Second
+}
+
 // setGlobalBasicDefaults sets basic global defaults
 func (c *Config) setGlobalBasicDefaults() {
 	if c.Global.ShutdownTimeout == 0 {
