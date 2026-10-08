@@ -31,7 +31,14 @@ global:
 
 **Type:** `integer` (seconds)
 **Default:** `30`
-**Description:** Maximum time to wait for all processes to stop gracefully before force-kill.
+**Environment:** `CBOX_INIT_GLOBAL_SHUTDOWN_TIMEOUT`
+**Description:** Time all processes get to stop gracefully before the rest are
+force-killed — at least this, and longer when an enabled process's own
+`shutdown.timeout` (plus `shutdown.kill_timeout` after a kill signal other than
+SIGKILL) asks for more, up to 3600. A queue worker given `shutdown.timeout: 1800`
+to finish its job gets those 30 minutes; it is not cut off at 30 seconds. The
+container's own stop grace period (`docker stop -t`, a pod's
+`terminationGracePeriodSeconds`) must allow as much.
 
 ```yaml
 global:

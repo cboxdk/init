@@ -155,9 +155,12 @@ func LoadWithEnvExpansion(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// fieldNode represents a YAML field tree for env overrides
+// fieldNode represents a YAML field tree for env overrides. typ is the field's
+// Go type (pointers removed): an env value is converted to it, so the same text
+// means what the field it sets expects (see parseEnvValueFor).
 type fieldNode struct {
 	key      string
+	typ      reflect.Type
 	children map[string]*fieldNode
 }
 
@@ -166,6 +169,7 @@ func buildFieldNode(t reflect.Type) *fieldNode {
 		t = t.Elem()
 	}
 	node := &fieldNode{
+		typ:      t,
 		children: map[string]*fieldNode{},
 	}
 
@@ -256,6 +260,62 @@ func setNestedValue(root map[string]any, path []string, value any) {
 	current[path[len(path)-1]] = value
 }
 
+// fieldType returns the Go type of the field a matched path names, or nil when
+// the tree does not know it.
+func fieldType(tree *fieldNode, path []string) reflect.Type {
+	node := tree
+	for _, key := range path {
+		child, ok := node.children[normalizeKey(key)]
+		if !ok {
+			return nil
+		}
+		node = child
+	}
+	return node.typ
+}
+
+// parseEnvValueFor converts an env value to the kind of the field it sets.
+//
+// Guessing the type from the text alone read "1" and "0" as booleans
+// (strconv.ParseBool accepts them, and it was tried first), so an integer field
+// set to 1 — CBOX_INIT_PROCESS_<NAME>_SCHEDULE_MAX_CONCURRENT=1 — failed to decode
+// with "cannot unmarshal !!bool into int" and the container never started, and a
+// string field such as USER=0 became false. Booleans still accept 1/0/true/false,
+// numbers stay numbers, strings stay text; a value that does not parse as the
+// field's kind is passed through for the decoder to report.
+func parseEnvValueFor(raw string, t reflect.Type) any {
+	if t == nil {
+		return parseEnvValue(raw)
+	}
+	value := strings.TrimSpace(raw)
+	switch t.Kind() {
+	case reflect.String:
+		return value
+	case reflect.Bool:
+		if v, err := strconv.ParseBool(value); err == nil {
+			return v
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		// time.Duration is an int64: "30s" stays text for the decoder, a bare
+		// number is a number as before.
+		if v, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return v
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if v, err := strconv.ParseUint(value, 10, 64); err == nil {
+			return v
+		}
+	case reflect.Float32, reflect.Float64:
+		if v, err := strconv.ParseFloat(value, 64); err == nil {
+			return v
+		}
+	default:
+		// Lists, maps, structs and untyped fields: JSON or a scalar guess.
+		return parseEnvValue(raw)
+	}
+	return value
+}
+
 func parseEnvValue(raw string) any {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -311,7 +371,7 @@ func applyEnvOverridesMap(raw map[string]any) error {
 			if len(path) == 0 {
 				continue
 			}
-			setNestedValue(globalMap, path, parseEnvValue(value))
+			setNestedValue(globalMap, path, parseEnvValueFor(value, fieldType(globalFieldTree, path)))
 		case strings.HasPrefix(key, "CBOX_INIT_HOOK_"):
 			segment := strings.TrimPrefix(key, "CBOX_INIT_HOOK_")
 			collectHookEnvOverride(hookCollector, segment, value)
@@ -393,7 +453,7 @@ func collectHookEnvOverride(collector map[string]map[int]map[string]any, segment
 		hookMap["command"] = parseCommandValue(value)
 		return
 	}
-	setNestedValue(hookMap, path, parseEnvValue(value))
+	setNestedValue(hookMap, path, parseEnvValueFor(value, fieldType(hookFieldTree, path)))
 }
 
 // hookEnvEntry returns (creating as needed) the collector entry for one hook.
@@ -539,7 +599,7 @@ func setProcessField(procMap map[string]any, path []string, value string) {
 		setNestedValue(procMap, path, parseCommandValue(value))
 		return
 	}
-	setNestedValue(procMap, path, parseEnvValue(value))
+	setNestedValue(procMap, path, parseEnvValueFor(value, fieldType(processFieldTree, path)))
 }
 
 func decodeProcessName(processes map[string]any, encoded string) string {

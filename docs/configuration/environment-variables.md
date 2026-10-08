@@ -265,6 +265,14 @@ CBOX_INIT_PROCESS_<NAME>_SHUTDOWN_KILL_SIGNAL=SIGQUIT
 CBOX_INIT_PROCESS_<NAME>_SHUTDOWN_KILL_TIMEOUT=10
 ```
 
+### How values are read
+
+A value is converted to the type of the field it sets: boolean fields accept
+`true`/`false`/`1`/`0`, number fields take numbers (`..._SCALE=1`,
+`..._SCHEDULE_MAX_CONCURRENT=1`), text fields keep the text as written
+(`..._USER=1` is the user `1`), durations take `30s`/`5m`, and lists take a
+JSON array.
+
 A name like `POSTGRES_HEALTH_CHECK_USER` can be read two ways: process
 `postgres`, field `health_check.user` — or process `postgres-health-check`,
 field `user`. A process already in the config file wins; only when none
