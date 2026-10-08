@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.2] - 2026-10-08
+
 ### Fixed
 
 - **`1` and `0` in an environment override no longer turn into booleans.**
