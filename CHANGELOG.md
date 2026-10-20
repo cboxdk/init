@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Rebuilt against a patched Go toolchain and a patched `golang.org/x/net`.**
+  No behaviour change: the same code as 3.8.2. The 3.8.2 binaries were built by
+  a floating `go-version: '1.26'`, which resolved to 1.26.8 on the day of the
+  release and carried three denial-of-service advisories in the standard
+  library — CVE-2026-78667 (`net/http`, crafted HTTP `Range` headers),
+  CVE-2026-78669 (`net/http2`, excessive HTTP/2 SETTINGS frames) and
+  CVE-2026-97031 (`crypto/tls`, multiple ECH outer extension references) — and
+  the vendored `golang.org/x/net` v0.58.0 carried CVE-2026-78669 a second time
+  in its own HTTP/2 implementation. cbox-init serves HTTP on all three of the
+  metrics, readiness and management ports, so none of these were dead code.
+  The toolchain is pinned to 1.26.10 and `golang.org/x/net` to v0.60.0, and
+  every `go-version` in CI and in the release workflow is pinned to the same
+  patch, so the toolchain that builds a release is the one the gate scanned
+  rather than whatever the runner resolves that day.
+
 ## [3.8.2] - 2026-10-08
 
 ### Fixed

@@ -4,7 +4,8 @@
 // generated rather than on the dependency set, which would make the committed
 // SBOM drift on every commit and on every developer machine:
 //
-//   - the root component's version is a git pseudo-version derived from HEAD
+//   - the root component's version is a git pseudo-version derived from HEAD,
+//     or missing entirely where git cannot resolve one
 //   - purls carry the generating host's goos/goarch qualifiers
 //   - metadata.tools records hashes of the cyclonedx-gomod binary, which differ
 //     per platform and per build of the tool
@@ -77,21 +78,29 @@ func normaliseRootVersion(doc map[string]any) {
 		return
 	}
 
-	oldVersion, _ := component["version"].(string)
 	component["version"] = rootVersion
 
 	name, _ := component["name"].(string)
-	if oldVersion == "" || name == "" {
+	if name == "" {
 		return
 	}
 
-	// The same version appears inside the root purl and bom-ref.
-	old := name + "@" + oldVersion
-	replacement := name + "@" + rootVersion
+	// The version also appears inside the root purl and bom-ref, and it may be
+	// absent there: cyclonedx-gomod cannot resolve a version for the main
+	// module in every checkout (inside a git worktree it warns "failed to
+	// determine version of main module" and emits a version-less purl), and
+	// normalising only the `version` field would then leave a document that
+	// differs from the one CI generates -- which passes `sbom-check` locally
+	// and fails it in CI. Pin the purl to rootVersion in both cases.
+	//
+	// The trailing `?` or `"` is what keeps this off a longer module path that
+	// merely starts with the root's name.
+	rootPurl := regexp.MustCompile(`pkg:golang/` + regexp.QuoteMeta(name) + `(?:@[^"?]*)?([?"])`)
+	replacement := "pkg:golang/" + name + "@" + rootVersion + "$1"
 
 	if raw, err := json.Marshal(doc); err == nil {
 		var replaced map[string]any
-		if err := json.Unmarshal(bytes.ReplaceAll(raw, []byte(old), []byte(replacement)), &replaced); err == nil {
+		if err := json.Unmarshal(rootPurl.ReplaceAll(raw, []byte(replacement)), &replaced); err == nil {
 			for k, v := range replaced {
 				doc[k] = v
 			}

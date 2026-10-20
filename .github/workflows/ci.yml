@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: ['1.26']
+        go: ['1.26.10']
 
     steps:
       - name: Checkout code
@@ -74,13 +74,16 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.10'
           cache: true
 
-      # Pinned to the patch, not the minor: `1.26` resolved to 1.26.5 while the
-      # advisories below were fixed in 1.26.6, so the scan would have passed on
-      # a toolchain that still shipped them. Bump this when govulncheck fails
-      # on the standard library -- that is the gate doing its job.
+      # Pinned to the patch, not the minor: a floating `1.26` resolves to
+      # whatever the runner has that day (it shipped 1.26.8 into v3.8.2, which
+      # still carried CVE-2026-78667, -78669 and -97031), so the scan could
+      # pass on a toolchain that still shipped the advisories below. Every
+      # go-version in this repo is pinned to the same patch as the toolchain
+      # line in go.mod. Bump them together when govulncheck fails on the
+      # standard library -- that is the gate doing its job.
       # Known-vulnerable dependencies, and the standard library this is built
       # against. Nothing in CI reported either before.
       - name: Run govulncheck
@@ -105,7 +108,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.10'
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -126,7 +129,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.10'
 
       # Validates configs/examples/*.yaml against the real schema with
       # `check-config`. These files back the documented examples, so a config
@@ -148,7 +151,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.10'
 
       - name: Build all platforms
         run: make build-all

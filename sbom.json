@@ -1569,11 +1569,11 @@
       "version": "v1.11.0"
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/net@v0.58.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/net@v0.60.0?type=module",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ca7586eeba988b871ca5312e3d9d901961e4b5510cf433028fdcb30c4d10ed3a"
+          "content": "efda79d2d7d9966d09f587e80ec4a2eb7f6a49734657013338f2c2c4cd85b185"
         }
       ],
       "licenses": [
@@ -1584,17 +1584,17 @@
         }
       ],
       "name": "golang.org/x/net",
-      "purl": "pkg:golang/golang.org/x/net@v0.58.0?type=module",
+      "purl": "pkg:golang/golang.org/x/net@v0.60.0?type=module",
       "scope": "required",
       "type": "library",
-      "version": "v0.58.0"
+      "version": "v0.60.0"
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a3b5c63af6500800c1410e18ed536ad9d456411ec998e516f0ac71e19b0d816b"
+          "content": "6db5ff8bfe8c813f4154b33d453d6d866c4bd38c9e4c085b133e12c9a75b5e8a"
         }
       ],
       "licenses": [
@@ -1605,17 +1605,17 @@
         }
       ],
       "name": "golang.org/x/sys",
-      "purl": "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+      "purl": "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
       "scope": "required",
       "type": "library",
-      "version": "v0.47.0"
+      "version": "v0.48.0"
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/text@v0.42.0?type=module",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "bf3fec780d259d7f3b3ad86ed9fff42f6e11720ad70fdfd81534ae1a38f7ac7f"
+          "content": "25b3995e07de08f53d81a715b5896226a3a10fece1ac4a8ae0b7dda6695466a2"
         }
       ],
       "licenses": [
@@ -1626,10 +1626,10 @@
         }
       ],
       "name": "golang.org/x/text",
-      "purl": "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+      "purl": "pkg:golang/golang.org/x/text@v0.42.0?type=module",
       "scope": "required",
       "type": "library",
-      "version": "v0.41.0"
+      "version": "v0.42.0"
     },
     {
       "bom-ref": "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688?type=module",
@@ -1763,7 +1763,7 @@
         "pkg:golang/go.opentelemetry.io/otel/exporters/stdout/stdouttrace@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
         "pkg:golang/google.golang.org/grpc@v1.83.2?type=module",
         "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
       ],
@@ -1815,8 +1815,8 @@
         "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
         "pkg:golang/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e?type=module",
         "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module"
       ],
       "ref": "pkg:golang/github.com/cboxdk/fpm-tune@v1.3.0?type=module"
@@ -1832,7 +1832,7 @@
         "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module",
         "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
         "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.0?type=module"
     },
@@ -1864,8 +1864,8 @@
         "pkg:golang/github.com/muesli/termenv@v0.16.0?type=module",
         "pkg:golang/github.com/rivo/uniseg@v0.4.7?type=module",
         "pkg:golang/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module"
       ],
       "ref": "pkg:golang/github.com/charmbracelet/bubbles@v1.0.0?type=module"
     },
@@ -1887,8 +1887,8 @@
         "pkg:golang/github.com/muesli/termenv@v0.16.0?type=module",
         "pkg:golang/github.com/rivo/uniseg@v0.4.7?type=module",
         "pkg:golang/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module"
       ],
       "ref": "pkg:golang/github.com/charmbracelet/bubbletea@v1.3.10?type=module"
     },
@@ -1902,7 +1902,7 @@
         "pkg:golang/github.com/lucasb-eyer/go-colorful@v1.3.0?type=module",
         "pkg:golang/github.com/mattn/go-runewidth@v0.0.19?type=module",
         "pkg:golang/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/charmbracelet/colorprofile@v0.4.1?type=module"
     },
@@ -1919,7 +1919,7 @@
         "pkg:golang/github.com/muesli/termenv@v0.16.0?type=module",
         "pkg:golang/github.com/rivo/uniseg@v0.4.7?type=module",
         "pkg:golang/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/charmbracelet/lipgloss@v1.1.0?type=module"
     },
@@ -1945,13 +1945,13 @@
         "pkg:golang/github.com/mattn/go-runewidth@v0.0.19?type=module",
         "pkg:golang/github.com/rivo/uniseg@v0.4.7?type=module",
         "pkg:golang/github.com/xo/terminfo@v0.0.0-20220910002029-abceb7e1c41e?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/charmbracelet/x/cellbuf@v0.0.15?type=module"
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/charmbracelet/x/term@v0.2.2?type=module"
     },
@@ -1976,13 +1976,13 @@
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/erikgeiser/coninput@v0.0.0-20211004153227-1c3628e74d0f?type=module"
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/fsnotify/fsnotify@v1.10.1?type=module"
     },
@@ -1997,7 +1997,7 @@
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/go-ole/go-ole@v1.2.6?type=module"
     },
@@ -2016,9 +2016,9 @@
         "pkg:golang/go.opentelemetry.io/otel/metric@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
-        "pkg:golang/golang.org/x/net@v0.58.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/net@v0.60.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/grpc@v1.83.2?type=module",
@@ -2037,7 +2037,7 @@
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/mattn/go-isatty@v0.0.20?type=module"
     },
@@ -2059,7 +2059,7 @@
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/muesli/cancelreader@v0.2.2?type=module"
     },
@@ -2069,7 +2069,7 @@
         "pkg:golang/github.com/lucasb-eyer/go-colorful@v1.3.0?type=module",
         "pkg:golang/github.com/mattn/go-isatty@v0.0.20?type=module",
         "pkg:golang/github.com/rivo/uniseg@v0.4.7?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/muesli/termenv@v0.16.0?type=module"
     },
@@ -2078,7 +2078,7 @@
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/power-devops/perfstat@v0.0.0-20240221224432-82ca36839d55?type=module"
     },
@@ -2091,9 +2091,9 @@
         "pkg:golang/github.com/prometheus/client_model@v0.6.3?type=module",
         "pkg:golang/github.com/prometheus/common@v0.71.0?type=module",
         "pkg:golang/github.com/prometheus/procfs@v0.21.1?type=module",
-        "pkg:golang/golang.org/x/net@v0.58.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/net@v0.60.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module"
       ],
       "ref": "pkg:golang/github.com/prometheus/client_golang@v1.24.1?type=module"
@@ -2113,16 +2113,16 @@
         "pkg:golang/github.com/prometheus/client_golang@v1.24.1?type=module",
         "pkg:golang/github.com/prometheus/client_model@v0.6.3?type=module",
         "pkg:golang/github.com/prometheus/procfs@v0.21.1?type=module",
-        "pkg:golang/golang.org/x/net@v0.58.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/net@v0.60.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module"
       ],
       "ref": "pkg:golang/github.com/prometheus/common@v0.71.0?type=module"
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/prometheus/procfs@v0.21.1?type=module"
     },
@@ -2141,7 +2141,7 @@
         "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module",
         "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
         "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
         "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
       ],
       "ref": "pkg:golang/github.com/shirou/gopsutil/v3@v3.24.5?type=module"
@@ -2155,7 +2155,7 @@
         "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module",
         "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
         "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
         "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
       ],
       "ref": "pkg:golang/github.com/shirou/gopsutil/v4@v4.26.8?type=module"
@@ -2176,13 +2176,13 @@
     {
       "dependsOn": [
         "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/tklauser/go-sysconf@v0.3.16?type=module"
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/github.com/tklauser/numcpus@v0.11.0?type=module"
     },
@@ -2226,7 +2226,7 @@
         "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/proto/otlp@v1.11.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module"
       ],
       "ref": "pkg:golang/go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.46.0?type=module"
@@ -2246,9 +2246,9 @@
         "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/proto/otlp@v1.11.0?type=module",
-        "pkg:golang/golang.org/x/net@v0.58.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/net@v0.60.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/grpc@v1.83.2?type=module",
@@ -2267,7 +2267,7 @@
         "pkg:golang/go.opentelemetry.io/otel/metric@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/go.opentelemetry.io/otel/exporters/stdout/stdouttrace@v1.46.0?type=module"
     },
@@ -2292,7 +2292,7 @@
         "pkg:golang/go.opentelemetry.io/otel@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/metric@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
       "ref": "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module"
     },
@@ -2306,9 +2306,9 @@
     {
       "dependsOn": [
         "pkg:golang/github.com/grpc-ecosystem/grpc-gateway/v2@v2.30.0?type=module",
-        "pkg:golang/golang.org/x/net@v0.58.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/net@v0.60.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/grpc@v1.83.2?type=module",
@@ -2318,22 +2318,22 @@
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module"
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module"
       ],
-      "ref": "pkg:golang/golang.org/x/net@v0.58.0?type=module"
+      "ref": "pkg:golang/golang.org/x/net@v0.60.0?type=module"
     },
     {
-      "ref": "pkg:golang/golang.org/x/sys@v0.47.0?type=module"
+      "ref": "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
     },
     {
-      "ref": "pkg:golang/golang.org/x/text@v0.41.0?type=module"
+      "ref": "pkg:golang/golang.org/x/text@v0.42.0?type=module"
     },
     {
       "dependsOn": [
-        "pkg:golang/golang.org/x/net@v0.58.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/net@v0.60.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/grpc@v1.83.2?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module"
@@ -2357,9 +2357,9 @@
         "pkg:golang/go.opentelemetry.io/otel/metric@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/sdk@v1.46.0?type=module",
         "pkg:golang/go.opentelemetry.io/otel/trace@v1.46.0?type=module",
-        "pkg:golang/golang.org/x/net@v0.58.0?type=module",
-        "pkg:golang/golang.org/x/sys@v0.47.0?type=module",
-        "pkg:golang/golang.org/x/text@v0.41.0?type=module",
+        "pkg:golang/golang.org/x/net@v0.60.0?type=module",
+        "pkg:golang/golang.org/x/sys@v0.48.0?type=module",
+        "pkg:golang/golang.org/x/text@v0.42.0?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/api@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/genproto/googleapis/rpc@v0.0.0-20260819154853-08b0e4226688?type=module",
         "pkg:golang/google.golang.org/protobuf@v1.36.12?type=module"
