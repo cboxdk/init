@@ -1,5 +1,14 @@
 # Build stage
-FROM golang:1.27-alpine AS builder
+#
+# Pinned to the same Go patch as the `toolchain` line in go.mod and every
+# `go-version` in CI, so the binary inside the published image is built by the
+# toolchain that was scanned -- the image is a supported way to get cbox-init
+# (the release notes document copying the binary out of it), so it must not be
+# built by a different toolchain than the release assets. A floating
+# `golang:1.27-alpine` also drifts silently: that is how v3.8.2's release
+# binaries ended up on 1.26.8 carrying CVE-2026-78667, -78669 and -97031.
+# Bump in lockstep with go.mod and the workflows.
+FROM golang:1.26.10-alpine AS builder
 
 WORKDIR /build
 

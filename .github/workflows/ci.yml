@@ -81,9 +81,10 @@ jobs:
       # whatever the runner has that day (it shipped 1.26.8 into v3.8.2, which
       # still carried CVE-2026-78667, -78669 and -97031), so the scan could
       # pass on a toolchain that still shipped the advisories below. Every
-      # go-version in this repo is pinned to the same patch as the toolchain
-      # line in go.mod. Bump them together when govulncheck fails on the
-      # standard library -- that is the gate doing its job.
+      # go-version in this repo, and the builder image in Dockerfile, is
+      # pinned to the same patch as the toolchain line in go.mod. Bump them
+      # together when govulncheck fails on the standard library -- that is the
+      # gate doing its job.
       # Known-vulnerable dependencies, and the standard library this is built
       # against. Nothing in CI reported either before.
       - name: Run govulncheck
