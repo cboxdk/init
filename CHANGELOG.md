@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The Docker image is built by the same pinned Go toolchain as the release
+  binaries.** `Dockerfile` used a floating `golang:1.27-alpine`, so the binary
+  inside `ghcr.io/cboxdk/init` was built by a different Go version than the
+  release assets for the same tag — v3.8.3's image carried go1.27.3 where its
+  release binaries carried go1.26.10. Neither was vulnerable, but a version
+  whose two published artifacts are built by different toolchains cannot be
+  audited from the pin. The builder image is now `golang:1.26.10-alpine`, in
+  lockstep with the `toolchain` line in `go.mod` and every `go-version` in CI;
+  the comments in all three places name each other so a future bump cannot
+  miss one.
+
 ## [3.8.3] - 2026-10-20
 
 ### Security

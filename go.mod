@@ -7,9 +7,10 @@ go 1.26.0
 // CVE-2026-78669 net/http2, CVE-2026-97031 crypto/tls), so a local build on an
 // older 1.26.x would fail `make check` where CI (which pins 1.26.10) passes.
 // Bump this in lockstep with the go-version in .github/workflows/ci.yml and
-// .github/workflows/release.yml when the gate next fails on the standard
-// library -- the published binaries record the toolchain that built them, so
-// the pin is what keeps a release scannable and auditable.
+// .github/workflows/release.yml, and the builder image in Dockerfile, when the
+// gate next fails on the standard library -- the published binaries record the
+// toolchain that built them, so the pin is what keeps a release scannable and
+// auditable.
 toolchain go1.26.10
 
 require (
