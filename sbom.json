@@ -1767,7 +1767,7 @@
         "pkg:golang/google.golang.org/grpc@v1.83.2?type=module",
         "pkg:golang/gopkg.in/yaml.v3@v3.0.1?type=module"
       ],
-      "ref": "pkg:golang/github.com/cboxdk/init?type=module"
+      "ref": "pkg:golang/github.com/cboxdk/init@0.0.0?type=module"
     },
     {
       "ref": "pkg:golang/github.com/aymanbagabas/go-osc52/v2@v2.0.1?type=module"
@@ -2375,7 +2375,7 @@
   ],
   "metadata": {
     "component": {
-      "bom-ref": "pkg:golang/github.com/cboxdk/init?type=module",
+      "bom-ref": "pkg:golang/github.com/cboxdk/init@0.0.0?type=module",
       "externalReferences": [
         {
           "type": "vcs",
@@ -2390,7 +2390,7 @@
         }
       ],
       "name": "github.com/cboxdk/init",
-      "purl": "pkg:golang/github.com/cboxdk/init?type=module",
+      "purl": "pkg:golang/github.com/cboxdk/init@0.0.0?type=module",
       "type": "application",
       "version": "0.0.0"
     },
