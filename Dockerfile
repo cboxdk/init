@@ -8,7 +8,7 @@
 # `golang:1.27-alpine` also drifts silently: that is how v3.8.2's release
 # binaries ended up on 1.26.8 carrying CVE-2026-78667, -78669 and -97031.
 # Bump in lockstep with go.mod and the workflows.
-FROM golang:1.26.10-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 
 WORKDIR /build
 
