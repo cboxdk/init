@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A scheduled process runs as its `user` and `group`.** Both were dropped on
+  the way from the process config to the scheduler's executor, so every
+  scheduled job ran as cbox-init's own uid — root in the database images — no
+  matter what `user:` (or `CBOX_INIT_PROCESS_<NAME>_USER`) said. pgBackRest
+  refuses to run as root, so scheduled `pgbackrest backup` jobs failed every
+  night with `[031]`. The executor now resolves the user and group at each run,
+  as hooks and exec health checks do; one that cannot be resolved fails the run
+  instead of running it as root.
+
 ### Changed
 
 - **The Docker image is built by the same pinned Go toolchain as the release

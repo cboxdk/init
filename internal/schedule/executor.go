@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cboxdk/init/internal/config"
+	"github.com/cboxdk/init/internal/credentials"
 	"github.com/cboxdk/init/internal/logger"
 	"github.com/cboxdk/init/internal/signals"
 )
@@ -30,6 +31,8 @@ type ProcessConfig struct {
 	Command    []string
 	WorkingDir string
 	Env        map[string]string
+	User       string                // Run as this user (name or UID); "" = cbox-init's own
+	Group      string                // Run as this group (name or GID); "" = the user's primary group
 	Timeout    time.Duration         // 0 = no timeout
 	Logging    *config.LoggingConfig // Logging configuration for output capture
 }
@@ -88,6 +91,22 @@ func (e *ProcessExecutor) Execute(ctx context.Context, processName string) (int,
 
 	// Setup and configure command
 	cmd := e.setupCommand(execCtx, processName, cfg, logWriter)
+
+	// Drop to the configured user and group. An unresolvable one is an error and
+	// the job does not run: running it as cbox-init's own uid (root, in most
+	// images) instead would be the very privilege the setting exists to shed.
+	// Scheduled jobs used to skip this entirely, so `user:` was silently ignored
+	// and every scheduled job ran as root.
+	if err := credentials.ApplyToCmd(cmd, cfg.User, cfg.Group); err != nil {
+		e.logger.Error("scheduled process not started",
+			"process", processName,
+			"error", err,
+		)
+		if logWriter != nil {
+			logWriter.AddEvent(fmt.Sprintf("✗ Process not started: %v", err))
+		}
+		return -1, fmt.Errorf("scheduled process %q: %w", processName, err)
+	}
 
 	e.logger.Info("executing scheduled process",
 		"process", processName,
