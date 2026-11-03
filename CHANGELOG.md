@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep sleeping workloads ready: pause health probes during CRIU checkpoints,
+  cancel in-flight checks and reject stale results after restore. Report the
+  aggregate checkpointed state to readiness; resume probing after abort, restore
+  or cold recovery. Cold replacements must pass their own health check.
+
 - Preserve stderr alongside stdout across CRIU restore. Snapshot registration
   sends both pipe descriptors and requires agent acknowledgment; incompatible
   agents leave the workload awake. Found by Stache's Talos/FPM log-continuity

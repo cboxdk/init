@@ -214,6 +214,9 @@ type HealthMonitor struct {
 	everSucceeded   bool
 	fastUntil       time.Time
 	lastCountedFail time.Time
+	paused          bool
+	generation      uint64
+	activeCancel    context.CancelFunc
 }
 
 // FastStartInterval is the probe cadence before the first success. First
@@ -317,6 +320,43 @@ func (hm *HealthMonitor) Start(ctx context.Context) <-chan HealthStatus {
 func (hm *HealthMonitor) Rearm() {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
+	hm.resetLocked()
+}
+
+// Pause suspends probes during an intentional checkpoint and invalidates results
+// already in flight or buffered for the supervisor.
+func (hm *HealthMonitor) Pause() {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.paused = true
+	hm.invalidateLocked()
+}
+
+// Resume starts a fresh probe history after restore, cold recovery or abort.
+func (hm *HealthMonitor) Resume() {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	hm.paused = false
+	hm.resetLocked()
+}
+
+func (hm *HealthMonitor) accepts(status HealthStatus) bool {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	return !hm.paused && !status.suppress && status.generation == hm.generation
+}
+
+func (hm *HealthMonitor) invalidateLocked() {
+	hm.generation++
+	if hm.activeCancel != nil {
+		hm.activeCancel()
+		hm.activeCancel = nil
+	}
+}
+
+func (hm *HealthMonitor) resetLocked() {
+	hm.invalidateLocked()
+	hm.graceUntil = time.Time{}
 	hm.consecutiveFails = 0
 	hm.consecutiveSuccess = 0
 	hm.currentlyHealthy = true
@@ -343,7 +383,7 @@ func (hm *HealthMonitor) Rearm() {
 func (hm *HealthMonitor) inGrace() bool {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
-	return !hm.graceUntil.IsZero() && time.Now().Before(hm.graceUntil)
+	return hm.paused || (!hm.graceUntil.IsZero() && time.Now().Before(hm.graceUntil))
 }
 
 // armFastStart opens the fast-probing window for a fresh start: probes run at
@@ -372,8 +412,16 @@ func (hm *HealthMonitor) nextInterval(period time.Duration) time.Duration {
 	return period
 }
 
-func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
+func (hm *HealthMonitor) performCheck(ctx context.Context) (status HealthStatus) {
+	hm.mu.Lock()
+	if hm.paused {
+		hm.mu.Unlock()
+		return HealthStatus{suppress: true}
+	}
+	generation := hm.generation
 	checkCtx, cancel := context.WithTimeout(ctx, time.Duration(hm.config.Timeout)*time.Second)
+	hm.activeCancel = cancel
+	hm.mu.Unlock()
 	defer cancel()
 
 	// Measure health check duration
@@ -383,6 +431,12 @@ func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
 
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
+
+	if hm.paused || generation != hm.generation {
+		return HealthStatus{suppress: true}
+	}
+	hm.activeCancel = nil
+	defer func() { status.generation = generation }()
 
 	// Determine success threshold (default 1 if not configured)
 	successThreshold := hm.config.SuccessThreshold
@@ -471,7 +525,8 @@ func (hm *HealthMonitor) performCheck(ctx context.Context) HealthStatus {
 type HealthStatus struct {
 	// suppress marks a fast-start probe whose failure was throttled (not
 	// counted); the monitor loop drops it instead of emitting.
-	suppress bool
+	suppress   bool
+	generation uint64
 
 	Healthy            bool  // Whether process should be considered healthy (for liveness/restart decisions)
 	LastCheckSucceeded bool  // Whether the most recent health check actually succeeded (for readiness)

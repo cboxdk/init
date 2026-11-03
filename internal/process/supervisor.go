@@ -1112,9 +1112,12 @@ func (s *Supervisor) SetSnapshotStreams(enabled bool) {
 // Returns the PIDs the agent should checkpoint, in the container's own PID
 // numbering, which is what CRIU records and what it will restore.
 func (s *Supervisor) BeginCheckpoint() []int {
-	s.mu.RLock()
+	s.mu.Lock()
+	if s.healthMonitor != nil {
+		s.healthMonitor.Pause()
+	}
 	instances := append([]*Instance(nil), s.instances...)
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
 	pids := make([]int, 0, len(instances))
 	for _, instance := range instances {
@@ -1127,6 +1130,9 @@ func (s *Supervisor) BeginCheckpoint() []int {
 			pids = append(pids, instance.pid)
 		}
 		instance.mu.Unlock()
+	}
+	if len(pids) == 0 {
+		s.resumeCheckpointHealth(false)
 	}
 	return pids
 }
@@ -1148,6 +1154,7 @@ func (s *Supervisor) AbortCheckpoint() {
 		}
 		instance.mu.Unlock()
 	}
+	s.resumeCheckpointHealth(false)
 }
 
 // CompleteCheckpoint is called once the dump has actually finished, and does
@@ -1185,6 +1192,17 @@ func (s *Supervisor) CompleteCheckpoint() []int {
 		instance.mu.Unlock()
 	}
 
+	s.mu.Lock()
+	allCheckpointed := len(instances) > 0
+	for _, instance := range instances {
+		instance.mu.RLock()
+		allCheckpointed = allCheckpointed && instance.state == StateCheckpointed
+		instance.mu.RUnlock()
+	}
+	if allCheckpointed && s.state == StateRunning {
+		s.state = StateCheckpointed
+	}
+	s.mu.Unlock()
 	return reaped
 }
 
@@ -1237,6 +1255,7 @@ func (s *Supervisor) EndCheckpoint() int {
 		s.mu.Lock()
 		s.state = StateRunning
 		s.mu.Unlock()
+		s.resumeCheckpointHealth(false)
 		s.logger.Info("Process instances restored", "count", restored)
 	}
 	return restored
@@ -1390,10 +1409,33 @@ func (s *Supervisor) RecoverCheckpointed(ctx context.Context) (int, error) {
 		s.mu.Unlock()
 	}
 
+	if recovered > 0 || len(errs) > 0 {
+		if recovered == 0 {
+			s.mu.Lock()
+			s.state = StateFailed
+			s.mu.Unlock()
+		}
+		s.resumeCheckpointHealth(true)
+	}
+
 	if len(errs) > 0 {
 		return recovered, fmt.Errorf("recovering checkpointed instances: %v", errs)
 	}
 	return recovered, nil
+}
+
+// resumeCheckpointHealth preserves readiness across a warm restore, but a
+// replacement process must pass its own probe before it is ready.
+func (s *Supervisor) resumeCheckpointHealth(cold bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.healthMonitor != nil {
+		if cold {
+			s.healthKnown = false
+			s.lastCheckSucceeded = false
+		}
+		s.healthMonitor.Resume()
+	}
 }
 
 // IsCheckpointed reports whether every instance is currently checkpointed.
@@ -2279,6 +2321,10 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 			}
 
 			s.mu.Lock()
+			if s.healthMonitor != nil && !s.healthMonitor.accepts(status) {
+				s.mu.Unlock()
+				continue
+			}
 			s.healthKnown = true
 			s.healthHealthy = status.Healthy
 			s.lastCheckSucceeded = status.LastCheckSucceeded
@@ -2312,31 +2358,21 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 					continue
 				}
 
-				s.logger.Error("Process unhealthy, triggering restart",
-					"error", status.Error,
-				)
-
-				// Re-arm the monitor: reset its failure history and start a fresh
-				// warmup grace window so the restarted instance is judged from a
-				// clean slate and gets time to boot, instead of being killed again
-				// on the next probe and abandoned once restarts run out.
-				if s.healthMonitor != nil {
-					s.healthMonitor.Rearm()
+				// Serialize the restart decision with checkpoint admission. A
+				// result accepted earlier may have become stale in the meantime.
+				s.mu.Lock()
+				if s.healthMonitor != nil && !s.healthMonitor.accepts(status) {
+					s.mu.Unlock()
+					continue
 				}
-
-				// Record health check restart
+				s.logger.Error("Process unhealthy, triggering restart", "error", status.Error)
 				metrics.RecordProcessRestart(s.name, "health_check")
-
-				// Copy instances slice to avoid holding supervisor lock while locking instances
-				s.mu.RLock()
-				instancesCopy := make([]*Instance, len(s.instances))
-				copy(instancesCopy, s.instances)
-				s.mu.RUnlock()
+				instancesCopy := s.instances
 
 				// Restart all instances that are currently running
 				for _, instance := range instancesCopy {
 					instance.mu.Lock()
-					if instance.state == StateRunning {
+					if instance.state == StateRunning && !instance.checkpointing {
 						s.logger.Info("Health check failure - restarting instance",
 							"instance_id", instance.id,
 							"pid", instance.pid,
@@ -2354,6 +2390,10 @@ func (s *Supervisor) handleHealthStatus(ctx context.Context) {
 					}
 					instance.mu.Unlock()
 				}
+				if s.healthMonitor != nil {
+					s.healthMonitor.Rearm()
+				}
+				s.mu.Unlock()
 			}
 		case <-ctx.Done():
 			return
