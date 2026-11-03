@@ -49,7 +49,7 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) *
 		return nil
 	}
 
-	pid, stream, err := pm.SnapshotTarget()
+	pid, stream, stderr, err := pm.SnapshotTarget()
 	if err != nil {
 		log.Warn("warm tier unavailable for this container; it will run without sleeping", "error", err)
 		return nil
@@ -66,7 +66,7 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) *
 	}
 
 	registerCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	policy, err := client.Register(registerCtx, pid, stream)
+	policy, err := client.Register(registerCtx, pid, stream, stderr)
 	cancel()
 	if err != nil {
 		// A refusal here is the design working: tty: true and user-namespaced

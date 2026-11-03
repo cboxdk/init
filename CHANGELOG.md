@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve stderr alongside stdout across CRIU restore. Snapshot registration
+  sends both pipe descriptors and requires agent acknowledgment; incompatible
+  agents leave the workload awake. Found by Stache's Talos/FPM log-continuity
+  acceptance test. Requires a compatible snapshot agent; no release tagged yet.
+
 ### Changed
 
 - **The Docker image is built by the same pinned Go toolchain as the release

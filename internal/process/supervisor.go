@@ -2673,32 +2673,32 @@ func (s *Supervisor) GetLogs(limit int) []logger.LogEntry {
 	return allLogs
 }
 
-// SnapshotTarget returns the instance the agent will checkpoint and the pipe
-// its stdout is on. It refuses a scaled process for the same reason the manager
-// refuses several processes: one registration describes one tree.
-func (s *Supervisor) SnapshotTarget() (int, *snapshot.Stream, error) {
+// SnapshotTarget returns the instance and its stdout/stderr pipes. It refuses
+// a scaled process for the same reason the manager refuses several processes:
+// one registration describes one tree.
+func (s *Supervisor) SnapshotTarget() (int, *snapshot.Stream, *snapshot.Stream, error) {
 	s.mu.RLock()
 	instances := append([]*Instance(nil), s.instances...)
 	s.mu.RUnlock()
 
 	if len(instances) != 1 {
-		return 0, nil, fmt.Errorf("process %s has %d instances; the warm tier registers one tree", s.name, len(instances))
+		return 0, nil, nil, fmt.Errorf("process %s has %d instances; the warm tier registers one tree", s.name, len(instances))
 	}
 
 	inst := instances[0]
 	inst.mu.RLock()
-	pid, stream, state := inst.pid, inst.stdoutStream, inst.state
+	pid, stream, stderr, state := inst.pid, inst.stdoutStream, inst.stderrStream, inst.state
 	inst.mu.RUnlock()
 
 	if state != StateRunning {
-		return 0, nil, fmt.Errorf("process %s is %s, not running", s.name, state)
+		return 0, nil, nil, fmt.Errorf("process %s is %s, not running", s.name, state)
 	}
-	if stream == nil {
+	if stream == nil || stderr == nil {
 		// os/exec owns the pipe, so there is no write end left to hand CRIU at
 		// restore and the restored process would die of SIGPIPE on its first
 		// write. Refusing here is the difference between no warm tier and a
 		// warm tier that loses the workload on the first wake.
-		return 0, nil, fmt.Errorf("process %s does not have a supervisor-owned stdout pipe", s.name)
+		return 0, nil, nil, fmt.Errorf("process %s does not have supervisor-owned stdio pipes", s.name)
 	}
-	return pid, stream, nil
+	return pid, stream, stderr, nil
 }

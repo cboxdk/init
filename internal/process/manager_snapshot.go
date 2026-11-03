@@ -141,22 +141,22 @@ func (m *Manager) snapshotSupervisors() []*Supervisor {
 }
 
 // SnapshotTarget returns the single process the agent will checkpoint: its PID
-// and the supervisor-owned pipe its stdout goes to.
+// and the supervisor-owned stdout and stderr pipes.
 //
 // Single, and refused rather than guessed when there is more than one. The
-// control protocol registers one child tree and one pipe, so a container
+// control protocol registers one child tree and its stdio, so a container
 // running nginx and php-fpm as separate supervised processes has no single
 // answer here — dumping one and leaving the other is a container that is
 // neither asleep nor awake. Registering several trees is the next piece of this
 // design and is deliberately not faked in the meantime: a container that is not
 // eligible must run normally and never pretend to offer the warm tier.
-func (m *Manager) SnapshotTarget() (int, *snapshot.Stream, error) {
+func (m *Manager) SnapshotTarget() (int, *snapshot.Stream, *snapshot.Stream, error) {
 	sups := m.snapshotSupervisors()
 	if len(sups) == 0 {
-		return 0, nil, fmt.Errorf("no supervised process to checkpoint")
+		return 0, nil, nil, fmt.Errorf("no supervised process to checkpoint")
 	}
 	if len(sups) > 1 {
-		return 0, nil, fmt.Errorf("the warm tier supports one supervised process, found %d", len(sups))
+		return 0, nil, nil, fmt.Errorf("the warm tier supports one supervised process, found %d", len(sups))
 	}
 	return sups[0].SnapshotTarget()
 }

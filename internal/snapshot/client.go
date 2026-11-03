@@ -97,14 +97,16 @@ func Dial(socketPath string) (*Client, error) {
 }
 
 // Register introduces the child and hands the agent the write end of its stdout
-// pipe over SCM_RIGHTS.
+// pipe over SCM_RIGHTS. When stderr is provided, it is passed as a second
+// descriptor and requires an explicit stdio=2 acknowledgment. Older agents
+// safely leave the workload awake rather than silently losing stderr logs.
 //
 // The descriptor is the whole reason registration is not just a line of text.
 // On restore the agent passes it to CRIU as --inherit-fd, which is what puts
 // the child's output back on the pipe cbox-init has been reading all along.
 // Without it CRIU creates a new pipe, and the restored process dies on its
 // first write with no reader on the other end.
-func (c *Client) Register(ctx context.Context, childPID int, stream *Stream) (Policy, error) {
+func (c *Client) Register(ctx context.Context, childPID int, stream *Stream, stderr ...*Stream) (Policy, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -114,6 +116,9 @@ func (c *Client) Register(ctx context.Context, childPID int, stream *Stream) (Po
 	done := c.bound(ctx)
 	defer done()
 
+	if len(stderr) > 1 || (len(stderr) == 1 && stderr[0] == nil) {
+		return Policy{}, fmt.Errorf("expected at most one stderr stream")
+	}
 	msg := NewMessage(VerbRegister,
 		"pid", fmt.Sprint(childPID),
 		"inode", fmt.Sprint(stream.Inode()),
@@ -128,7 +133,12 @@ func (c *Client) Register(ctx context.Context, childPID int, stream *Stream) (Po
 		return Policy{}, c.fail(fmt.Errorf("accessing agent socket: %w", err))
 	}
 
-	rights := syscall.UnixRights(int(stream.Writer().Fd()))
+	fds := []int{int(stream.Writer().Fd())}
+	if len(stderr) == 1 {
+		msg = NewMessage(VerbRegister, "pid", fmt.Sprint(childPID), "inode", fmt.Sprint(stream.Inode()), "stderr_inode", fmt.Sprint(stderr[0].Inode()))
+		fds = append(fds, int(stderr[0].Writer().Fd()))
+	}
+	rights := syscall.UnixRights(fds...)
 	var sendErr error
 	if err := raw.Control(func(fd uintptr) {
 		sendErr = syscall.Sendmsg(int(fd), []byte(msg.String()+"\n"), rights, nil, 0)
@@ -145,6 +155,10 @@ func (c *Client) Register(ctx context.Context, childPID int, stream *Stream) (Po
 	}
 	if err := reply.Err(); err != nil {
 		return Policy{}, err
+	}
+
+	if len(stderr) == 1 && reply.Int("stdio", 0) != 2 {
+		return Policy{}, c.fail(fmt.Errorf("snapshot agent does not support stderr restoration"))
 	}
 
 	return Policy{
