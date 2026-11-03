@@ -16,14 +16,15 @@ import (
 // workload: the container runs exactly as it always did, without the warm tier.
 var ErrUnavailable = errors.New("snapshot agent unavailable")
 
-// ErrControlLost means the control channel to the agent broke while an
-// operation was in flight, or has broken since.
-//
-// It is a distinct error because it implies something the others do not: the
-// agent is the only thing that can restore a checkpointed tree, so if the
-// channel is gone while the workload is asleep, nothing will ever wake it. The
-// caller's only recovery is a cold start.
+// ErrControlLost means the control channel is unusable. An in-place cold start
+// is safe only when the failed request was not sent. ErrOperationUncertain
+// accompanies this error when the agent may still be dumping/restoring.
 var ErrControlLost = errors.New("snapshot control channel lost")
+
+// ErrOperationUncertain means a command may have executed without a definitive
+// reply. PID 1 must fence the container before an orchestrator cold restart;
+// starting another process tree in place could create concurrent writers.
+var ErrOperationUncertain = errors.New("snapshot operation outcome unknown")
 
 // DefaultRequestTimeout bounds one control operation when the caller supplies
 // no deadline of its own.
@@ -198,13 +199,16 @@ func (c *Client) request(ctx context.Context, msg Message) error {
 	done := c.bound(ctx)
 	defer done()
 
-	if _, err := fmt.Fprintln(c.conn, msg.String()); err != nil {
+	if sent, err := fmt.Fprintln(c.conn, msg.String()); err != nil {
+		if sent > 0 {
+			return c.fail(fmt.Errorf("%w: partial %s send: %v", ErrOperationUncertain, msg.Verb, err))
+		}
 		return c.fail(fmt.Errorf("sending %s: %w", msg.Verb, err))
 	}
 
 	reply, err := c.readReply()
 	if err != nil {
-		return c.fail(err)
+		return c.fail(fmt.Errorf("%w: awaiting %s reply: %v", ErrOperationUncertain, msg.Verb, err))
 	}
 	// A refusal is the agent answering, not the channel failing. The connection
 	// stays usable; the caller decides what the reason means.
@@ -254,14 +258,17 @@ func (c *Client) fail(cause error) error {
 	if c.broken == nil {
 		// nolint:errorlint // Same reasoning as ErrUnavailable above.
 		c.broken = fmt.Errorf("%w: %v", ErrControlLost, cause)
+		if errors.Is(cause, ErrOperationUncertain) {
+			c.broken = fmt.Errorf("%w: %w", ErrControlLost, cause)
+		}
 		_ = c.conn.Close()
 	}
 	return c.broken
 }
 
-// Lost reports whether the control channel has broken. A checkpointed workload
-// whose channel is lost can never be restored: the agent is the only thing that
-// holds its images and the descriptor its output goes back onto.
+// Lost reports whether the control channel has broken. Inspect the request
+// error before recovery: a sent operation can still be running remotely and
+// requires container fencing, rather than an in-place cold start.
 func (c *Client) Lost() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -273,7 +280,14 @@ func (c *Client) readReply() (Message, error) {
 	if err != nil {
 		return Message{}, fmt.Errorf("reading agent reply: %w", err)
 	}
-	return ParseMessage(line)
+	reply, err := ParseMessage(line)
+	if err != nil {
+		return Message{}, err
+	}
+	if reply.Verb != StatusOK && reply.Verb != StatusError {
+		return Message{}, fmt.Errorf("unexpected agent reply verb %q", reply.Verb)
+	}
+	return reply, nil
 }
 
 // Close releases the connection. The container keeps running; only the warm

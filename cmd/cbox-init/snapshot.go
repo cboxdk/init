@@ -49,6 +49,11 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) *
 		return nil
 	}
 
+	if os.Getpid() != 1 {
+		log.Warn("warm tier requires namespace PID 1 for safe failure fencing")
+		return nil
+	}
+
 	pid, stream, stderr, err := pm.SnapshotTarget()
 	if err != nil {
 		log.Warn("warm tier unavailable for this container; it will run without sleeping", "error", err)
@@ -96,6 +101,13 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) *
 	})
 
 	coordinator := snapshot.NewCoordinator(snapshot.CoordinatorOptions{
+		Fence: func(err error) {
+			// Exiting namespace PID 1 makes Linux terminate every member,
+			// including a late/untracked CRIU restore. Kubelet then cold starts
+			// on the existing volume; an in-place restart cannot provide fencing.
+			log.Error("terminating PID 1 after uncertain snapshot operation", "error", err)
+			os.Exit(70)
+		},
 		Control:  client,
 		Workload: pm,
 		Proxy:    proxy,

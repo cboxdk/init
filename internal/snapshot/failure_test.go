@@ -75,6 +75,9 @@ func TestControlRequestTimesOutRatherThanHanging(t *testing.T) {
 	if !errors.Is(err, ErrControlLost) {
 		t.Errorf("error = %v, want the channel reported as lost", err)
 	}
+	if !errors.Is(err, ErrOperationUncertain) {
+		t.Errorf("sent request timeout must be uncertain: %v", err)
+	}
 	if elapsed > time.Second {
 		t.Errorf("the call took %s; cbox-init holds a customer's connection while this runs", elapsed)
 	}
@@ -104,6 +107,9 @@ func TestControlChannelIsPoisonedAfterATimeout(t *testing.T) {
 	}
 	if !errors.Is(err, ErrControlLost) {
 		t.Errorf("error = %v, want ErrControlLost", err)
+	}
+	if !errors.Is(err, ErrOperationUncertain) {
+		t.Fatal("poisoned channel lost the original uncertain outcome")
 	}
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
 		t.Errorf("the second call waited %s; a poisoned channel must fail immediately", elapsed)
@@ -140,6 +146,9 @@ func TestAgentDeathMidRequestIsALostChannel(t *testing.T) {
 	err = client.Restore(context.Background())
 	if !errors.Is(err, ErrControlLost) {
 		t.Fatalf("error = %v, want ErrControlLost", err)
+	}
+	if !errors.Is(err, ErrOperationUncertain) {
+		t.Fatal("agent death after receiving a request must be uncertain")
 	}
 }
 
@@ -368,10 +377,9 @@ func TestAbandonedCheckpointColdStartsTheWorkload(t *testing.T) {
 	}
 }
 
-// The other way to lose the processes for good: the agent is the only thing
-// holding the images and the descriptor the workload's output goes back onto,
-// so a channel that breaks while the workload is checkpointed means nothing can
-// ever restore it.
+// If the channel is gone before the restore command is sent, no remote
+// operation can race the in-place cold recovery. Sent-but-unacknowledged
+// requests carry ErrOperationUncertain and are covered by the fencing tests.
 func TestLostControlChannelColdStartsTheWorkload(t *testing.T) {
 	control := &fakeControl{restorer: func() error { return ErrControlLost }}
 	workload := &fakeWorkload{}

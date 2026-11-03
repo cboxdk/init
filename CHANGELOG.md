@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fence ambiguous snapshot operations before cold recovery. A lost reply or
+  timeout after sending CHECKPOINT/RESTORE now terminates container PID 1 (exit
+  70), allowing the orchestrator to cold restart only after Linux has killed the
+  old process namespace. A command that was never sent still allows in-place
+  recovery. Prevents a late restore from racing a second writer. Warm tier now
+  requires PID 1. Agent-side operation-timeout replies still require separate
+  protocol qualification; no release tagged yet.
+
 - Keep sleeping workloads ready: pause health probes during CRIU checkpoints,
   cancel in-flight checks and reject stale results after restore. Report the
   aggregate checkpointed state to readiness; resume probing after abort, restore

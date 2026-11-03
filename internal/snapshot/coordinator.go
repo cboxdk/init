@@ -47,10 +47,12 @@ type Workload interface {
 // customer's state silently gone or a connection hanging forever. The
 // happy path is four lines; the rest of this file is the other paths.
 type Coordinator struct {
-	control  Control
-	workload Workload
-	proxy    *Proxy
-	log      *slog.Logger
+	fence     func(error)
+	uncertain error // guarded by opMu; no further lifecycle actions are safe
+	control   Control
+	workload  Workload
+	proxy     *Proxy
+	log       *slog.Logger
 
 	idle time.Duration
 	poll time.Duration
@@ -68,6 +70,9 @@ type Coordinator struct {
 
 // CoordinatorOptions configures a Coordinator.
 type CoordinatorOptions struct {
+	// Fence must terminate container PID 1 on an ambiguous in-flight outcome.
+	// If absent, the proxy stays closed and the coordinator never cold-starts.
+	Fence    func(error)
 	Control  Control
 	Workload Workload
 	Proxy    *Proxy
@@ -95,6 +100,7 @@ const DefaultPoll = 5 * time.Second
 // NewCoordinator builds a Coordinator.
 func NewCoordinator(opts CoordinatorOptions) *Coordinator {
 	c := &Coordinator{
+		fence:    opts.Fence,
 		control:  opts.Control,
 		workload: opts.Workload,
 		proxy:    opts.Proxy,
@@ -145,6 +151,9 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 	// to, so this cannot become a hang of its own.
 	c.opMu.Lock()
 	defer c.opMu.Unlock()
+	if c.uncertain != nil {
+		return c.uncertain
+	}
 
 	// Single-flight: every connection that observed "asleep" queues here, so by
 	// the time this one gets the lock the workload has very likely already been
@@ -180,6 +189,9 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 		return nil
 	}
 
+	if errors.Is(err, ErrOperationUncertain) {
+		return c.fenceUncertain("restore", err)
+	}
 	c.log.Error("restore failed", "error", err)
 
 	if !c.unrecoverable(err) {
@@ -218,9 +230,8 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 //
 // Two ways to get there. The agent can say so — it abandons a checkpoint that
 // failed to load twice, and it says when the images are gone. Or the control
-// channel itself can break, which means the same thing for a different reason:
-// the agent is the only thing holding the images and the descriptor the
-// workload's output goes back onto, so nothing else can ever restore this tree.
+// channel can be lost before sending the request. Unknown sent operations
+// have already taken the fencing path above; they must never reach ColdStart.
 func (c *Coordinator) unrecoverable(err error) bool {
 	var agentErr *AgentError
 	if errors.As(err, &agentErr) {
@@ -268,9 +279,12 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 	}
 
 	if err := c.control.Checkpoint(ctx); err != nil {
-		// The workload was never touched. It is still running, still holding
-		// its state, and still able to serve — the only thing that failed is
-		// the sleeping.
+		if errors.Is(err, ErrOperationUncertain) {
+			_ = c.fenceUncertain("checkpoint", err)
+			return
+		}
+		// An explicit dump refusal or an unsent command leaves ordinary
+		// supervision in charge. Unknown sent outcomes were fenced above.
 		c.proxy.SetAsleep(false)
 		c.workload.AbortCheckpoint()
 		c.penalise(err)
@@ -331,4 +345,18 @@ func (c *Coordinator) Disabled() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.disabled
+}
+
+// fenceUncertain runs with opMu held. Never clear the asleep gate or resume
+// supervision: the node agent may still complete the operation after a timeout.
+func (c *Coordinator) fenceUncertain(operation string, err error) error {
+	c.uncertain = fmt.Errorf("%s requires container fencing: %w", operation, err)
+	c.proxy.SetAsleep(true)
+	c.disable("snapshot operation outcome unknown")
+	c.log.Error("snapshot outcome unknown; fencing container before cold recovery",
+		"operation", operation, "error", err)
+	if c.fence != nil {
+		c.fence(c.uncertain)
+	}
+	return c.uncertain
 }
