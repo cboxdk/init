@@ -14,8 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   70), allowing the orchestrator to cold restart only after Linux has killed the
   old process namespace. A command that was never sent still allows in-place
   recovery. Prevents a late restore from racing a second writer. Warm tier now
-  requires PID 1. Agent-side operation-timeout replies still require separate
-  protocol qualification; no release tagged yet.
+  requires PID 1. Registration negotiates `fence=pid1-v1`; agent replies with
+  `operation_uncertain` take the same fencing path. Real CRIU fault injection
+  remains pending; no release tagged yet.
+
+- Keep the existing service proxy available when snapshot registration is
+  unavailable or refused. Set `CBOX_SNAPSHOT_LISTEN=127.0.0.1:9001` with
+  `CBOX_SNAPSHOT_UPSTREAM` to serve awake through that address even without an
+  agent. The registered policy must match its port before sleep is enabled.
+  Deploy this configuration with the client before upgrading an agent that
+  requires the fencing capability.
 
 - Keep sleeping workloads ready: pause health probes during CRIU checkpoints,
   cancel in-flight checks and reject stale results after restore. Report the

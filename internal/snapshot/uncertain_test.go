@@ -25,7 +25,7 @@ func TestClosedChannelBeforeSendIsNotAnUncertainOperation(t *testing.T) {
 
 func TestUncertainCheckpointFencesWithoutAbortingOrColdStarting(t *testing.T) {
 	workload := &fakeWorkload{}
-	control := &fakeControl{checkpointer: func() error { return ErrOperationUncertain }}
+	control := &fakeControl{checkpointer: func() error { return &AgentError{Reason: "operation_uncertain"} }}
 	coordinator, proxy := newTestCoordinator(t, control, workload)
 	var fences atomic.Int32
 	coordinator.fence = func(error) { fences.Add(1) }

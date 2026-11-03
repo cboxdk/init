@@ -12,9 +12,10 @@ import (
 	"time"
 )
 
-func TestRegisterRequiresStderrAcknowledgment(t *testing.T) {
-	for _, supported := range []bool{true, false} {
-		t.Run(fmt.Sprint(supported), func(t *testing.T) {
+func TestRegisterRequiresCapabilities(t *testing.T) {
+	for _, capabilities := range []string{"stdio=2 fence=pid1-v1", "fence=pid1-v1", "stdio=2", "stdio=2 fence=unknown"} {
+		t.Run(capabilities, func(t *testing.T) {
+			supported := capabilities == "stdio=2 fence=pid1-v1"
 			root, err := os.MkdirTemp("/tmp", "init-stdio-")
 			if err != nil {
 				t.Fatal(err)
@@ -85,10 +86,11 @@ func TestRegisterRequiresStderrAcknowledgment(t *testing.T) {
 						return
 					}
 				}
-				reply := "OK port=9001 idle=15"
-				if supported {
-					reply += " stdio=2"
+				if msg.Fields["fence"] != "pid1-v1" {
+					done <- fmt.Errorf("client did not advertise PID 1 fencing")
+					return
 				}
+				reply := "OK port=9001 idle=15 " + capabilities
 				_, err = fmt.Fprintln(conn, reply)
 				done <- err
 			}()
@@ -102,7 +104,7 @@ func TestRegisterRequiresStderrAcknowledgment(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !supported && err == nil {
-				t.Fatal("old agent accepted without stderr acknowledgment")
+				t.Fatal("agent accepted without required capability acknowledgment")
 			}
 			if err := <-done; err != nil {
 				t.Fatal(err)

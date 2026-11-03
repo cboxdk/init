@@ -139,6 +139,7 @@ func (c *Client) Register(ctx context.Context, childPID int, stream *Stream, std
 		msg = NewMessage(VerbRegister, "pid", fmt.Sprint(childPID), "inode", fmt.Sprint(stream.Inode()), "stderr_inode", fmt.Sprint(stderr[0].Inode()))
 		fds = append(fds, int(stderr[0].Writer().Fd()))
 	}
+	msg.Fields["fence"] = "pid1-v1"
 	rights := syscall.UnixRights(fds...)
 	var sendErr error
 	if err := raw.Control(func(fd uintptr) {
@@ -162,6 +163,9 @@ func (c *Client) Register(ctx context.Context, childPID int, stream *Stream, std
 		return Policy{}, c.fail(fmt.Errorf("snapshot agent does not support stderr restoration"))
 	}
 
+	if reply.Fields["fence"] != "pid1-v1" {
+		return Policy{}, c.fail(fmt.Errorf("snapshot agent does not acknowledge uncertain-operation fencing"))
+	}
 	return Policy{
 		Port:        reply.Int("port", 0),
 		IdleTimeout: time.Duration(reply.Int("idle", 0)) * time.Second,

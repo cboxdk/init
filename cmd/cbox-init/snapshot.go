@@ -32,20 +32,51 @@ const upstreamEnv = "CBOX_SNAPSHOT_UPSTREAM"
 // idleEnv overrides the idle timeout the agent hands down at registration.
 const idleEnv = "CBOX_SNAPSHOT_IDLE"
 
+// listenEnv keeps the service proxy available even when registration is refused.
+const listenEnv = "CBOX_SNAPSHOT_LISTEN"
+
 // startWarmTier registers with the node agent, puts the proxy in front of the
 // workload and starts the idle loop. It returns nil when the container is not
 // eligible, having said why.
-func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) *snapshot.Coordinator {
-	socket := snapshot.SocketPath("")
-	if _, err := os.Stat(socket); err != nil {
-		log.Info("warm tier not offered on this node", "socket", socket)
-		return nil
-	}
-
+func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) (coordinator *snapshot.Coordinator) {
 	upstream := os.Getenv(upstreamEnv)
 	if upstream == "" {
 		log.Info("warm tier not enabled for this workload",
 			"reason", upstreamEnv+" is not set, so there is no address to proxy to")
+		return nil
+	}
+
+	proxy := snapshot.NewProxy(snapshot.ProxyOptions{
+		Upstream:    upstream,
+		Log:         log,
+		DialTimeout: 15 * time.Second,
+	})
+	var ln net.Listener
+	if address := os.Getenv(listenEnv); address != "" {
+		var err error
+		ln, err = net.Listen("tcp", address)
+		if err != nil {
+			log.Error("could not hold the configured service port", "error", err)
+			return nil
+		}
+	}
+	defer func() {
+		if ln == nil {
+			return
+		}
+		if coordinator != nil {
+			proxy.SetWaker(coordinator)
+		}
+		go func() {
+			if err := proxy.Serve(ctx, ln); err != nil {
+				log.Error("the service port proxy stopped", "error", err)
+			}
+		}()
+	}()
+
+	socket := snapshot.SocketPath("")
+	if _, err := os.Stat(socket); err != nil {
+		log.Info("warm tier not offered on this node", "socket", socket)
 		return nil
 	}
 
@@ -92,15 +123,21 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) *
 		}
 	}
 
-	proxy := snapshot.NewProxy(snapshot.ProxyOptions{
-		Upstream: upstream,
-		Log:      log,
-		// A cold start after a lost checkpoint is far slower than a restore,
-		// and this is the window the first connection after one has to land in.
-		DialTimeout: 15 * time.Second,
-	})
+	if ln != nil && ln.Addr().(*net.TCPAddr).Port != policy.Port {
+		log.Error("snapshot policy does not match the configured service port", "port", policy.Port)
+		_ = client.Close()
+		return nil
+	}
+	if ln == nil {
+		ln, err = net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(policy.Port)))
+		if err != nil {
+			log.Error("could not hold the service port; running without the warm tier", "error", err)
+			_ = client.Close()
+			return nil
+		}
+	}
 
-	coordinator := snapshot.NewCoordinator(snapshot.CoordinatorOptions{
+	coordinator = snapshot.NewCoordinator(snapshot.CoordinatorOptions{
 		Fence: func(err error) {
 			// Exiting namespace PID 1 makes Linux terminate every member,
 			// including a late/untracked CRIU restore. Kubelet then cold starts
@@ -114,21 +151,6 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) *
 		Log:      log,
 		Idle:     idle,
 	})
-	proxy.SetWaker(coordinator)
-
-	ln, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(policy.Port)))
-	if err != nil {
-		log.Error("could not hold the service port; running without the warm tier",
-			"port", policy.Port, "error", err)
-		_ = client.Close()
-		return nil
-	}
-
-	go func() {
-		if err := proxy.Serve(ctx, ln); err != nil {
-			log.Error("the service port proxy stopped", "error", err)
-		}
-	}()
 	go coordinator.Run(ctx)
 
 	log.Info("warm tier active",

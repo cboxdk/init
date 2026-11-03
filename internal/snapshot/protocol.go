@@ -110,6 +110,12 @@ type AgentError struct {
 	Reason string
 }
 
+// Is exposes explicit uncertain outcomes through the same fencing path as a
+// lost reply. Acknowledging uncertainty is not an ordinary safe refusal.
+func (e *AgentError) Is(target error) bool {
+	return target == ErrOperationUncertain && e.Reason == "operation_uncertain"
+}
+
 func (e *AgentError) Error() string { return "snapshot agent: " + e.Reason }
 
 // Reasons the agent sends that the container must act on rather than merely
