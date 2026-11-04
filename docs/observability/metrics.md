@@ -72,7 +72,16 @@ is added to init. This does not validate the baseimage's bundled exporter releas
 or cbox-init startup configuration.
 
 The transport has passed this test with real FPM, but CRIU remains unverified.
-Closing a FastCGI connection does not prove PHP stopped executing. The exporter
+The runner also includes a negative qualification case: a PHP fixture calls
+`fastcgi_finish_request()` and continues working for five seconds. The client
+receives its complete response, closes, and the proxy reports idle; an independent
+FPM status query still observes the script executing. This is a deliberately
+reproduced limitation, not a successful checkpoint qualification. Even a complete
+FastCGI response does not prove PHP stopped executing. The normal OPcache probe
+does not call this function, but application-controlled PHP startup/shutdown code
+cannot be assumed absent from a shared FPM pool. A production solution must prove
+PHP quiescence or isolate the observation execution before allowing checkpoint;
+a connection-drain timeout alone cannot provide that proof. The exporter
 also needs a probe script path visible to FPM, and its placement must preserve
 the snapshot single-process-tree requirement. Do not enable an additional
 managed exporter process in the snapshot workload until these integration

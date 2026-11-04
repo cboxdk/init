@@ -39,5 +39,7 @@ UPSTREAM="$(docker port "$CONTAINER" 9000/tcp)"
 printf 'Testing PHP image: %s\n' "$(docker inspect --format '{{.Image}}' "$CONTAINER")"
 cd "$ROOT"
 TMPDIR="$FIXTURE" CBOX_TEST_FPM_UPSTREAM="$UPSTREAM" \
-    go test -race -tags integration -run '^TestObservationWithRealFPM$' -count=1 ./internal/snapshot \
+    go test -race -tags integration -run '^TestObservation(WithRealFPM|ResponseDoesNotProveFPMQuiescence)$' -count=1 ./internal/snapshot \
     || { docker logs "$CONTAINER"; exit 1; }
+
+printf '%s\n' 'Transport checks passed; negative qualification confirms PHP can outlive its response. CRIU safety is NOT established.'
