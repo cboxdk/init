@@ -35,6 +35,9 @@ const idleEnv = "CBOX_SNAPSHOT_IDLE"
 // listenEnv keeps the service proxy available even when registration is refused.
 const listenEnv = "CBOX_SNAPSHOT_LISTEN"
 
+// observationListenEnv is an optional loopback-only, non-waking monitoring port.
+const observationListenEnv = "CBOX_SNAPSHOT_OBSERVE_LISTEN"
+
 // startWarmTier registers with the node agent, puts the proxy in front of the
 // workload and starts the idle loop. It returns nil when the container is not
 // eligible, having said why.
@@ -66,6 +69,11 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) (
 		}
 		if coordinator != nil {
 			proxy.SetWaker(coordinator)
+		}
+		if address := os.Getenv(observationListenEnv); address != "" {
+			if err := startObservationProxy(ctx, proxy, address, log); err != nil {
+				log.Warn("observation proxy unavailable", "error", err)
+			}
 		}
 		go func() {
 			if err := proxy.Serve(ctx, ln); err != nil {
@@ -181,4 +189,24 @@ func warmTierEligible() bool {
 	}
 	_, err := os.Stat(snapshot.SocketPath(""))
 	return err == nil
+}
+
+// Validate before binding so a typo cannot briefly expose the observation port
+// on every interface. Hostnames are not accepted: loopback is an address property.
+func startObservationProxy(ctx context.Context, proxy *snapshot.Proxy, address string, log *slog.Logger) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil || !net.ParseIP(host).IsLoopback() {
+		return fmt.Errorf("%s requires an explicit loopback TCP address", observationListenEnv)
+	}
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("binding observation listener: %w", err)
+	}
+	go func() {
+		defer func() { _ = ln.Close() }()
+		if err := proxy.ServeObservations(ctx, ln); err != nil {
+			log.Warn("observation proxy stopped", "error", err)
+		}
+	}()
+	return nil
 }

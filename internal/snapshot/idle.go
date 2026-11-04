@@ -99,3 +99,21 @@ func (a *Activity) Counts() (open, inFlight int) {
 	defer a.mu.Unlock()
 	return a.open, a.inFlight
 }
+
+// Observed pins the awake workload while an observation connection is open,
+// without treating monitoring as customer activity or resetting the idle clock.
+// Register it before checking Proxy.Asleep: the coordinator's second count check
+// then closes the observation-versus-checkpoint race.
+func (a *Activity) Observed() func() {
+	a.mu.Lock()
+	a.open++
+	a.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			a.mu.Lock()
+			a.open--
+			a.mu.Unlock()
+		})
+	}
+}

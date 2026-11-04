@@ -53,7 +53,6 @@ type Proxy struct {
 	asleep bool
 
 	ln net.Listener
-	wg sync.WaitGroup
 }
 
 // ProxyOptions configures a Proxy. Only Upstream and Waker are required.
@@ -126,7 +125,22 @@ func (p *Proxy) Asleep() bool {
 // Serve accepts on ln until the context is cancelled or ln is closed.
 func (p *Proxy) Serve(ctx context.Context, ln net.Listener) error {
 	p.ln = ln
+	return p.serve(ctx, ln, p.handle)
+}
 
+// ServeObservations exposes the same upstream only while awake. It never wakes
+// the workload and observations do not extend its idle timer. Loopback only:
+// this is a privileged local monitoring path, not another customer ingress.
+func (p *Proxy) ServeObservations(ctx context.Context, ln net.Listener) error {
+	address, ok := ln.Addr().(*net.TCPAddr)
+	if !ok || !address.IP.IsLoopback() {
+		return errors.New("observation listener must use a loopback TCP address")
+	}
+	return p.serve(ctx, ln, p.handleObservation)
+}
+
+func (p *Proxy) serve(ctx context.Context, ln net.Listener, handle func(context.Context, net.Conn)) error {
+	var wg sync.WaitGroup
 	go func() {
 		<-ctx.Done()
 		_ = ln.Close()
@@ -135,17 +149,17 @@ func (p *Proxy) Serve(ctx context.Context, ln net.Listener) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			p.wg.Wait()
+			wg.Wait()
 			if ctx.Err() != nil {
 				return nil
 			}
 			return fmt.Errorf("accepting on %s: %w", ln.Addr(), err)
 		}
 
-		p.wg.Add(1)
+		wg.Add(1)
 		go func() {
-			defer p.wg.Done()
-			p.handle(ctx, conn)
+			defer wg.Done()
+			handle(ctx, conn)
 		}()
 	}
 }
@@ -281,4 +295,35 @@ func (p *Proxy) dialUpstream(ctx context.Context) (net.Conn, error) {
 		lastErr = errors.New("timed out")
 	}
 	return nil, lastErr
+}
+
+// handleObservation holds an open-connection pin before checking the sleep flag.
+// A transition already in progress refuses the probe; a probe already admitted
+// makes the coordinator's count recheck abort the transition. No wake is called.
+func (p *Proxy) handleObservation(ctx context.Context, client net.Conn) {
+	done := p.activity.Observed()
+	defer done()
+	defer func() { _ = client.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stop()
+	if ctx.Err() != nil || p.Asleep() {
+		return
+	}
+	// Bound monitoring independently of the caller so an idle exporter cannot
+	// hold a workload awake forever with a keep-alive socket.
+	deadline := time.Now().Add(5 * time.Second)
+	if err := client.SetDeadline(deadline); err != nil {
+		return
+	}
+	probeCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	upstream, err := (&net.Dialer{}).DialContext(probeCtx, "tcp", p.upstream)
+	if err != nil {
+		return
+	}
+	defer func() { _ = upstream.Close() }()
+	if err := upstream.SetDeadline(deadline); err != nil {
+		return
+	}
+	p.splice(client, upstream)
 }

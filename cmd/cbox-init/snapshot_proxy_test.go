@@ -52,3 +52,12 @@ func TestSnapshotProxyServesWithoutAgent(t *testing.T) {
 	}
 	t.Fatal("proxy listener survived cancellation")
 }
+
+func TestObservationProxyRejectsNonLoopbackAddresses(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	for _, address := range []string{":9002", "0.0.0.0:9002", "[::]:9002", "192.0.2.1:9002", "localhost:9002", "invalid"} {
+		if err := startObservationProxy(context.Background(), nil, address, log); err == nil {
+			t.Errorf("unsafe observation address %q accepted", address)
+		}
+	}
+}

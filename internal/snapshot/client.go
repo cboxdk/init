@@ -205,14 +205,14 @@ func (c *Client) request(ctx context.Context, msg Message) error {
 
 	if sent, err := fmt.Fprintln(c.conn, msg.String()); err != nil {
 		if sent > 0 {
-			return c.fail(fmt.Errorf("%w: partial %s send: %v", ErrOperationUncertain, msg.Verb, err))
+			return c.fail(fmt.Errorf("%w: partial %s send: %w", ErrOperationUncertain, msg.Verb, err))
 		}
 		return c.fail(fmt.Errorf("sending %s: %w", msg.Verb, err))
 	}
 
 	reply, err := c.readReply()
 	if err != nil {
-		return c.fail(fmt.Errorf("%w: awaiting %s reply: %v", ErrOperationUncertain, msg.Verb, err))
+		return c.fail(fmt.Errorf("%w: awaiting %s reply: %w", ErrOperationUncertain, msg.Verb, err))
 	}
 	// A refusal is the agent answering, not the channel failing. The connection
 	// stays usable; the caller decides what the reason means.

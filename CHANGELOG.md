@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional loopback observation proxy (`CBOX_SNAPSHOT_OBSERVE_LISTEN`) for the
+  existing PHP baseimage FPM exporter. Probes never request restore or refresh
+  customer idle time; open probes prevent checkpoint for up to five seconds.
+  Real FPM/CRIU integration and exporter placement remain unverified; disabled
+  by default.
+
 ### Fixed
 
 - Fence ambiguous snapshot operations before cold recovery. A lost reply or

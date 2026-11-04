@@ -19,6 +19,32 @@ global:
   metrics_path: /metrics
 ```
 
+## Non-waking FPM observations (unreleased)
+
+PHP baseimages already provide FPM and OPcache metrics through `fpm-exporter`.
+Reuse that exporter; cbox-init does not implement a second FPM collector.
+For snapshot workloads, the optional `CBOX_SNAPSHOT_OBSERVE_LISTEN` address
+provides a monitoring connection to `CBOX_SNAPSHOT_UPSTREAM` without requesting
+restore or extending the customer idle timer. For example, with the ordinary
+service proxy configured on `127.0.0.1:9001`, use `127.0.0.1:9002` for observations
+and point the exporter's FastCGI connection at that observation port.
+
+Only explicit loopback IP addresses are accepted. This is privileged raw
+upstream access, not HTTP, and must never be exposed through ingress or a
+Service. Processes sharing the pod network can reach it. An admitted probe pins
+the workload against checkpoint while its connection is open, for at most five
+seconds. Probes arriving during sleep/checkpoint are disconnected without wake.
+Missing samples must be represented as unavailable, not as zero or disabled
+OPcache. All monitoring traffic must use this path; direct upstream connections
+bypass its coordination.
+
+This transport has race tests but is not yet verified with real FPM and CRIU.
+Closing a FastCGI connection does not prove PHP stopped executing. The exporter
+also needs a probe script path visible to FPM, and its placement must preserve
+the snapshot single-process-tree requirement. Do not enable an additional
+managed exporter process in the snapshot workload until these integration
+constraints and checkpoint/restore acceptance tests are resolved.
+
 ## Cgroup CPU accounting (unreleased)
 
 The metrics server also exports the kernel's cumulative cgroup v2 CPU usage:
