@@ -38,7 +38,25 @@ Missing samples must be represented as unavailable, not as zero or disabled
 OPcache. All monitoring traffic must use this path; direct upstream connections
 bypass its coordination.
 
-This transport has race tests but is not yet verified with real FPM and CRIU.
+Run `make test-e2e-fpm-observation` to verify real FPM status and enabled OPcache
+through the observation proxy using the Cbox PHP baseimage. The test checks that
+probes leave the customer idle clock untouched, are refused while asleep without
+wake, and resume after the awake transition. It prints the tested image ID; set
+`CBOX_TEST_PHP_IMAGE` to select another image or immutable digest. Its lifecycle
+control is fake: it does not perform a CRIU checkpoint or restore.
+
+Verified locally on 2026-11-04 with race detection:
+
+- PHP 8.4 Bookworm, image ID
+  `sha256:9e0d7787d5646436dc3839090ba6fd18a25da973e9e1db4cfa06f513d56900ba`.
+- PHP 8.5 Bookworm rootless, image ID
+  `sha256:b4d7228dc08320fa8464f961725ae06f0216dcf8f547e8c7e0d9430dede63c20`.
+
+These are local Docker image IDs, not registry manifest digests. The test runs
+this checkout's proxy with the existing phpfpm dependency; it does not validate
+the baseimage's bundled exporter release or cbox-init startup configuration.
+
+The transport has passed this test with real FPM, but CRIU remains unverified.
 Closing a FastCGI connection does not prove PHP stopped executing. The exporter
 also needs a probe script path visible to FPM, and its placement must preserve
 the snapshot single-process-tree requirement. Do not enable an additional

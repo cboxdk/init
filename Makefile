@@ -1,4 +1,4 @@
-.PHONY: build build-all clean test test-all test-integration test-e2e-fpm-tune bench coverage lint deps install dev help \
+.PHONY: build build-all clean test test-all test-integration test-e2e-fpm-tune test-e2e-fpm-observation bench coverage lint deps install dev help \
 	check check-configs cover-check fmt fmt-check vet vulncheck sbom sbom-check license-check
 
 # Build variables
@@ -76,6 +76,9 @@ test-integration:
 		docker run --rm cbox-init-test-$$distro || exit 1; \
 	done
 	@echo "✅ All integration tests passed"
+
+test-e2e-fpm-observation:
+	@bash tests/integration/e2e-fpm-observation.sh
 
 test-e2e-fpm-tune: build-all
 	@echo "🧪 Running the runtime PHP-FPM autotuner e2e (php-fpm container)..."
@@ -191,5 +194,6 @@ help:
 	@echo "  lint             - Run golangci-lint (matches CI)"
 	@echo "  deps             - Install/update dependencies"
 	@echo "  install          - Install binary to /usr/local/bin"
+	@echo "  test-e2e-fpm-observation - Verify non-waking monitoring against Cbox PHP (Docker)"
 	@echo "  dev              - Build and run against $(DEV_CONFIG)"
 	@echo "  help             - Show this help message"
