@@ -64,6 +64,8 @@ func TestObservationWithRealFPM(t *testing.T) {
 	if cache == nil || !cache.Enabled {
 		t.Fatal("did not observe enabled FPM OPcache")
 	}
+	checkExporter := startObservationExporter(t, ln.Addr().String())
+	checkExporter(true)
 	// The client receives its reply before the server necessarily drops its pin.
 	deadline = time.Now().Add(time.Second)
 	for !activity.IdleFor(time.Minute) && time.Now().Before(deadline) {
@@ -89,6 +91,7 @@ func TestObservationWithRealFPM(t *testing.T) {
 	if err == nil {
 		t.Fatal("sleeping proxy allowed an OPcache probe")
 	}
+	checkExporter(false)
 	if wakes.Load() != 0 {
 		t.Fatal("monitoring requested a wake")
 	}
@@ -97,4 +100,5 @@ func TestObservationWithRealFPM(t *testing.T) {
 	if result.Err != nil {
 		t.Fatalf("observation did not recover after awake transition: %v", result.Err)
 	}
+	checkExporter(true)
 }

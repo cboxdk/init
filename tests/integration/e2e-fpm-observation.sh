@@ -3,6 +3,11 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 IMAGE="${CBOX_TEST_PHP_IMAGE:-ghcr.io/cboxdk/php-baseimages/php-fpm:8.4-bookworm}"
+if [ -n "${CBOX_TEST_FPM_EXPORTER_BINARY:-}" ]; then
+    test -x "$CBOX_TEST_FPM_EXPORTER_BINARY"
+    printf 'Testing exporter binary: '
+    shasum -a 256 "$CBOX_TEST_FPM_EXPORTER_BINARY"
+fi
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/cbox-observation.XXXXXXXX")"
 CONTAINER=""
 cleanup() {

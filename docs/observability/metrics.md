@@ -52,9 +52,24 @@ Verified locally on 2026-11-04 with race detection:
 - PHP 8.5 Bookworm rootless, image ID
   `sha256:b4d7228dc08320fa8464f961725ae06f0216dcf8f547e8c7e0d9430dede63c20`.
 
-These are local Docker image IDs, not registry manifest digests. The test runs
-this checkout's proxy with the existing phpfpm dependency; it does not validate
-the baseimage's bundled exporter release or cbox-init startup configuration.
+These are local Docker image IDs, not registry manifest digests. By default the
+test runs this checkout's proxy with the existing phpfpm dependency. To include
+the actual exporter process, build the selected fpm-exporter checkout separately
+and pass its absolute executable path:
+
+```bash
+CBOX_TEST_FPM_EXPORTER_BINARY=/absolute/path/to/fpm-exporter make test-e2e-fpm-observation
+```
+
+The runner prints the binary SHA-256. This requires the unreleased exporter
+observation-quality changes (9e2b980 or later); it asserts successful FPM/OPcache
+collection and real worker/queue/cache series while awake, failed collection
+without stale worker/cache values while asleep, then successful recovery. Exporter
+probes must not refresh idle time or request wake. The separate process inherits
+the shared temporary probe directory and is terminated after the test. Without
+an explicit binary, this extra coverage is not exercised. No exporter dependency
+is added to init. This does not validate the baseimage's bundled exporter release
+or cbox-init startup configuration.
 
 The transport has passed this test with real FPM, but CRIU remains unverified.
 Closing a FastCGI connection does not prove PHP stopped executing. The exporter
