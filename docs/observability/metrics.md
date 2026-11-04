@@ -19,6 +19,28 @@ global:
   metrics_path: /metrics
 ```
 
+## Cgroup CPU accounting (unreleased)
+
+The metrics server also exports the kernel's cumulative cgroup v2 CPU usage:
+
+- `cbox_init_cgroup_cpu_usage_seconds_total`: CPU seconds for the rooted cgroup
+  subtree, including child processes that have already exited.
+- `cbox_init_cgroup_cpu_accounting_up`: `1` when the current scrape read valid
+  accounting; `0` when unavailable. On failure the counter is omitted, not zeroed.
+
+This collector requires `/proc/self/cgroup` to identify `0::/` and a unified
+`/sys/fs/cgroup` mount. Cgroup v1, non-rooted namespaces and non-Linux hosts are
+unsupported and report `up=0`; no host-tree path is guessed. The measured scope
+is that mount's rooted cgroup, so only run this as container accounting when the
+runtime provides a private cgroup namespace/mount for that container.
+
+CPU percentage gauges remain useful for live process health, but are not a
+replacement for this cumulative counter. The counter resets when the cgroup is
+recreated and does not preserve accounting across CRIU migration to another
+cgroup. Billing consumers must bind samples to the verified workload/container
+identity, detect resets, retain their own durable cursors and handle missed final
+samples. This metric alone does not make sampling lossless or authorize charging.
+
 ## One Endpoint: Federation and Embedded Engines
 
 Since 3.2.0 the main `/metrics` response can carry the whole container's

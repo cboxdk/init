@@ -125,14 +125,18 @@ func NewServer(port int, path string, aclCfg *config.ACLConfig, tlsCfg *config.T
 		}
 	}
 
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(newCgroupCollector())
+
 	return &Server{
-		port:       port,
-		path:       path,
-		aclConfig:  aclCfg,
-		aclChecker: aclChecker,
-		aclInitErr: aclInitErr,
-		tlsConfig:  tlsCfg,
-		logger:     log,
+		extraGatherers: []prometheus.Gatherer{registry},
+		port:           port,
+		path:           path,
+		aclConfig:      aclCfg,
+		aclChecker:     aclChecker,
+		aclInitErr:     aclInitErr,
+		tlsConfig:      tlsCfg,
+		logger:         log,
 	}
 }
 
