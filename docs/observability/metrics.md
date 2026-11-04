@@ -76,7 +76,10 @@ The runner also includes a negative qualification case: a PHP fixture calls
 `fastcgi_finish_request()` and continues working for five seconds. The client
 receives its complete response, closes, and the proxy reports idle; an independent
 FPM status query still observes the script executing. This is a deliberately
-reproduced limitation, not a successful checkpoint qualification. Even a complete
+reproduced transport limitation, not a successful CRIU qualification. The test
+now also supplies the native FPM quiescence guard to the coordinator: checkpoint
+is refused while that script runs and admitted after the script finishes. The
+checkpoint controller remains fake. Even a complete
 FastCGI response does not prove PHP stopped executing. The normal OPcache probe
 does not call this function, but application-controlled PHP startup/shutdown code
 cannot be assumed absent from a shared FPM pool. A production solution must prove
@@ -649,3 +652,29 @@ services:
     ports:
       - "9091:9090"
 ```
+
+
+### Native FPM check before checkpoint (unreleased)
+
+`CoordinatorOptions.Quiesce` runs after proxy admission is closed, before
+`BeginCheckpoint`. It receives a two-second context deadline. An error or expired
+context keeps the workload running without consuming the failed-checkpoint budget.
+After the check, the coordinator checks queued connections again and abandons
+sleep if customer traffic arrived. Implementations must honor their context.
+
+`CheckFPMQuiescence` uses the existing phpfpm native `ReadStatus` API on an explicit
+list of pools. It rejects an empty inventory, unavailable status, mismatched pool
+names, queued work, missing/duplicate worker identities, incomplete counts and any
+state other than Idle plus exactly one Running native status request. This targets
+the main-pool status listener; a separate status pool does not satisfy this model.
+The check executes no PHP-info/OPcache probes and does not adjust native counters.
+
+The CLI startup path does not yet configure this guard. Production activation
+still requires an authoritative complete pool inventory, admission exclusively
+through the proxy, treatment of detached/background processes, lifecycle wiring
+and real CRIU acceptance. This helper cannot prove those conditions. No blanket
+claim of checkpoint safety follows from a successful single-pool status read.
+
+The native API currently requires phpfpm's temporary public pseudo-version
+`v1.2.1-0.20261104145516-b48f6f42576a`. Replace it with an approved tagged release
+before publishing init/baseimages; no release is created by this change.

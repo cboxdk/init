@@ -78,11 +78,11 @@ usleep(5000000);
 	target := phpfpm.Target{Name: "www", Socket: "tcp://" + upstream, StatusPath: "/status", Timeout: time.Second}
 	running := func() bool {
 		t.Helper()
-		outcome := phpfpm.Scrape(ctx, target, quietLogger())
-		if outcome.Err != nil || outcome.Result == nil {
-			t.Fatalf("FPM status: %v", outcome.Err)
+		pool, err := phpfpm.ReadStatus(ctx, target)
+		if err != nil {
+			t.Fatalf("FPM status: %v", err)
 		}
-		for _, process := range outcome.Result.Pools["www"].Processes {
+		for _, process := range pool.Processes {
 			if process.Script == script && process.State != "Idle" {
 				return true
 			}
@@ -92,7 +92,16 @@ usleep(5000000);
 	if !running() {
 		t.Fatal("expected actual PHP work after the FastCGI response and transport close")
 	}
-	t.Log("qualification failure demonstrated: transport idle while PHP continues after its response")
+	control := &fakeControl{}
+	workload := &fakeWorkload{}
+	coordinator := NewCoordinator(CoordinatorOptions{Proxy: proxy, Control: control, Workload: workload, Idle: time.Minute, Log: quietLogger(), Quiesce: func(checkCtx context.Context) error {
+		return CheckFPMQuiescence(checkCtx, []phpfpm.Target{target})
+	}})
+	coordinator.maybeSleep(ctx)
+	if control.checkpoints != 0 || workload.begun.Load() != 0 || proxy.Asleep() {
+		t.Fatal("quiescence gate allowed checkpoint during post-response PHP work")
+	}
+	t.Log("transport idle while PHP continues; native FPM gate refuses checkpoint")
 	// Let the actual request finish before the runner removes its fixture.
 	deadline = time.Now().Add(8 * time.Second)
 	for running() {
@@ -100,5 +109,9 @@ usleep(5000000);
 			t.Fatal("post-response PHP did not finish")
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+	coordinator.maybeSleep(ctx)
+	if control.checkpoints != 1 || !proxy.Asleep() {
+		t.Fatal("quiescence gate did not admit checkpoint after actual PHP finished")
 	}
 }

@@ -47,6 +47,7 @@ type Workload interface {
 // customer's state silently gone or a connection hanging forever. The
 // happy path is four lines; the rest of this file is the other paths.
 type Coordinator struct {
+	quiesce   func(context.Context) error
 	fence     func(error)
 	uncertain error // guarded by opMu; no further lifecycle actions are safe
 	control   Control
@@ -70,6 +71,10 @@ type Coordinator struct {
 
 // CoordinatorOptions configures a Coordinator.
 type CoordinatorOptions struct {
+	// Quiesce checks application work after proxy admission has been closed.
+	// It must honor its context and must not submit work through the closed proxy.
+	// A refusal keeps the workload awake and does not count as a failed dump.
+	Quiesce func(context.Context) error
 	// Fence must terminate container PID 1 on an ambiguous in-flight outcome.
 	// If absent, the proxy stays closed and the coordinator never cold-starts.
 	Fence    func(error)
@@ -100,6 +105,7 @@ const DefaultPoll = 5 * time.Second
 // NewCoordinator builds a Coordinator.
 func NewCoordinator(opts CoordinatorOptions) *Coordinator {
 	c := &Coordinator{
+		quiesce:  opts.Quiesce,
 		fence:    opts.Fence,
 		control:  opts.Control,
 		workload: opts.Workload,
@@ -265,6 +271,24 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 	c.proxy.SetAsleep(true)
 
 	if open, inFlight := c.proxy.Activity().Counts(); open > 0 || inFlight > 0 {
+		c.proxy.SetAsleep(false)
+		return
+	}
+
+	if c.quiesce != nil {
+		checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		err := c.quiesce(checkCtx)
+		contextErr := checkCtx.Err()
+		cancel()
+		if err != nil || contextErr != nil {
+			c.proxy.SetAsleep(false)
+			c.log.Debug("checkpoint deferred: workload quiescence not established")
+			return
+		}
+	}
+	// A customer may have queued while the status request was in flight.
+	// Restore ordinary admission rather than dumping a now-wanted workload.
+	if open, inFlight := c.proxy.Activity().Counts(); ctx.Err() != nil || open > 0 || inFlight > 0 {
 		c.proxy.SetAsleep(false)
 		return
 	}
