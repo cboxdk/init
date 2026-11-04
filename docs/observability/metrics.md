@@ -668,6 +668,8 @@ names, queued work, missing/duplicate worker identities, incomplete counts and a
 state other than Idle plus exactly one Running native status request. This targets
 the main-pool status listener; a separate status pool does not satisfy this model.
 The check executes no PHP-info/OPcache probes and does not adjust native counters.
+The shared status decoder rejects missing/null queue, active/idle/total and worker
+fields, so unavailable data cannot become an apparent zero queue.
 
 The CLI startup path does not yet configure this guard. Production activation
 still requires an authoritative complete pool inventory, admission exclusively
@@ -676,5 +678,5 @@ and real CRIU acceptance. This helper cannot prove those conditions. No blanket
 claim of checkpoint safety follows from a successful single-pool status read.
 
 The native API currently requires phpfpm's temporary public pseudo-version
-`v1.2.1-0.20261104145516-b48f6f42576a`. Replace it with an approved tagged release
+`v1.2.1-0.20261104150721-fd84ae99b5d3`. Replace it with an approved tagged release
 before publishing init/baseimages; no release is created by this change.

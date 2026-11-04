@@ -110,7 +110,16 @@ usleep(5000000);
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	coordinator.maybeSleep(ctx)
+	// Native status requests can briefly overlap while the serving worker returns
+	// to Idle. The coordinator normally retries on its poll; do not require the
+	// first observation after script completion to be quiescent.
+	deadline = time.Now().Add(2 * time.Second)
+	for control.checkpoints == 0 && time.Now().Before(deadline) {
+		coordinator.maybeSleep(ctx)
+		if control.checkpoints == 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 	if control.checkpoints != 1 || !proxy.Asleep() {
 		t.Fatal("quiescence gate did not admit checkpoint after actual PHP finished")
 	}

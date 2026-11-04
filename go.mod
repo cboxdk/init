@@ -16,7 +16,7 @@ toolchain go1.26.10
 require (
 	github.com/cboxdk/fcgx v1.2.0
 	github.com/cboxdk/fpm-tune v1.3.0
-	github.com/cboxdk/phpfpm v1.2.1-0.20261104145516-b48f6f42576a
+	github.com/cboxdk/phpfpm v1.2.1-0.20261104150721-fd84ae99b5d3
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0

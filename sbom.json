@@ -111,7 +111,7 @@
       "version": "v1.3.0"
     },
     {
-      "bom-ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104145516-b48f6f42576a?type=module",
+      "bom-ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104150721-fd84ae99b5d3?type=module",
       "externalReferences": [
         {
           "type": "vcs",
@@ -121,7 +121,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b4c594caded7a973321aa5c565f7d57a92ebfb3cd94d508ad4a59e395ce14e8b"
+          "content": "81cfa6c862839f26e72895c65fcbd1f769b785e76cfccf2b8bd0471ec28fb92e"
         }
       ],
       "licenses": [
@@ -132,10 +132,10 @@
         }
       ],
       "name": "github.com/cboxdk/phpfpm",
-      "purl": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104145516-b48f6f42576a?type=module",
+      "purl": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104150721-fd84ae99b5d3?type=module",
       "scope": "required",
       "type": "library",
-      "version": "v1.2.1-0.20261104145516-b48f6f42576a"
+      "version": "v1.2.1-0.20261104150721-fd84ae99b5d3"
     },
     {
       "bom-ref": "pkg:golang/github.com/cenkalti/backoff/v5@v5.0.3?type=module",
@@ -1748,7 +1748,7 @@
       "dependsOn": [
         "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module",
         "pkg:golang/github.com/cboxdk/fpm-tune@v1.3.0?type=module",
-        "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104145516-b48f6f42576a?type=module",
+        "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104150721-fd84ae99b5d3?type=module",
         "pkg:golang/github.com/charmbracelet/bubbles@v1.0.0?type=module",
         "pkg:golang/github.com/charmbracelet/bubbletea@v1.3.10?type=module",
         "pkg:golang/github.com/charmbracelet/lipgloss@v1.1.0?type=module",
@@ -1785,7 +1785,7 @@
         "pkg:golang/github.com/aymanbagabas/go-osc52/v2@v2.0.1?type=module",
         "pkg:golang/github.com/beorn7/perks@v1.0.1?type=module",
         "pkg:golang/github.com/cboxdk/fcgx@v1.2.0?type=module",
-        "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104145516-b48f6f42576a?type=module",
+        "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104150721-fd84ae99b5d3?type=module",
         "pkg:golang/github.com/cespare/xxhash/v2@v2.3.0?type=module",
         "pkg:golang/github.com/charmbracelet/bubbles@v1.0.0?type=module",
         "pkg:golang/github.com/charmbracelet/bubbletea@v1.3.10?type=module",
@@ -1836,7 +1836,7 @@
         "pkg:golang/github.com/yusufpapurcu/wmi@v1.2.4?type=module",
         "pkg:golang/golang.org/x/sys@v0.48.0?type=module"
       ],
-      "ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104145516-b48f6f42576a?type=module"
+      "ref": "pkg:golang/github.com/cboxdk/phpfpm@v1.2.1-0.20261104150721-fd84ae99b5d3?type=module"
     },
     {
       "ref": "pkg:golang/github.com/cenkalti/backoff/v5@v5.0.3?type=module"
