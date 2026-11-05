@@ -38,7 +38,7 @@ func TestObservationWithRealFPM(t *testing.T) {
 		}
 	}()
 	defer phpfpm.RemoveOpcacheScript()
-	target := phpfpm.Target{Name: "www", Socket: "tcp://" + ln.Addr().String(), StatusPath: "/status", Timeout: time.Second}
+	target := phpfpm.Target{Name: "www", Socket: "tcp://" + ln.Addr().String(), StatusPath: "/fpm-status", Timeout: time.Second}
 	// FPM startup can trail the container's published port.
 	deadline := time.Now().Add(15 * time.Second)
 	for {

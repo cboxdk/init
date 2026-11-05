@@ -75,7 +75,7 @@ usleep(5000000);
 	if !activity.IdleFor(time.Minute) {
 		t.Fatal("expected completed transport to be idle")
 	}
-	target := phpfpm.Target{Name: "www", Socket: "tcp://" + upstream, StatusPath: "/status", Timeout: time.Second}
+	target := phpfpm.Target{Name: "www", Socket: "tcp://" + upstream, StatusPath: "/fpm-status", Timeout: time.Second}
 	running := func() bool {
 		t.Helper()
 		pool, err := phpfpm.ReadStatus(ctx, target)
@@ -94,9 +94,11 @@ usleep(5000000);
 	}
 	control := &fakeControl{}
 	workload := &fakeWorkload{}
-	coordinator := NewCoordinator(CoordinatorOptions{Proxy: proxy, Control: control, Workload: workload, Idle: time.Minute, Log: quietLogger(), Quiesce: func(checkCtx context.Context) error {
-		return CheckFPMQuiescence(checkCtx, []phpfpm.Target{target})
-	}})
+	guard, err := CboxFPMQuiescence("www", upstream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinator := NewCoordinator(CoordinatorOptions{Proxy: proxy, Control: control, Workload: workload, Idle: time.Minute, Log: quietLogger(), Quiesce: guard})
 	coordinator.maybeSleep(ctx)
 	if control.checkpoints != 0 || workload.begun.Load() != 0 || proxy.Asleep() {
 		t.Fatal("quiescence gate allowed checkpoint during post-response PHP work")

@@ -4,10 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
+	"time"
 
 	"github.com/cboxdk/phpfpm"
 )
+
+// CboxFPMQuiescence configures the single main pool in a Cbox PHP image.
+// Read status on its direct loopback listener only while proxy admission is closed.
+func CboxFPMQuiescence(pool, upstream string) (func(context.Context) error, error) {
+	address, err := netip.ParseAddrPort(upstream)
+	if err != nil || !address.Addr().IsLoopback() || address.Port() == 0 {
+		return nil, errors.New("FPM quiescence requires a loopback upstream IP and port")
+	}
+	if pool != "www" {
+		return nil, errors.New("single-pool FPM quiescence requires the www pool")
+	}
+	targets := []phpfpm.Target{{Name: pool, Socket: "tcp://" + upstream, StatusPath: "/fpm-status", Timeout: time.Second}}
+	return func(ctx context.Context) error { return CheckFPMQuiescence(ctx, targets) }, nil
+}
 
 // CheckFPMQuiescence checks the complete operator-supplied set of FPM pools
 // through their native, main-pool status listeners. All application admissions

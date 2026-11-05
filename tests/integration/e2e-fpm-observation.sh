@@ -26,7 +26,7 @@ group = www-data
 listen = 0.0.0.0:9000
 pm = static
 pm.max_children = 2
-pm.status_path = /status
+pm.status_path = /fpm-status
 catch_workers_output = yes
 CONF
 # Map the probe directory at the identical path so the shared phpfpm library's

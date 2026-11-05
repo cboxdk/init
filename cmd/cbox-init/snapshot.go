@@ -82,6 +82,16 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) (
 		}()
 	}()
 
+	var quiesce func(context.Context) error
+	if pool, configured := os.LookupEnv("CBOX_SNAPSHOT_FPM_POOL"); configured {
+		var err error
+		quiesce, err = snapshot.CboxFPMQuiescence(pool, upstream)
+		if err != nil {
+			log.Warn("invalid FPM quiescence configuration; workload will run without sleeping", "error", err)
+			return nil
+		}
+	}
+
 	socket := snapshot.SocketPath("")
 	if _, err := os.Stat(socket); err != nil {
 		log.Info("warm tier not offered on this node", "socket", socket)
@@ -153,6 +163,7 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) (
 			log.Error("terminating PID 1 after uncertain snapshot operation", "error", err)
 			os.Exit(70)
 		},
+		Quiesce:  quiesce,
 		Control:  client,
 		Workload: pm,
 		Proxy:    proxy,

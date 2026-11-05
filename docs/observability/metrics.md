@@ -671,10 +671,17 @@ The check executes no PHP-info/OPcache probes and does not adjust native counter
 The shared status decoder rejects missing/null queue, active/idle/total and worker
 fields, so unavailable data cannot become an apparent zero queue.
 
-The CLI startup path does not yet configure this guard. Production activation
-still requires an authoritative complete pool inventory, admission exclusively
-through the proxy, treatment of detached/background processes, lifecycle wiring
-and real CRIU acceptance. This helper cannot prove those conditions. No blanket
+For a qualified Cbox PHP image with the single `www` pool, set
+`CBOX_SNAPSHOT_FPM_POOL=www` together with a loopback `CBOX_SNAPSHOT_UPSTREAM`
+such as `127.0.0.1:9000`. Init uses the baseimage's native `/fpm-status` on
+that listener. A configuration error keeps the workload serving through the
+configured service proxy without registering for sleep. A busy or unavailable
+status endpoint defers checkpoint on each idle poll. Leave this setting absent
+for non-PHP engines.
+
+Production activation still requires an authoritative complete pool inventory,
+admission exclusively through the proxy, treatment of detached/background
+processes and real CRIU acceptance. This helper cannot prove those conditions. No blanket
 claim of checkpoint safety follows from a successful single-pool status read.
 
 The native API currently requires phpfpm's temporary public pseudo-version

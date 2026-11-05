@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Single-pool PHP images can opt into a native FPM check before checkpoint with
+  `CBOX_SNAPSHOT_FPM_POOL=www`. Ongoing work after `fastcgi_finish_request()`
+  defers sleep until the main pool is idle.
+
 - Optional loopback observation proxy (`CBOX_SNAPSHOT_OBSERVE_LISTEN`) for the
   existing PHP baseimage FPM exporter. Probes never request restore or refresh
   customer idle time; open probes prevent checkpoint for up to five seconds.

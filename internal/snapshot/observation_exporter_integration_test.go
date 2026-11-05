@@ -43,7 +43,7 @@ func startObservationExporter(t *testing.T, upstream string) func(bool) {
   pools:
     - name: www
       socket: tcp://%s
-      status_path: /status
+      status_path: /fpm-status
       timeout: 1s
 monitor:
   listen_addr: %s

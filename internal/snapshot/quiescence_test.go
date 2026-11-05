@@ -109,3 +109,14 @@ func TestCheckpointRechecksCustomerArrivalAndCancellationAfterQuiescence(t *test
 		})
 	}
 }
+
+func TestCboxFPMQuiescenceRejectsUnqualifiedTargets(t *testing.T) {
+	for _, target := range []struct{ pool, upstream string }{
+		{"", "127.0.0.1:9000"}, {"other", "127.0.0.1:9000"}, {"www", "localhost:9000"},
+		{"www", "10.0.0.1:9000"}, {"www", "127.0.0.1:0"}, {"www", "/run/php.sock"},
+	} {
+		if guard, err := CboxFPMQuiescence(target.pool, target.upstream); err == nil || guard != nil {
+			t.Errorf("accepted unqualified target %+v", target)
+		}
+	}
+}
