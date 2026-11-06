@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `cbox-init snapshot status|sleep|wake` and authenticated management API routes
+  expose the qualified warm-tier coordinator. Manual sleep skips the idle timer
+  but refuses active connections and unconfirmed PHP work. Status never wakes
+  the workload; ambiguous operations retain PID-1 fencing. This checkpoints
+  processes, not Kubernetes pods or billing capacity.
+
 - Single-pool PHP images can opt into a native FPM check before checkpoint with
   `CBOX_SNAPSHOT_FPM_POOL=www`. Ongoing work after `fastcgi_finish_request()`
   defers sleep until the main pool is idle.
@@ -20,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by default.
 
 ### Fixed
+
+- Bound sleep/wake lock waits by the caller's context and preserve checkpoint
+  response deadlines through the API audit middleware.
 
 - Fence ambiguous snapshot operations before cold recovery. A lost reply or
   timeout after sending CHECKPOINT/RESTORE now terminates container PID 1 (exit

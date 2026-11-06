@@ -210,6 +210,7 @@ type Server struct {
 	auth               string
 	maxRequestBodySize int64 // Configurable request body size limit
 	manager            *process.Manager
+	snapshot           SnapshotControl
 	server             *http.Server
 	socketServer       *http.Server
 	socketListener     net.Listener // Stored for explicit cleanup on shutdown
@@ -413,6 +414,9 @@ func (s *Server) buildMux(authRequired bool) *http.ServeMux {
 	mux.HandleFunc("/api/v1/config/reload", s.wrapHandler(s.handleConfigReload, authRequired))
 	mux.HandleFunc("/api/v1/metrics/history", s.wrapHandler(s.handleMetricsHistory, authRequired))
 	mux.HandleFunc("/api/v1/oneshot/history", s.wrapHandler(s.handleOneshotHistory, authRequired))
+	mux.HandleFunc("/api/v1/snapshot", s.wrapHandler(s.handleSnapshot, authRequired))
+	mux.HandleFunc("/api/v1/snapshot/sleep", s.wrapHandler(s.handleSnapshot, authRequired))
+	mux.HandleFunc("/api/v1/snapshot/wake", s.wrapHandler(s.handleSnapshot, authRequired))
 	return mux
 }
 
@@ -660,6 +664,11 @@ func (s *Server) wrapHandler(handler http.HandlerFunc, requireAuth bool) http.Ha
 type auditStatusWriter struct {
 	http.ResponseWriter
 	status int
+}
+
+// Unwrap preserves per-request deadlines through the audit wrapper.
+func (w *auditStatusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *auditStatusWriter) WriteHeader(code int) {

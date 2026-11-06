@@ -22,7 +22,47 @@ tags:
   - name: schedule
   - name: config
   - name: metrics
+  - name: snapshot
 paths:
+  /api/v1/snapshot:
+    get:
+      tags: [snapshot]
+      summary: Observe the qualified warm tier without waking it
+      responses:
+        "200": { $ref: "#/components/responses/SnapshotState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+  /api/v1/snapshot/sleep:
+    post:
+      tags: [snapshot]
+      summary: Checkpoint an idle workload without waiting for the idle timer
+      description: >
+        Refuses active or unconfirmed work. No body, query options or force
+        override. Does not scale pods to zero or alter reserved resources.
+        After an uncertain result, observe runtime state before retrying.
+      responses:
+        "200": { $ref: "#/components/responses/SnapshotState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServerError" }
+        "504": { $ref: "#/components/responses/ServerError" }
+  /api/v1/snapshot/wake:
+    post:
+      tags: [snapshot]
+      summary: Restore through the existing coordinator recovery path
+      description: >
+        No body or query options. Lost checkpoints can require a cold start;
+        ambiguous operations retain PID-1 fencing. Observe state after failure.
+      responses:
+        "200": { $ref: "#/components/responses/SnapshotState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServerError" }
+        "504": { $ref: "#/components/responses/ServerError" }
   /api/v1/health:
     get:
       tags: [health]
@@ -319,6 +359,14 @@ components:
       schema: { type: integer, maximum: 10000 }
       description: Max entries (clamped to 10000)
   responses:
+    SnapshotState:
+      description: Current non-waking observation, not billable usage
+      headers:
+        Cache-Control:
+          schema: { type: string, enum: [no-store] }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/SnapshotStatus" }
     Logs:
       description: Log entries
       content:
@@ -351,6 +399,16 @@ components:
       description: Method not allowed (response carries an Allow header)
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   schemas:
+    SnapshotStatus:
+      type: object
+      required: [supported, state, idle_seconds]
+      properties:
+        supported: { type: boolean }
+        state:
+          type: string
+          enum: [awake, asleep, transitioning, disabled, unknown, unavailable]
+        idle_seconds: { type: integer, format: int64 }
+        disabled_reason: { type: string }
     Error:
       type: object
       properties:

@@ -18,7 +18,7 @@ func TestCLISubprocess(t *testing.T) {
 		return
 	}
 	rootCmd.SetArgs(strings.Fields(os.Getenv("CBOX_CLI_ARGS")))
-	_ = rootCmd.Execute()
+	Execute()
 }
 
 // runCLI runs the CLI in a subprocess against srvURL and returns its combined

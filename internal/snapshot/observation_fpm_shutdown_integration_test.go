@@ -4,6 +4,7 @@ package snapshot
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -100,6 +101,9 @@ usleep(5000000);
 	}
 	coordinator := NewCoordinator(CoordinatorOptions{Proxy: proxy, Control: control, Workload: workload, Idle: time.Minute, Log: quietLogger(), Quiesce: guard})
 	coordinator.maybeSleep(ctx)
+	if err := coordinator.Sleep(ctx); !errors.Is(err, ErrWorkloadBusy) {
+		t.Fatalf("manual sleep must also refuse post-response PHP work: %v", err)
+	}
 	if control.checkpoints != 0 || workload.begun.Load() != 0 || proxy.Asleep() {
 		t.Fatal("quiescence gate allowed checkpoint during post-response PHP work")
 	}

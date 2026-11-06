@@ -22,6 +22,7 @@ import (
 	"github.com/cboxdk/init/internal/process"
 	"github.com/cboxdk/init/internal/setup"
 	"github.com/cboxdk/init/internal/signals"
+	"github.com/cboxdk/init/internal/snapshot"
 	"github.com/cboxdk/init/internal/tracing"
 	"github.com/cboxdk/init/internal/watcher"
 	"github.com/spf13/cobra"
@@ -332,10 +333,13 @@ func runServe(cmd *cobra.Command, args []string) {
 		if cfg.Global.APISocket == "" {
 			cfg.Global.APISocket = socketPath
 		}
-		apiServer = startAPIServer(ctx, cfg, pm, log)
+		apiServer = startAPIServer(ctx, cfg, pm, log, warmTier)
 	} else {
 		// Socket-only mode: local management without TCP
 		apiServer = api.NewServer(0, socketPath, "", nil, nil, cfg.Global.AuditEnabled, cfg.Global.APIMaxRequestBody, pm, log)
+		if warmTier != nil {
+			apiServer.SetSnapshotControl(warmTier)
+		}
 		if err := apiServer.StartSocketOnly(ctx); err != nil {
 			slog.Warn("Failed to start Unix socket (local CLI/TUI disabled)", "error", err)
 			apiServer = nil
@@ -750,13 +754,16 @@ func dirWritable(dir string) bool {
 }
 
 // startAPIServer starts the Management API server
-func startAPIServer(ctx context.Context, cfg *config.Config, pm *process.Manager, log *slog.Logger) *api.Server {
+func startAPIServer(ctx context.Context, cfg *config.Config, pm *process.Manager, log *slog.Logger, warmTier ...*snapshot.Coordinator) *api.Server {
 	apiPort := cfg.Global.APIPort
 	if apiPort == 0 {
 		apiPort = 9180
 	}
 
 	server := api.NewServer(apiPort, cfg.Global.APISocket, cfg.Global.APIAuth, cfg.Global.APIACL, cfg.Global.APITLS, cfg.Global.AuditEnabled, cfg.Global.APIMaxRequestBody, pm, log)
+	if len(warmTier) > 0 && warmTier[0] != nil {
+		server.SetSnapshotControl(warmTier[0])
+	}
 	server.SetBindHost(cfg.Global.APIHost)
 	if err := server.Start(ctx); err != nil {
 		slog.Warn("Failed to start API server (TUI/remote control disabled)", "error", err)

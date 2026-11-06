@@ -34,6 +34,56 @@ curl -H "Authorization: Bearer your-secure-token-here" \
 
 ## Endpoints
 
+### Snapshot sleep and wake
+
+The qualified warm tier exposes these routes through the same management
+listeners and authentication as process controls:
+
+| Method | Path | Result |
+| --- | --- | --- |
+| GET | `/api/v1/snapshot` | Observe state without waking or refreshing idle time |
+| POST | `/api/v1/snapshot/sleep` | Checkpoint now if the workload is idle and safe |
+| POST | `/api/v1/snapshot/wake` | Restore through the ordinary recovery path |
+
+The commands use the local Unix socket by default. `--url` selects an explicit
+management endpoint and the usual API authentication configuration applies.
+
+```bash
+cbox-init snapshot status
+cbox-init snapshot sleep
+cbox-init snapshot wake
+```
+
+Successful responses are JSON with `Cache-Control: no-store`:
+
+```json
+{"supported":true,"state":"asleep","idle_seconds":300}
+```
+
+States are `awake`, `asleep`, `transitioning`, `disabled`, `unknown`, and
+`unavailable`. `supported` means a qualified coordinator was attached at startup;
+`disabled_reason`, when present, explains why it stopped sleeping. An unavailable
+coordinator reports `supported: false`. A closed proxy alone is never reported as
+a completed checkpoint. State is an observation and can change as traffic arrives.
+
+Sleep skips only the idle timer. It refuses open connections, active requests,
+unconfirmed native PHP-FPM work, or disabled sleep. Neither mutation accepts a
+body, query options, or a force override. Busy/unavailable returns 409; invalid
+options return 400; a bounded operation timeout returns 504; other failures return
+503. After an uncertain failure, observe runtime and orchestrator state before
+retrying. The runtime may fence itself; a lost checkpoint can cold-start through
+the existing recovery path, with the loss reported in logs and `disabled_reason`.
+
+Operations have a 60-second control budget, a 70-second HTTP write budget, and a
+75-second CLI client timeout. They inherit the caller's earlier cancellation.
+Repeated completed actions are harmless, but clients do not automatically retry
+mutations. New traffic can wake a sleeping workload immediately.
+
+This is process checkpointing inside the existing container. It does not remove
+the pod, release its reserved CPU/RAM, change instance count, or establish billable
+usage. A compatible, qualified snapshot agent and runtime configuration are
+required. Without them the workload stays awake and mutations are refused.
+
 ### Health Check
 
 **GET** `/api/v1/health`

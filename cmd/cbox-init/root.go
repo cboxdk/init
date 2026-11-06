@@ -78,5 +78,6 @@ func init() {
 	rootCmd.AddCommand(restartCmd)
 	rootCmd.AddCommand(signalCmd)
 	rootCmd.AddCommand(scaleCmd)
+	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(reloadConfigCmd)
 }

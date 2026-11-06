@@ -155,7 +155,9 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 	// Waits for an in-flight dump rather than racing it. The wait is bounded by
 	// the caller's deadline, which is the same deadline the whole wake is held
 	// to, so this cannot become a hang of its own.
-	c.opMu.Lock()
+	if err := c.lockOperation(ctx); err != nil {
+		return err
+	}
 	defer c.opMu.Unlock()
 	if c.uncertain != nil {
 		return c.uncertain
@@ -247,14 +249,26 @@ func (c *Coordinator) unrecoverable(err error) bool {
 }
 
 func (c *Coordinator) maybeSleep(ctx context.Context) {
-	c.opMu.Lock()
+	_ = c.sleep(ctx, false)
+}
+
+func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
+	if err := c.lockOperation(ctx); err != nil {
+		return err
+	}
 	defer c.opMu.Unlock()
 
-	if c.Disabled() != "" || c.proxy.Asleep() {
-		return
+	if c.uncertain != nil {
+		return c.uncertain
 	}
-	if !c.proxy.Activity().IdleFor(c.idle) {
-		return
+	if c.Disabled() != "" || c.idle <= 0 {
+		return ErrSleepUnavailable
+	}
+	if c.proxy.Asleep() {
+		return nil
+	}
+	if !requested && !c.proxy.Activity().IdleFor(c.idle) {
+		return ErrWorkloadBusy
 	}
 
 	// Asleep before anything else, and idleness confirmed again afterwards.
@@ -272,7 +286,7 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 
 	if open, inFlight := c.proxy.Activity().Counts(); open > 0 || inFlight > 0 {
 		c.proxy.SetAsleep(false)
-		return
+		return ErrWorkloadBusy
 	}
 
 	if c.quiesce != nil {
@@ -283,14 +297,20 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 		if err != nil || contextErr != nil {
 			c.proxy.SetAsleep(false)
 			c.log.Debug("checkpoint deferred: workload quiescence not established")
-			return
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return ErrWorkloadBusy
 		}
 	}
 	// A customer may have queued while the status request was in flight.
 	// Restore ordinary admission rather than dumping a now-wanted workload.
 	if open, inFlight := c.proxy.Activity().Counts(); ctx.Err() != nil || open > 0 || inFlight > 0 {
 		c.proxy.SetAsleep(false)
-		return
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return ErrWorkloadBusy
 	}
 
 	pids := c.workload.BeginCheckpoint()
@@ -299,20 +319,19 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 		// every poll: a container whose processes have all exited is already
 		// being handled by the supervisor.
 		c.proxy.SetAsleep(false)
-		return
+		return ErrSleepUnavailable
 	}
 
 	if err := c.control.Checkpoint(ctx); err != nil {
 		if errors.Is(err, ErrOperationUncertain) {
-			_ = c.fenceUncertain("checkpoint", err)
-			return
+			return c.fenceUncertain("checkpoint", err)
 		}
 		// An explicit dump refusal or an unsent command leaves ordinary
 		// supervision in charge. Unknown sent outcomes were fenced above.
 		c.proxy.SetAsleep(false)
 		c.workload.AbortCheckpoint()
 		c.penalise(err)
-		return
+		return fmt.Errorf("checkpointing the workload: %w", err)
 	}
 
 	// Immediately, and before anything can ask for a restore: the dumped tree
@@ -325,6 +344,7 @@ func (c *Coordinator) maybeSleep(ctx context.Context) {
 
 	open, inFlight := c.proxy.Activity().Counts()
 	c.log.Info("workload checkpointed", "pids", pids, "open_connections", open, "in_flight", inFlight)
+	return nil
 }
 
 // penalise records a failed checkpoint and gives up after enough of them.
