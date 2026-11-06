@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.9.0] - 2026-11-06
 
 ### Added
 
@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expose the qualified warm-tier coordinator. Manual sleep skips the idle timer
   but refuses active connections and unconfirmed PHP work. Status never wakes
   the workload; ambiguous operations retain PID-1 fencing. This checkpoints
-  processes, not Kubernetes pods or billing capacity.
+  processes, not Kubernetes pods or billing capacity. A restricted Talos ARM64
+  PHP-FPM fixture passed manual and traffic-triggered restore with unchanged
+  container identity; other runtime profiles require their own qualification.
 
 - Single-pool PHP images can opt into a native FPM check before checkpoint with
   `CBOX_SNAPSHOT_FPM_POOL=www`. Ongoing work after `fastcgi_finish_request()`
@@ -36,8 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   old process namespace. A command that was never sent still allows in-place
   recovery. Prevents a late restore from racing a second writer. Warm tier now
   requires PID 1. Registration negotiates `fence=pid1-v1`; agent replies with
-  `operation_uncertain` take the same fencing path. Real CRIU fault injection
-  remains pending; no release tagged yet.
+  `operation_uncertain` take the same fencing path. Stache's Talos lab has also
+  exercised real CRIU disconnect, timeout and post-dump/pre-resume failures;
+  this does not qualify arbitrary process trees or another platform.
 
 - Keep the existing service proxy available when snapshot registration is
   unavailable or refused. Set `CBOX_SNAPSHOT_LISTEN=127.0.0.1:9001` with
@@ -54,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserve stderr alongside stdout across CRIU restore. Snapshot registration
   sends both pipe descriptors and requires agent acknowledgment; incompatible
   agents leave the workload awake. Found by Stache's Talos/FPM log-continuity
-  acceptance test. Requires a compatible snapshot agent; no release tagged yet.
+  acceptance test. Requires a compatible snapshot agent.
 
 ### Changed
 
