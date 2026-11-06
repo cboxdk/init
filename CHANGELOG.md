@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- Update `golang.org/x/net` to v0.62.0 to remove CVE-2026-78661 from
+  distributed binaries; update the required x/sys and x/text dependencies.
+  The image vulnerability gate checks embedded module versions independently of
+  whether the affected HTML parser is reachable from cbox-init.
+
 ## [3.9.0] - 2026-11-06
 
 ### Added
