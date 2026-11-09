@@ -353,12 +353,14 @@ func TestTransientRestoreFailureDoesNotColdStart(t *testing.T) {
 	}
 }
 
-// When the agent says it has given up, the dumped processes are gone for good.
-// Leaving the container asleep would mean every future connection fails against
-// images that will never load, so it cold starts — and the state loss is stated
-// rather than absorbed.
+// When the agent says the checkpoint cannot come back, the dumped processes are
+// gone for good. Leaving the container asleep would mean every future
+// connection fails against images that will never load, so it cold starts. A
+// missing or incompatible checkpoint is not the container's fault, and a first
+// abandoned one earns a fresh checkpoint, so none of these turns the warm tier
+// off on its own; outcome_test.go covers what does.
 func TestAbandonedCheckpointColdStartsTheWorkload(t *testing.T) {
-	for _, reason := range []string{ReasonRestoreAbandoned, ReasonImagesMissing} {
+	for _, reason := range []string{ReasonRestoreAbandoned, ReasonImagesMissing, ReasonCheckpointIncompatible} {
 		t.Run(reason, func(t *testing.T) {
 			control := &fakeControl{restorer: func() error { return &AgentError{Reason: reason} }}
 			workload := &fakeWorkload{}
@@ -370,8 +372,8 @@ func TestAbandonedCheckpointColdStartsTheWorkload(t *testing.T) {
 			if workload.coldStarts.Load() != 1 {
 				t.Fatal("an abandoned checkpoint must be recovered by cold starting, not left asleep")
 			}
-			if c.Disabled() == "" {
-				t.Error("a container that lost a checkpoint must come off the warm tier")
+			if c.Disabled() != "" {
+				t.Errorf("one lost checkpoint must not turn the warm tier off: %s", c.Disabled())
 			}
 		})
 	}

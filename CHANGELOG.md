@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.2] - 2026-11-09
+
+### Fixed
+
+- A missing checkpoint is no longer treated as a failure. When the node has no
+  checkpoint images to restore (node replaced or rebooted, images swept, pod
+  moved), cbox-init cold starts the workload in place as before, but warm sleep
+  now stays on and the next sleep takes a fresh checkpoint. It is logged at
+  info with `cause=checkpoint_missing`. Previously this turned warm sleep off
+  with "a checkpoint was lost", the same report as a real restore failure.
+- A checkpoint the agent reports as incompatible (`checkpoint_incompatible`)
+  also cold starts and keeps warm sleep on, at warning.
+- A present checkpoint that will not load (`restore_abandoned`) now earns one
+  fresh checkpoint before warm sleep turns off, and the disable says why.
+- An agent answering `checkpoint_disabled` turns warm sleep off at once with
+  `cause=agent_disabled`, instead of spending three attempts and three error
+  lines on an answer that cannot change.
+- A checkpoint or wake abandoned by its caller before the request was sent no
+  longer counts as a failed dump or logs at error.
+- "Workload unreachable after restore" was logged when no restore had happened;
+  the message now says which.
+- Registering with an agent that lacks stderr restoration or fencing support
+  reported "snapshot control channel lost"; it now names what the agent lacks.
+- Refusals to sleep say why: open connections and requests in flight,
+  unconfirmed application work, no idle timeout, or why warm sleep is off.
+- A restored process that exits is logged with why its exit status is unknown.
+
+### Added
+
+- `GET /api/v1/snapshot` and `cbox-init snapshot status` report why: `cause`,
+  `level` and `message` for the most recent non-success outcome,
+  `last_restore` (`restored` or `cold_start`), `disabled_cause` next to
+  `disabled_reason`, and `last_event` with the agent's reason and, when the
+  agent sends them, CRIU's exit status and log line. All fields are additive;
+  existing fields keep their names. See the Management API docs for the cause
+  codes.
+- Failed snapshot actions answer with `cause` and the observed `snapshot`
+  status next to `error`, instead of a bare "snapshot operation failed".
+- The control protocol accepts optional `criu_exit`, `criu_log` and `detail`
+  fields on an agent's `ERR` reply, and the `checkpoint_incompatible` reason.
+  Agents that send only `reason` keep working.
+
 ## [3.9.1] - 2026-11-06
 
 ### Security

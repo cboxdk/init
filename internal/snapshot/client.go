@@ -160,11 +160,11 @@ func (c *Client) Register(ctx context.Context, childPID int, stream *Stream, std
 	}
 
 	if len(stderr) == 1 && reply.Int("stdio", 0) != 2 {
-		return Policy{}, c.fail(fmt.Errorf("snapshot agent does not support stderr restoration"))
+		return Policy{}, c.incompatible("the node agent does not acknowledge stderr restoration (stdio=2), so a restored process would lose its stderr; the agent needs updating")
 	}
 
 	if reply.Fields["fence"] != "pid1-v1" {
-		return Policy{}, c.fail(fmt.Errorf("snapshot agent does not acknowledge uncertain-operation fencing"))
+		return Policy{}, c.incompatible("the node agent does not acknowledge uncertain-operation fencing (fence=pid1-v1), so an ambiguous outcome could not be handled safely; the agent needs updating")
 	}
 	return Policy{
 		Port:        reply.Int("port", 0),
@@ -268,6 +268,18 @@ func (c *Client) fail(cause error) error {
 		_ = c.conn.Close()
 	}
 	return c.broken
+}
+
+// incompatible closes a channel to an agent that answered but cannot be used
+// safely. The channel did not break, so the error says what is missing
+// instead of reporting a lost connection.
+func (c *Client) incompatible(reason string) error {
+	err := errors.New(reason)
+	if c.broken == nil {
+		c.broken = err
+		_ = c.conn.Close()
+	}
+	return err
 }
 
 // Lost reports whether the control channel has broken. Inspect the request

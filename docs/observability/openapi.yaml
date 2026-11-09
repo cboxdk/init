@@ -408,11 +408,54 @@ components:
           type: string
           enum: [awake, asleep, transitioning, disabled, unknown, unavailable]
         idle_seconds: { type: integer, format: int64 }
-        disabled_reason: { type: string }
+        disabled_reason:
+          type: string
+          description: A sentence saying why warm sleep is off for this container
+        disabled_cause:
+          type: string
+          description: Cause code for disabled_reason
+        last_restore:
+          type: string
+          enum: [restored, cold_start]
+        cause:
+          type: string
+          description: >
+            Cause code of the most recent operation when it was not a plain
+            success; cleared by the next success. Stable codes, new ones may be
+            added.
+          example: checkpoint_missing
+        level:
+          type: string
+          enum: [info, warning, error]
+        message:
+          type: string
+          description: What happened, why, and what happens next
+        last_event: { $ref: "#/components/schemas/SnapshotEvent" }
+    SnapshotEvent:
+      type: object
+      required: [operation, cause, level, message, at]
+      properties:
+        operation: { type: string, enum: [checkpoint, restore] }
+        cause:
+          type: string
+          enum: [checkpoint_missing, checkpoint_incompatible, restore_failed, restore_abandoned,
+            checkpoint_failed, agent_disabled, control_lost, cold_start_failed,
+            operation_uncertain, agent_refused]
+        level: { type: string, enum: [info, warning, error] }
+        message: { type: string }
+        agent_reason: { type: string, description: The node agent's own reason token }
+        criu_exit: { type: integer, description: CRIU's exit status, when the agent reported it }
+        criu_log: { type: string, description: First relevant CRIU log line, when the agent reported it }
+        attempt: { type: integer }
+        at: { type: string, format: date-time }
     Error:
       type: object
       properties:
         error: { type: string }
+        cause:
+          type: string
+          description: Snapshot actions only. Refusal or outcome cause code.
+        snapshot: { $ref: "#/components/schemas/SnapshotStatus" }
     LogEntry:
       type: object
       description: One log line. Identical on the REST endpoints and the SSE stream.

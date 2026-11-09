@@ -99,7 +99,8 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) (
 	}
 
 	if os.Getpid() != 1 {
-		log.Warn("warm tier requires namespace PID 1 for safe failure fencing")
+		log.Warn("warm tier unavailable: cbox-init must be PID 1 in the container to fence an uncertain snapshot operation; it will run without sleeping",
+			"pid", os.Getpid())
 		return nil
 	}
 
@@ -142,7 +143,8 @@ func startWarmTier(ctx context.Context, pm *process.Manager, log *slog.Logger) (
 	}
 
 	if ln != nil && ln.Addr().(*net.TCPAddr).Port != policy.Port {
-		log.Error("snapshot policy does not match the configured service port", "port", policy.Port)
+		log.Error("the node agent's snapshot policy names a different service port than "+listenEnv+"; running without the warm tier",
+			"policy_port", policy.Port, "configured", ln.Addr().String())
 		_ = client.Close()
 		return nil
 	}

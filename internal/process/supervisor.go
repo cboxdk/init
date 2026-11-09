@@ -1318,7 +1318,11 @@ func (s *Supervisor) monitorRestored(instance *Instance, pid int, done chan stru
 		allowRestart := instance.allowRestart
 		instance.mu.Unlock()
 
-		s.logger.Warn("Restored process instance exited", "instance_id", instance.id, "pid", pid)
+		// A restored process is re-parented onto cbox-init rather than started
+		// by os/exec, so its exit status cannot be collected; say so instead of
+		// leaving the reason blank.
+		s.logger.Warn("Restored process instance exited", "instance_id", instance.id, "pid", pid,
+			"exit_status", "unknown: a restored process is not an os/exec child, so its status cannot be read")
 		metrics.RecordProcessStop(s.name, instance.id, -1)
 
 		// Record the death for the container-level exit decision, exactly as

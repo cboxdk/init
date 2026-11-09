@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -106,17 +107,50 @@ func (m Message) Int(key string, def int) int {
 // differently on different reasons: a dump that failed leaves a running
 // workload alone, while a checkpoint the agent has abandoned means the
 // processes are gone and only a cold start brings the service back.
+//
+// The reason is the only field an agent must send. An agent may add CRIU's own
+// diagnosis as optional fields, which cbox-init carries into its status so the
+// cause of a failed dump or restore is never only in a node log:
+//
+//	criu_exit=<int>      CRIU's exit status
+//	criu_log=<escaped>   the first relevant line of CRIU's log, percent-encoded
+//	detail=<escaped>     any other human explanation, percent-encoded
+//
+// Percent-encoding (RFC 3986, %20 for a space) keeps each value one token on
+// the line-oriented wire. Agents that send none of these still interoperate.
 type AgentError struct {
 	Reason string
+	// CRIUExit is CRIU's exit status, when the agent reported it.
+	CRIUExit *int
+	// CRIULog is the first relevant CRIU log line, when the agent reported it.
+	CRIULog string
+	// Detail is the agent's own explanation, when it sent one.
+	Detail string
 }
 
 // Is exposes explicit uncertain outcomes through the same fencing path as a
 // lost reply. Acknowledging uncertainty is not an ordinary safe refusal.
 func (e *AgentError) Is(target error) bool {
-	return target == ErrOperationUncertain && e.Reason == "operation_uncertain"
+	return target == ErrOperationUncertain && e.Reason == ReasonOperationUncertain
 }
 
-func (e *AgentError) Error() string { return "snapshot agent: " + e.Reason }
+func (e *AgentError) Error() string {
+	var b strings.Builder
+	b.WriteString("snapshot agent: ")
+	b.WriteString(e.Reason)
+	if e.CRIUExit != nil {
+		fmt.Fprintf(&b, " (criu exit %d)", *e.CRIUExit)
+	}
+	if e.CRIULog != "" {
+		b.WriteString(": ")
+		b.WriteString(e.CRIULog)
+	}
+	if e.Detail != "" {
+		b.WriteString(": ")
+		b.WriteString(e.Detail)
+	}
+	return b.String()
+}
 
 // Reasons the agent sends that the container must act on rather than merely
 // log. The remaining reasons all mean "not this time", and the workload is
@@ -126,14 +160,41 @@ const (
 	// not load. The dumped processes are gone for good.
 	ReasonRestoreAbandoned = "restore_abandoned"
 
-	// ReasonImagesMissing means there is nothing left to restore from.
+	// ReasonImagesMissing means there is nothing left to restore from. That is
+	// a normal event, not a failure: the node was replaced or rebooted, the
+	// images were swept, or they were never on this node. The container cold
+	// starts and keeps the warm tier.
 	ReasonImagesMissing = "images_missing"
+
+	// ReasonCheckpointIncompatible means the images exist but were written for
+	// a different kernel, CRIU or image build, so they can never load here. A
+	// fresh checkpoint on this node will, so the warm tier stays on.
+	ReasonCheckpointIncompatible = "checkpoint_incompatible"
+
+	// ReasonRestoreFailed means one restore of present images failed. The
+	// images are kept and the next connection retries.
+	ReasonRestoreFailed = "restore_failed"
+
+	// ReasonDumpFailed means a dump failed and the workload kept running.
+	ReasonDumpFailed = "dump_failed"
+
+	// ReasonCheckpointDisabled means the agent no longer accepts checkpoints
+	// for this container. It answers every later request the same way.
+	ReasonCheckpointDisabled = "checkpoint_disabled"
+
+	// ReasonOperationUncertain means the agent cannot say whether an operation
+	// ran. Handled by fencing, never by a cold start.
+	ReasonOperationUncertain = "operation_uncertain"
 )
 
 // Lost reports whether a reason means the checkpointed processes can never come
 // back, which is the only case where losing state is the right answer.
 func (e *AgentError) Lost() bool {
-	return e.Reason == ReasonRestoreAbandoned || e.Reason == ReasonImagesMissing
+	switch e.Reason {
+	case ReasonRestoreAbandoned, ReasonImagesMissing, ReasonCheckpointIncompatible:
+		return true
+	}
+	return false
 }
 
 // Err returns a non-nil error when the message is a failure reply.
@@ -141,10 +202,32 @@ func (m Message) Err() error {
 	if m.Verb != StatusError {
 		return nil
 	}
-	if reason, ok := m.Fields["reason"]; ok {
-		return &AgentError{Reason: reason}
+	agentErr := &AgentError{Reason: "refused"}
+	if reason, ok := m.Fields["reason"]; ok && reason != "" {
+		agentErr.Reason = reason
 	}
-	return &AgentError{Reason: "refused"}
+	if v, ok := m.Fields["criu_exit"]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			agentErr.CRIUExit = &n
+		}
+	}
+	agentErr.CRIULog = unescapeField(m.Fields["criu_log"])
+	agentErr.Detail = unescapeField(m.Fields["detail"])
+	return agentErr
+}
+
+// unescapeField decodes an optional percent-encoded value. A value that does
+// not decode is shown as sent rather than dropped: a garbled explanation is
+// still more useful to an operator than none.
+func unescapeField(v string) string {
+	if v == "" {
+		return ""
+	}
+	decoded, err := url.PathUnescape(v)
+	if err != nil {
+		return v
+	}
+	return strings.TrimSpace(decoded)
 }
 
 // ParseMessage parses one protocol line. Unknown fields are kept rather than

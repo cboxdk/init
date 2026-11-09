@@ -182,6 +182,7 @@ func (p *Proxy) handle(ctx context.Context, client net.Conn) {
 		_ = client.Close()
 	}()
 
+	woken := false
 	if p.Asleep() {
 		wakeCtx, cancel := context.WithTimeout(ctx, p.wakeTimeout)
 		err := p.wake(wakeCtx)
@@ -196,11 +197,18 @@ func (p *Proxy) handle(ctx context.Context, client net.Conn) {
 			return
 		}
 		p.SetAsleep(false)
+		woken = true
 	}
 
 	upstream, err := p.dialUpstream(ctx)
 	if err != nil {
-		p.log.Error("workload unreachable after restore", "upstream", p.upstream, "error", err)
+		// Only say "after restore" when there was one: an awake workload that
+		// refuses connections is an ordinary outage, not a warm-tier failure.
+		msg := "workload unreachable; failing the connection"
+		if woken {
+			msg = "workload unreachable after waking it; failing the connection"
+		}
+		p.log.Error(msg, "upstream", p.upstream, "error", err)
 		return
 	}
 	defer func() { _ = upstream.Close() }()

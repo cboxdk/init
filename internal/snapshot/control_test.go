@@ -139,7 +139,7 @@ func TestSnapshotStatusDoesNotWakeOrRefreshIdle(t *testing.T) {
 	if c.Status().State != "asleep" || control.restores != 0 {
 		t.Fatal("observation woke workload")
 	}
-	c.disable("qualification lost")
+	c.disable(CauseAgentDisabled, "qualification lost")
 	if status := c.Status(); status.State != "disabled" || status.DisabledReason != "qualification lost" {
 		t.Fatalf("status = %+v", status)
 	}

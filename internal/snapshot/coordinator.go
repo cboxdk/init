@@ -66,7 +66,18 @@ type Coordinator struct {
 
 	mu       sync.Mutex
 	failures int
-	disabled string
+	// abandoned counts restores of present checkpoints the agent gave up on
+	// since the last successful restore. The first earns one fresh checkpoint;
+	// the second turns the warm tier off.
+	abandoned     int
+	disabled      string // human explanation, "" while the warm tier is on
+	disabledCause string // Cause* code matching disabled
+	lastRestore   string // LastRestoreRestored or LastRestoreColdStart
+	// current is the outcome of the most recent operation when it was not a
+	// plain success, and nil after one. last keeps the most recent non-success
+	// outcome for history even after a later success.
+	current *Event
+	last    *Event
 }
 
 // CoordinatorOptions configures a Coordinator.
@@ -167,10 +178,10 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 	// the time this one gets the lock the workload has very likely already been
 	// restored by the first. Restoring again would ask the agent to restore an
 	// already-running tree — and if it answers "images missing" (there are none
-	// once a restore consumed them) that is treated as unrecoverable and cold
-	// starts a perfectly healthy workload, destroying its state. The same guard
-	// covers the maybeSleep back-out path, where a connection can queue while
-	// the workload was marked asleep but never actually dumped.
+	// once a restore consumed them) that would cold start a perfectly healthy
+	// workload, destroying its state. The same guard covers the maybeSleep
+	// back-out path, where a connection can queue while the workload was marked
+	// asleep but never actually dumped.
 	// Asleep is the authoritative signal: a successful restore clears it, and
 	// every maybeSleep back-out path clears it too — so "not asleep" means
 	// either someone already restored the tree or it was never dumped.
@@ -194,31 +205,107 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 		// it dies.
 		c.workload.EndCheckpoint()
 		c.proxy.SetAsleep(false)
+		c.mu.Lock()
+		c.abandoned = 0
+		c.current = nil
+		c.lastRestore = LastRestoreRestored
+		c.mu.Unlock()
 		return nil
 	}
 
 	if errors.Is(err, ErrOperationUncertain) {
 		return c.fenceUncertain("restore", err)
 	}
-	c.log.Error("restore failed", "error", err)
 
-	if !c.unrecoverable(err) {
-		// Still asleep, images still on disk, and the agent will try again on
-		// the next connection. The caller fails this one request rather than
-		// throwing away a checkpoint that may well load.
+	var agentErr *AgentError
+	isAgent := errors.As(err, &agentErr)
+
+	// The caller gave up before the request was sent. Nothing happened to the
+	// checkpoint and the next connection restores it; that is not a failure
+	// of the warm tier and is not reported as one.
+	if !isAgent && !errors.Is(err, ErrControlLost) &&
+		(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+		c.log.Debug("wake abandoned by its caller before the restore was sent; the workload stays asleep", "error", err)
 		return fmt.Errorf("waking the workload: %w", err)
 	}
 
-	// The dumped processes are never coming back. Say what that costs before
-	// doing anything about it: this is the one outcome that must never be
-	// reported as a success, and the prior art's equivalent path lost state
-	// without saying anything at all.
-	c.log.Error("checkpoint lost; cold starting the workload. in-memory state from before the checkpoint is gone",
-		"cause", err)
+	switch {
+	case isAgent && agentErr.Reason == ReasonImagesMissing:
+		// The normal case after a node change: there is simply nothing here to
+		// restore. Cold start, keep sleeping, take a fresh checkpoint next time.
+		return c.coldStartAfter(ctx, newEvent("restore", CauseCheckpointMissing, LevelInfo,
+			"no checkpoint images on this node to restore (the node was replaced or rebooted, the images were swept, or the pod moved); cold started the workload in place and warm sleep stays on, so the next sleep takes a fresh checkpoint",
+			err), "", "")
+
+	case isAgent && agentErr.Reason == ReasonCheckpointIncompatible:
+		return c.coldStartAfter(ctx, newEvent("restore", CauseCheckpointIncompatible, LevelWarning,
+			fmt.Sprintf("the checkpoint on this node cannot be loaded here (%s); cold started the workload in place and warm sleep stays on, so the next sleep takes a checkpoint compatible with this node",
+				agentDiagnosis(err)),
+			err), "", "")
+
+	case isAgent && agentErr.Reason == ReasonRestoreAbandoned:
+		c.mu.Lock()
+		c.abandoned++
+		abandoned := c.abandoned
+		c.mu.Unlock()
+		if abandoned < 2 {
+			ev := newEvent("restore", CauseRestoreAbandoned, LevelError,
+				fmt.Sprintf("restoring the checkpoint failed and the node agent gave up on it (%s); cold started the workload in place. Warm sleep stays on for one fresh checkpoint; if that one fails to restore too, warm sleep turns off",
+					agentDiagnosis(err)),
+				err)
+			ev.Attempt = abandoned
+			return c.coldStartAfter(ctx, ev, "", "")
+		}
+		message := fmt.Sprintf("restoring a checkpoint failed again after a fresh checkpoint (%s); cold started the workload in place and turned warm sleep off for this container so it stops losing state",
+			agentDiagnosis(err))
+		ev := newEvent("restore", CauseRestoreAbandoned, LevelError, message, err)
+		ev.Attempt = abandoned
+		return c.coldStartAfter(ctx, ev, CauseRestoreAbandoned, message)
+
+	case errors.Is(err, ErrControlLost):
+		// The request was never sent, so no remote operation can race the
+		// in-place recovery. Sent-but-unanswered requests took the fencing
+		// path above and never reach this.
+		message := fmt.Sprintf("the control channel to the node agent is gone (%v), so the checkpoint cannot be restored; cold started the workload in place and turned warm sleep off for this container", err)
+		return c.coldStartAfter(ctx, newEvent("restore", CauseControlLost, LevelError, message, err),
+			CauseControlLost, message)
+
+	case isAgent && agentErr.Reason == ReasonRestoreFailed:
+		// Still asleep, images still on disk, and the agent will try again on
+		// the next connection. The caller fails this one request rather than
+		// throwing away a checkpoint that may well load.
+		c.record(newEvent("restore", CauseRestoreFailed, LevelError,
+			fmt.Sprintf("restoring the checkpoint failed (%s); the images are kept, the workload stays asleep and the next connection retries",
+				agentDiagnosis(err)),
+			err))
+		return fmt.Errorf("waking the workload: %w", err)
+
+	case isAgent:
+		c.record(newEvent("restore", CauseAgentRefused, LevelError,
+			fmt.Sprintf("the node agent refused the restore with a reason this cbox-init does not know (%s); the workload stays asleep and the next connection retries",
+				agentDiagnosis(err)),
+			err))
+		return fmt.Errorf("waking the workload: %w", err)
+
+	default:
+		c.record(newEvent("restore", CauseRestoreFailed, LevelError,
+			fmt.Sprintf("restoring the checkpoint failed: %v; the workload stays asleep and the next connection retries", err),
+			err))
+		return fmt.Errorf("waking the workload: %w", err)
+	}
+}
+
+// coldStartAfter records why the checkpoint cannot come back, starts the
+// workload again in place, and turns the warm tier off only when disableCause
+// is set. Runs with opMu held.
+func (c *Coordinator) coldStartAfter(ctx context.Context, ev Event, disableCause, disableMessage string) error {
+	c.record(ev)
 
 	if err := c.workload.ColdStart(ctx); err != nil {
-		c.disable("cold start after a lost checkpoint failed")
-		return fmt.Errorf("cold starting after a lost checkpoint: %w", err)
+		message := fmt.Sprintf("cold starting the workload after %s failed: %v; warm sleep is off for this container and the supervisor's restart policy takes over", ev.Cause, err)
+		c.record(newEvent("restore", CauseColdStartFailed, LevelError, message, nil))
+		c.disable(CauseColdStartFailed, message)
+		return fmt.Errorf("cold starting after %s: %w", ev.Cause, err)
 	}
 
 	// Marked awake here rather than only by the caller. The cold start can
@@ -228,24 +315,14 @@ func (c *Coordinator) Wake(ctx context.Context) error {
 	// proxy still convinced it is asleep, sending every subsequent connection
 	// into a restore that can no longer succeed.
 	c.proxy.SetAsleep(false)
-	c.disable("a checkpoint was lost")
-	c.log.Warn("workload cold started and the warm tier is off for this container; it will keep running and stop sleeping")
-	return nil
-}
+	c.mu.Lock()
+	c.lastRestore = LastRestoreColdStart
+	c.mu.Unlock()
 
-// unrecoverable reports whether the checkpointed processes can never be brought
-// back, which is the only case where a cold start is the right answer.
-//
-// Two ways to get there. The agent can say so — it abandons a checkpoint that
-// failed to load twice, and it says when the images are gone. Or the control
-// channel can be lost before sending the request. Unknown sent operations
-// have already taken the fencing path above; they must never reach ColdStart.
-func (c *Coordinator) unrecoverable(err error) bool {
-	var agentErr *AgentError
-	if errors.As(err, &agentErr) {
-		return agentErr.Lost()
+	if disableCause != "" {
+		c.disable(disableCause, disableMessage)
 	}
-	return errors.Is(err, ErrControlLost)
+	return nil
 }
 
 func (c *Coordinator) maybeSleep(ctx context.Context) {
@@ -261,14 +338,17 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 	if c.uncertain != nil {
 		return c.uncertain
 	}
-	if c.Disabled() != "" || c.idle <= 0 {
-		return ErrSleepUnavailable
+	if reason := c.Disabled(); reason != "" {
+		return fmt.Errorf("%w: warm sleep is off for this container: %s", ErrSleepUnavailable, reason)
+	}
+	if c.idle <= 0 {
+		return fmt.Errorf("%w: no idle timeout is configured", ErrSleepUnavailable)
 	}
 	if c.proxy.Asleep() {
 		return nil
 	}
 	if !requested && !c.proxy.Activity().IdleFor(c.idle) {
-		return ErrWorkloadBusy
+		return fmt.Errorf("%w: not idle for %s yet", ErrWorkloadBusy, c.idle)
 	}
 
 	// Asleep before anything else, and idleness confirmed again afterwards.
@@ -286,7 +366,7 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 
 	if open, inFlight := c.proxy.Activity().Counts(); open > 0 || inFlight > 0 {
 		c.proxy.SetAsleep(false)
-		return ErrWorkloadBusy
+		return busy(open, inFlight)
 	}
 
 	if c.quiesce != nil {
@@ -296,11 +376,16 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 		cancel()
 		if err != nil || contextErr != nil {
 			c.proxy.SetAsleep(false)
-			c.log.Debug("checkpoint deferred: workload quiescence not established")
+			if err == nil {
+				err = contextErr
+			}
+			c.log.Debug("checkpoint deferred: the application has not confirmed it is idle", "error", err)
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			return ErrWorkloadBusy
+			// The cause is kept as text, not wrapped: a quiescence timeout is a
+			// busy workload, and must not read as the caller's own deadline.
+			return fmt.Errorf("%w: the application has not confirmed it is idle: %s", ErrWorkloadBusy, err.Error())
 		}
 	}
 	// A customer may have queued while the status request was in flight.
@@ -310,7 +395,7 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return ErrWorkloadBusy
+		return busy(open, inFlight)
 	}
 
 	pids := c.workload.BeginCheckpoint()
@@ -319,7 +404,7 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 		// every poll: a container whose processes have all exited is already
 		// being handled by the supervisor.
 		c.proxy.SetAsleep(false)
-		return ErrSleepUnavailable
+		return fmt.Errorf("%w: no supervised process is running to checkpoint", ErrSleepUnavailable)
 	}
 
 	if err := c.control.Checkpoint(ctx); err != nil {
@@ -330,7 +415,16 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 		// supervision in charge. Unknown sent outcomes were fenced above.
 		c.proxy.SetAsleep(false)
 		c.workload.AbortCheckpoint()
-		c.penalise(err)
+
+		var agentErr *AgentError
+		if !errors.As(err, &agentErr) && !errors.Is(err, ErrControlLost) &&
+			(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+			// The caller gave up before the request was sent. The agent never
+			// saw it, so it is not a failed dump and does not count as one.
+			c.log.Debug("checkpoint abandoned by its caller before it was sent; the workload keeps running", "error", err)
+			return fmt.Errorf("checkpointing the workload: %w", err)
+		}
+		c.checkpointFailed(err)
 		return fmt.Errorf("checkpointing the workload: %w", err)
 	}
 
@@ -340,6 +434,7 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 
 	c.mu.Lock()
 	c.failures = 0
+	c.current = nil
 	c.mu.Unlock()
 
 	open, inFlight := c.proxy.Activity().Counts()
@@ -347,38 +442,88 @@ func (c *Coordinator) sleep(ctx context.Context, requested bool) error {
 	return nil
 }
 
-// penalise records a failed checkpoint and gives up after enough of them.
-func (c *Coordinator) penalise(err error) {
+// busy explains a refusal to sleep because of traffic.
+func busy(open, inFlight int) error {
+	return fmt.Errorf("%w: %d open connections, %d requests in flight", ErrWorkloadBusy, open, inFlight)
+}
+
+// checkpointFailed records a failed dump, says why, and turns the warm tier
+// off when retrying cannot help or has stopped helping.
+func (c *Coordinator) checkpointFailed(err error) {
+	var agentErr *AgentError
+	isAgent := errors.As(err, &agentErr)
+
+	if errors.Is(err, ErrControlLost) {
+		// Nothing to retry against. The workload is awake and stays awake,
+		// which is the failure this whole design prefers.
+		message := fmt.Sprintf("the control channel to the node agent is gone (%v); the workload keeps running and warm sleep is off for this container", err)
+		c.record(newEvent("checkpoint", CauseControlLost, LevelError, message, err))
+		c.disable(CauseControlLost, message)
+		return
+	}
+
+	if isAgent && agentErr.Reason == ReasonCheckpointDisabled {
+		// The agent answers every later request the same way, so asking again
+		// only adds log lines. Say so once and stop.
+		message := fmt.Sprintf("the node agent no longer accepts checkpoints for this container (%s). It does this after it abandoned a checkpoint, after repeated dump failures, or when admission was revoked; the workload keeps running and warm sleep is off",
+			agentDiagnosis(err))
+		c.mu.Lock()
+		previous := c.last
+		c.mu.Unlock()
+		if previous != nil && previous.Cause == CauseCheckpointMissing {
+			message += ". It followed a missing checkpoint, which is not a failure: a node agent that disables warm sleep for that needs updating"
+		}
+		c.record(newEvent("checkpoint", CauseAgentDisabled, LevelError, message, err))
+		c.disable(CauseAgentDisabled, message)
+		return
+	}
+
 	c.mu.Lock()
 	c.failures++
 	failures := c.failures
 	c.mu.Unlock()
 
-	c.log.Error("checkpoint failed; the workload keeps running and serving",
-		"attempt", failures, "error", err)
-
-	if errors.Is(err, ErrControlLost) {
-		// Nothing to retry against. The workload is awake and stays awake,
-		// which is the failure this whole design prefers.
-		c.disable("the control channel to the node agent is gone")
-		return
+	cause := CauseCheckpointFailed
+	if isAgent && agentErr.Reason != ReasonDumpFailed {
+		cause = CauseAgentRefused
 	}
+	message := fmt.Sprintf("checkpoint failed (%s); the workload keeps running and serving, attempt %d of %d",
+		agentDiagnosis(err), failures, maxCheckpointFailures)
 	if failures >= maxCheckpointFailures {
-		c.disable("repeated checkpoint failures")
+		message = fmt.Sprintf("checkpoint failed %d times in a row, last: %s; the workload keeps running and warm sleep is off for this container",
+			failures, agentDiagnosis(err))
+	}
+	ev := newEvent("checkpoint", cause, LevelError, message, err)
+	ev.Attempt = failures
+	c.record(ev)
+	if failures >= maxCheckpointFailures {
+		c.disable(CauseCheckpointFailed, message)
 	}
 }
 
-func (c *Coordinator) disable(reason string) {
+// record logs an outcome at its level and makes it visible in Status.
+func (c *Coordinator) record(ev Event) {
+	ev.log(c.log)
+	c.mu.Lock()
+	c.current = &ev
+	c.last = &ev
+	c.mu.Unlock()
+}
+
+// disable takes this container off the warm tier, keeping the first cause:
+// later failures are usually consequences of it.
+func (c *Coordinator) disable(cause, message string) {
 	c.mu.Lock()
 	already := c.disabled != ""
 	if !already {
-		c.disabled = reason
+		c.disabled = message
+		c.disabledCause = cause
 	}
 	c.mu.Unlock()
 
 	if !already {
-		c.log.Error("warm tier disabled for this container; it keeps running and stops sleeping",
-			"reason", reason)
+		c.log.Warn("warm tier disabled for this container; it keeps running and stops sleeping",
+			"cause", cause, "reason", message)
 	}
 }
 
@@ -391,14 +536,21 @@ func (c *Coordinator) Disabled() string {
 	return c.disabled
 }
 
+// DisabledCause reports the Cause* code for Disabled, or "".
+func (c *Coordinator) DisabledCause() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.disabledCause
+}
+
 // fenceUncertain runs with opMu held. Never clear the asleep gate or resume
 // supervision: the node agent may still complete the operation after a timeout.
 func (c *Coordinator) fenceUncertain(operation string, err error) error {
 	c.uncertain = fmt.Errorf("%s requires container fencing: %w", operation, err)
 	c.proxy.SetAsleep(true)
-	c.disable("snapshot operation outcome unknown")
-	c.log.Error("snapshot outcome unknown; fencing container before cold recovery",
-		"operation", operation, "error", err)
+	message := fmt.Sprintf("the outcome of the %s is unknown (%v); the container is being fenced so the orchestrator restarts it cleanly", operation, err)
+	c.record(newEvent(operation, CauseOperationUncertain, LevelError, message, err))
+	c.disable(CauseOperationUncertain, message)
 	if c.fence != nil {
 		c.fence(c.uncertain)
 	}

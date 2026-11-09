@@ -65,17 +65,52 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		err = s.snapshot.Wake(ctx)
 	}
 	if err != nil {
-		switch {
-		case errors.Is(err, snapshot.ErrWorkloadBusy), errors.Is(err, snapshot.ErrSleepUnavailable):
-			s.respondError(w, http.StatusConflict, err.Error())
-		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-			s.respondError(w, http.StatusGatewayTimeout, "snapshot operation timed out; read runtime state before retrying")
-		default:
-			s.logger.Error("Snapshot control failed", "action", r.URL.Path, "error", err)
-			s.respondError(w, http.StatusServiceUnavailable, "snapshot operation failed; read runtime state before retrying")
-		}
+		s.respondSnapshotError(w, r.URL.Path, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	s.respondJSON(w, http.StatusOK, s.snapshot.Status())
+}
+
+// Cause codes for refusals that are not warm-tier outcomes. They appear only
+// in error responses; outcome causes come from the snapshot package.
+const (
+	snapshotCauseBusy        = "workload_busy"
+	snapshotCauseUnavailable = "sleep_unavailable"
+	snapshotCauseTimeout     = "operation_timeout"
+)
+
+// respondSnapshotError answers a failed sleep or wake with why it failed: a
+// machine-readable cause, a sentence, and the status observed afterwards. A
+// bare "failed" leaves the caller to guess or to go read the logs.
+func (s *Server) respondSnapshotError(w http.ResponseWriter, action string, err error) {
+	status := s.snapshot.Status()
+	code := http.StatusServiceUnavailable
+	cause := status.Cause
+	// The raw error stays in the log: it can carry internal detail. The
+	// response carries the coordinator's own explanation instead, which is the
+	// same text the status endpoint reports.
+	message := "snapshot operation failed; read runtime state before retrying"
+	switch {
+	case errors.Is(err, snapshot.ErrWorkloadBusy):
+		code, cause, message = http.StatusConflict, snapshotCauseBusy, err.Error()
+	case errors.Is(err, snapshot.ErrSleepUnavailable):
+		code, cause, message = http.StatusConflict, snapshotCauseUnavailable, err.Error()
+		if status.DisabledCause != "" {
+			cause = status.DisabledCause
+		}
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		code, cause = http.StatusGatewayTimeout, snapshotCauseTimeout
+		message = "snapshot operation timed out before it finished; read runtime state before retrying"
+	default:
+		if status.Message != "" {
+			message = status.Message
+		}
+		s.logger.Warn("Snapshot control failed", "action", action, "cause", cause, "error", err)
+	}
+	body := map[string]any{"error": message, "snapshot": status}
+	if cause != "" {
+		body["cause"] = cause
+	}
+	s.respondJSON(w, code, body)
 }
