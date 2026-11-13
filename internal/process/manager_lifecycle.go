@@ -181,6 +181,8 @@ func (m *Manager) registerScheduledProcess(name string, procCfg *config.Process)
 		Command:    procCfg.Command,
 		WorkingDir: procCfg.WorkingDir,
 		Env:        procCfg.Env,
+		User:       procCfg.User,
+		Group:      procCfg.Group,
 		Timeout:    timeout,
 		Logging:    procCfg.Logging,
 	}); err != nil {

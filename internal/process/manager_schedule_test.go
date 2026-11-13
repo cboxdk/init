@@ -393,3 +393,41 @@ func TestManager_NilOneshotHistory(t *testing.T) {
 		t.Error("GetOneshotStats with nil history should return empty stats with non-nil ByProcess")
 	}
 }
+
+// TestManager_ScheduledProcessUserIsForwarded verifies a scheduled process's
+// user reaches the executor: an unresolvable one must stop the job from running
+// rather than letting it run as cbox-init's own uid.
+func TestManager_ScheduledProcessUserIsForwarded(t *testing.T) {
+	marker := t.TempDir() + "/ran"
+	cfg := &config.Config{
+		Global: config.GlobalConfig{ShutdownTimeout: 5, LogLevel: "error", MaxRestartAttempts: 3, RestartBackoff: 1},
+		Processes: map[string]*config.Process{
+			"backup": {
+				Enabled:  true,
+				Type:     "scheduled",
+				Schedule: "0 0 1 1 *",
+				Command:  []string{"touch", marker},
+				User:     "cbox-init-no-such-user",
+				Restart:  "never",
+				Scale:    1,
+			},
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	manager := NewManager(cfg, logger, audit.NewLogger(logger, false))
+	if err := manager.Start(context.Background()); err != nil {
+		t.Fatalf("Failed to start manager: %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = manager.Shutdown(ctx)
+	}()
+
+	if _, err := manager.scheduleExecutor.Execute(context.Background(), "backup"); err == nil {
+		t.Fatal("Execute() error = nil, want an error: the configured user was not forwarded")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the scheduled job ran although its user could not be resolved")
+	}
+}
