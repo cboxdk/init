@@ -3,15 +3,15 @@ module github.com/cboxdk/init
 go 1.26.0
 
 // Pinned to the patch the supply-chain gate requires: govulncheck flags
-// standard-library advisories fixed in 1.26.10 (CVE-2026-78667 net/http,
-// CVE-2026-78669 net/http2, CVE-2026-97031 crypto/tls), so a local build on an
-// older 1.26.x would fail `make check` where CI (which pins 1.26.10) passes.
+// standard-library advisories fixed in 1.26.11 (GO-2026-6859 net/http; earlier
+// CVE-2026-78667, -78669, -97031 in 1.26.10), so a local build on an
+// older 1.26.x would fail `make check` where CI (which pins 1.26.11) passes.
 // Bump this in lockstep with the go-version in .github/workflows/ci.yml and
 // .github/workflows/release.yml, and the builder image in Dockerfile, when the
 // gate next fails on the standard library -- the published binaries record the
 // toolchain that built them, so the pin is what keeps a release scannable and
 // auditable.
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/cboxdk/fcgx v1.2.0

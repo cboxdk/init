@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: ['1.26.10']
+        go: ['1.26.11']
 
     steps:
       - name: Checkout code
@@ -74,7 +74,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.10'
+          go-version: '1.26.11'
           cache: true
 
       # Pinned to the patch, not the minor: a floating `1.26` resolves to
@@ -109,7 +109,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.10'
+          go-version: '1.26.11'
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -130,7 +130,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.10'
+          go-version: '1.26.11'
 
       # Validates configs/examples/*.yaml against the real schema with
       # `check-config`. These files back the documented examples, so a config
@@ -152,7 +152,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.10'
+          go-version: '1.26.11'
 
       - name: Build all platforms
         run: make build-all
