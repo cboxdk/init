@@ -119,6 +119,8 @@ global:
   restart_backoff_initial: 5s      # Initial delay before restart
   restart_backoff_max: 60s         # Maximum delay cap
   restart_stability_window: 60s    # Uptime after which the restart budget resets
+  restart_cooldown: 1m             # Opt-in circuit breaker once the budget is spent (unset = give up)
+  restart_cooldown_max: 10m        # Cooldown cap (doubles per failed half-open attempt)
 ```
 
 - `restart_backoff_initial` and `restart_backoff_max` accept Go duration strings (`5s`, `1m`, etc.).
@@ -130,6 +132,16 @@ global:
   crashes rarely — but more than `max_restart_attempts` times over the container's whole
   lifetime — from being permanently abandoned. Set it to a negative value to disable the reset
   (restore the old lifetime-total behaviour).
+- `restart_cooldown` (opt-in, unset by default) is a **circuit breaker** for a process whose
+  restart budget is spent. Unset, the process is given up for good, as before. Set, the circuit
+  opens instead: the process is reported `failed` (readiness and health stay red, `/readyz` 503),
+  and after the cooldown it gets one more start (half-open). If that start stays up for
+  `restart_stability_window`, the circuit closes and the budget resets; if it fails, the circuit
+  opens again with the cooldown doubled, up to `restart_cooldown_max` (default `10m`). Use it for
+  processes that fail because something they depend on is away for a while (a queue worker
+  whose Redis restarted): they come back by themselves, without restarting the container and
+  its healthy processes. When every process in the container is dead, cbox-init still exits as
+  before.
 
 ### Metrics Configuration
 

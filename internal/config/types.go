@@ -26,6 +26,8 @@ type GlobalConfig struct {
 	RestartBackoffInitial     time.Duration          `yaml:"restart_backoff_initial" json:"restart_backoff_initial"`           // initial duration (supports "5s" style)
 	RestartBackoffMax         time.Duration          `yaml:"restart_backoff_max" json:"restart_backoff_max"`                   // max duration
 	RestartStabilityWindow    time.Duration          `yaml:"restart_stability_window" json:"restart_stability_window"`         // uptime after which the restart budget resets (default 60s; negative disables)
+	RestartCooldown           time.Duration          `yaml:"restart_cooldown" json:"restart_cooldown"`                         // circuit breaker, opt-in: wait after the restart budget is spent, then one more attempt (unset = give up for good, as before)
+	RestartCooldownMax        time.Duration          `yaml:"restart_cooldown_max" json:"restart_cooldown_max"`                 // circuit breaker: the cooldown doubles per failed half-open attempt up to this (default 10m)
 	AutotuneMemoryThreshold   float64                `yaml:"autotune_memory_threshold" json:"autotune_memory_threshold"`       // 0.0-2.0, overrides profile MaxMemoryUsage
 	AutotuneStrict            bool                   `yaml:"autotune_strict" json:"autotune_strict"`                           // Fail boot (exit PID 1) when the profile does not fit; default false clamps and boots
 	LogFormat                 string                 `yaml:"log_format" json:"log_format"`                                     // json | text

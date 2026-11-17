@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Opt-in circuit breaker for restarts (`global.restart_cooldown`, `restart_cooldown_max`).
+  Once a process has spent `max_restart_attempts`, it is no longer given up for good: it is
+  reported failed (readiness and health stay red) and, after the cooldown, gets one more start;
+  a start that stays up for `restart_stability_window` closes the circuit, one that fails reopens
+  it with the cooldown doubled up to `restart_cooldown_max` (default 10m). Unset, nothing
+  changes. Seen in production: queue workers gave up during a one-minute Valkey outage and
+  stayed down, unready, until the pod was restarted by hand.
+
+### Fixed
+
+- A restart whose backoff ends after the instance was stopped or scaled away is skipped
+  instead of starting an instance nobody tracks.
+
 ## [3.9.2] - 2026-11-09
 
 ### Fixed

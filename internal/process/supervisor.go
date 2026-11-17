@@ -81,6 +81,11 @@ const (
 	// exhaust MaxRestartAttempts and permanently abandon the service.
 	DefaultRestartStabilityWindow = 60 * time.Second
 
+	// DefaultRestartCooldownMax caps the circuit breaker's cooldown (which
+	// doubles after every half-open attempt that fails again) when
+	// restart_cooldown is set and restart_cooldown_max is not.
+	DefaultRestartCooldownMax = 10 * time.Minute
+
 	// DefaultGoroutineStopTimeout is the timeout for supervisor goroutines to stop during shutdown.
 	DefaultGoroutineStopTimeout = 5 * time.Second
 
@@ -137,6 +142,8 @@ type Supervisor struct {
 	healthStatus           <-chan HealthStatus
 	restartPolicy          RestartPolicy
 	restartStabilityWindow time.Duration                 // uptime after which an instance's restart budget resets (0 = never reset)
+	restartCooldown        time.Duration                 // circuit breaker: first cooldown once the restart budget is spent (0 = give up for good)
+	restartCooldownMax     time.Duration                 // circuit breaker: cooldown cap
 	resourceCollector      *metrics.ResourceCollector    // Shared resource collector (can be nil)
 	oneshotHistory         *OneshotHistory               // Shared oneshot history (can be nil)
 	deathNotifier          func(string)                  // Callback when all instances are dead
@@ -193,6 +200,7 @@ type Instance struct {
 	pid           int
 	started       time.Time
 	restartCount  int
+	cooldowns     int           // circuit breaker: half-open attempts since the restart budget was last reset
 	doneCh        chan struct{} // Closed when monitorInstance is done with the exit
 	exitedCh      chan struct{} // Closed as soon as the process is reaped, before its output is drained; nil = use doneCh
 	exitOnce      sync.Once
@@ -254,6 +262,21 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 		stabilityWindow = 0
 	}
 
+	// Circuit breaker after the restart budget is spent: opt-in. Unset (or not
+	// positive) keeps the behaviour from before it: the process is given up for
+	// good once max_restart_attempts is spent.
+	cooldown := globalCfg.RestartCooldown
+	if cooldown < 0 {
+		cooldown = 0
+	}
+	cooldownMax := globalCfg.RestartCooldownMax
+	if cooldownMax <= 0 {
+		cooldownMax = DefaultRestartCooldownMax
+	}
+	if cooldownMax < cooldown {
+		cooldownMax = cooldown
+	}
+
 	// Resolve user/group credentials at initialization
 	var creds *credentials.Credentials
 	var credErr error
@@ -290,6 +313,8 @@ func NewSupervisor(name string, cfg *config.Process, globalCfg *config.GlobalCon
 		state:                  StateStopped,
 		restartPolicy:          NewRestartPolicy(cfg.Restart, maxAttempts, initialBackoff, maxBackoff),
 		restartStabilityWindow: stabilityWindow,
+		restartCooldown:        cooldown,
+		restartCooldownMax:     cooldownMax,
 		resourceCollector:      resourceCollector,
 		credentials:            creds,
 		credentialErr:          credErr,
@@ -1038,6 +1063,7 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 
 	instance.state = StateStopped
 	restartCount := instance.restartCount
+	cooldowns := instance.cooldowns
 	// Reset the restart budget once an instance has stayed up long enough to
 	// be considered stable. Without this, restartCount accumulates over the
 	// whole container lifetime and a service that crashes rarely (more than
@@ -1046,6 +1072,7 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 	// StartLimitIntervalSec.
 	if resetRestartBudget(s.restartStabilityWindow, time.Since(instance.started)) {
 		restartCount = 0
+		cooldowns = 0
 	}
 	instance.mu.Unlock()
 
@@ -1085,6 +1112,8 @@ func (s *Supervisor) monitorInstance(instance *Instance) {
 	// Check if we should restart (longrun only)
 	if s.restartPolicy.ShouldRestart(exitCode, restartCount) {
 		s.attemptRestart(instance, exitCode, restartCount)
+	} else if s.circuitApplies(exitCode) {
+		s.openCircuit(instance, exitCode, restartCount, cooldowns)
 	} else {
 		s.logger.Warn("Process instance will not be restarted",
 			"instance_id", instance.id,
@@ -1336,6 +1365,11 @@ func (s *Supervisor) monitorRestored(instance *Instance, pid int, done chan stru
 
 		if allowRestart && s.config.Type != "oneshot" && s.restartPolicy.ShouldRestart(-1, restartCount) {
 			s.attemptRestart(instance, -1, restartCount)
+		} else if allowRestart && s.config.Type != "oneshot" && s.circuitApplies(-1) {
+			instance.mu.RLock()
+			cooldowns := instance.cooldowns
+			instance.mu.RUnlock()
+			s.openCircuit(instance, -1, restartCount, cooldowns)
 		} else {
 			s.checkAllInstancesDead()
 		}
@@ -2196,14 +2230,81 @@ func (s *Supervisor) logProcessExit(instance *Instance, exitCode int, restartCou
 }
 
 // attemptRestart attempts to restart a failed process instance
-func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCount int) {
-	backoff := s.restartPolicy.BackoffDuration(restartCount)
+// circuitApplies reports whether a process that has spent its restart budget
+// gets the circuit breaker (a cooldown, then one more attempt) instead of being
+// given up for good: the policy would restart this exit if budget were left
+// (always, or on-failure with a failing exit), and the breaker is enabled.
+func (s *Supervisor) circuitApplies(exitCode int) bool {
+	return s.restartCooldown > 0 && s.restartPolicy.ShouldRestart(exitCode, 0)
+}
 
+// stillWanted reports whether instance is still one of the supervisor's
+// instances, may be restarted, and the supervisor is not stopping.
+func (s *Supervisor) stillWanted(instance *Instance) bool {
+	instance.mu.RLock()
+	allow := instance.allowRestart
+	instance.mu.RUnlock()
+	if !allow {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state == StateStopping || s.state == StateStopped {
+		return false
+	}
+	for _, inst := range s.instances {
+		if inst == instance {
+			return true
+		}
+	}
+	return false
+}
+
+// circuitCooldown is the wait before half-open attempt n (0-based): the first
+// cooldown, doubled per earlier failed attempt, capped.
+func circuitCooldown(first, max time.Duration, n int) time.Duration {
+	return calculateBackoff(first, max, n)
+}
+
+// openCircuit handles a process whose restart budget is spent. Giving up for
+// good left a container running without the process (a queue worker whose
+// Redis was away for a minute never consumed again). Instead the circuit opens:
+// the process is reported failed (not ready) and, after a cooldown that doubles
+// per failed attempt up to restart_cooldown_max, gets one more start
+// (half-open). An attempt that stays up for the stability window closes the
+// circuit and resets the budget; one that fails reopens it.
+func (s *Supervisor) openCircuit(instance *Instance, exitCode int, restartCount int, cooldowns int) {
+	cooldown := circuitCooldown(s.restartCooldown, s.restartCooldownMax, cooldowns)
+	s.logger.Warn("Restart budget spent; circuit open, one more attempt after the cooldown",
+		"instance_id", instance.id,
+		"exit_code", exitCode,
+		"restart_count", restartCount,
+		"cooldown", cooldown,
+		"half_open_attempt", cooldowns+1,
+	)
+	metrics.RecordProcessRestart(s.name, "circuit_open")
+
+	// Report it as failed while the circuit is open; this does not stop the
+	// container unless every process is dead (the manager's all-dead exit).
+	s.checkAllInstancesDead()
+
+	instance.mu.Lock()
+	instance.cooldowns = cooldowns + 1
+	instance.mu.Unlock()
+	s.restartAfter(instance, exitCode, restartCount, cooldown, "circuit_half_open")
+}
+
+func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCount int) {
 	// Determine restart reason
 	restartReason := "crash"
 	if exitCode == 0 {
 		restartReason = "normal_exit"
 	}
+	s.restartAfter(instance, exitCode, restartCount, s.restartPolicy.BackoffDuration(restartCount), restartReason)
+}
+
+// restartAfter waits backoff, then replaces instance with a fresh one.
+func (s *Supervisor) restartAfter(instance *Instance, exitCode int, restartCount int, backoff time.Duration, restartReason string) {
 
 	s.logger.Info("Restarting process instance",
 		"instance_id", instance.id,
@@ -2240,6 +2341,16 @@ func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCou
 		return
 	}
 
+	// The wait can be long (a circuit breaker cooldown): the instance may have
+	// been stopped or scaled away meanwhile. Starting it then would leave an
+	// orphan nobody tracks.
+	if !s.stillWanted(instance) {
+		s.logger.Info("Restart skipped: the instance was stopped or removed while waiting",
+			"instance_id", instance.id,
+		)
+		return
+	}
+
 	// Attempt restart using supervisor context
 	// Use the stored instance index to preserve port assignment
 	newInstance, err := s.startInstance(s.ctx, instance.id, instance.index)
@@ -2260,10 +2371,23 @@ func (s *Supervisor) attemptRestart(instance *Instance, exitCode int, restartCou
 		return
 	}
 
-	// Update restart count
+	// Update restart count; the circuit breaker's count carries over until the
+	// stability window resets both.
+	instance.mu.RLock()
+	cooldowns := instance.cooldowns
+	instance.mu.RUnlock()
 	newInstance.mu.Lock()
 	newInstance.restartCount = restartCount + 1
+	newInstance.cooldowns = cooldowns
 	newInstance.mu.Unlock()
+
+	// A half-open attempt brings a failed supervisor back: it has a live
+	// instance again (readiness was re-armed above and follows the new one).
+	s.mu.Lock()
+	if s.state == StateFailed {
+		s.state = StateRunning
+	}
+	s.mu.Unlock()
 
 	// Log restart to audit trail
 	s.auditLogger.LogProcessRestart(s.name, instance.pid, newInstance.pid, restartReason)

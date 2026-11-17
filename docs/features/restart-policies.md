@@ -278,6 +278,22 @@ processes:
 - If it crashes sooner than that, the backoff grows toward `restart_backoff_max`
 - A negative `restart_stability_window` disables the reset entirely
 
+### Circuit breaker after the budget (opt-in)
+
+```yaml
+global:
+  max_restart_attempts: 3
+  restart_cooldown: 1m        # unset = give up for good once the budget is spent (default)
+  restart_cooldown_max: 10m
+```
+
+**Behavior once the budget is spent:**
+- The circuit opens: the process is reported `failed`, so readiness and health stay red
+- After `restart_cooldown` it gets one more start (half-open)
+- Stays up for `restart_stability_window`: the circuit closes, budget and cooldown reset
+- Fails again: the circuit reopens, cooldown doubled (1m, 2m, 4m, 8m, 10m, 10m, ...)
+- Stopping or scaling the process away during the cooldown cancels the attempt
+
 ## Metrics and Monitoring
 
 ### Restart Count Metrics
